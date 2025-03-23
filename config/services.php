@@ -41,4 +41,10 @@ return [
             env("PUBLIC_SHOPIFY_DOMAIN") .
             "/admin/api/2025-01/graphql.json",
     ],
+
+    "workos" => [
+        "client_id" => env("WORKOS_CLIENT_ID"),
+        "secret" => env("WORKOS_API_KEY"),
+        "redirect_url" => env("WORKOS_REDIRECT_URL"),
+    ],
 ];

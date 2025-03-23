@@ -18,14 +18,21 @@ class User extends Authenticatable
      *
      * @var list<string>
      */
-    protected $fillable = ["name", "email", "password", "shopify_customer_id"];
+    protected $fillable = [
+        "name",
+        "email",
+        "password",
+        "shopify_customer_id",
+        "workos_id",
+        "avatar",
+    ];
 
     /**
      * The attributes that should be hidden for serialization.
      *
      * @var list<string>
      */
-    protected $hidden = ["password", "remember_token"];
+    protected $hidden = ["password", "remember_token", "workos_id"];
 
     /**
      * Get the attributes that should be cast.
