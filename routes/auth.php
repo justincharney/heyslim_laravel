@@ -70,12 +70,8 @@ Route::get("authenticate", function (AuthKitAuthenticationRequest $request) {
     return redirect(config("app.front_end_url") . "/dashboard");
 })->middleware(["guest"]);
 
-Route::middleware(["auth", ValidateSessionWithWorkOS::class])->group(
-    function () {
-        Route::post("logout", function (AuthKitLogoutRequest $request) {
-            $request->logout();
-
-            return redirect(config("app.front_end_url"));
-        })->name("logout");
-    }
-);
+Route::post("logout", function (AuthKitLogoutRequest $request) {
+    return $request->logout();
+})
+    ->middleware(["auth"])
+    ->name("logout");
