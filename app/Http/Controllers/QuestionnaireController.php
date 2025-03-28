@@ -57,17 +57,17 @@ class QuestionnaireController extends Controller
                 ->where("user_id", auth()->id())
                 ->findOrFail($submission_id);
 
-            Log::info("Question options:", [
-                "questions" => $submission->questionnaire->questions->map(
-                    function ($q) {
-                        return [
-                            "question_number" => $q->question_number,
-                            "options_count" => $q->options->count(),
-                            "raw_options" => $q->options->toArray(),
-                        ];
-                    }
-                ),
-            ]);
+            // Log::info("Question options:", [
+            //     "questions" => $submission->questionnaire->questions->map(
+            //         function ($q) {
+            //             return [
+            //                 "question_number" => $q->question_number,
+            //                 "options_count" => $q->options->count(),
+            //                 "raw_options" => $q->options->toArray(),
+            //             ];
+            //         }
+            //     ),
+            // ]);
 
             return response()->json([
                 "submission" => [

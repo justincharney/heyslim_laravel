@@ -60,12 +60,12 @@ class GLP1Seeder extends Seeder
                     ],
                     [
                         "text" => "Email",
-                        "type" => "text",
+                        "type" => "email",
                         "required" => true,
                     ],
                     [
                         "text" => "Phone number",
-                        "type" => "text",
+                        "type" => "tel",
                         "required" => true,
                     ],
                     [
@@ -123,22 +123,38 @@ class GLP1Seeder extends Seeder
                 "questions" => [
                     [
                         "text" => "Height (feet)",
-                        "type" => "text",
+                        "type" => "number",
                         "required" => true,
+                        "validation" => [
+                            "min" => 3,
+                            "max" => 8,
+                            "message" => "Height must be between 3 and 8 feet",
+                        ],
                     ],
                     [
                         "text" => "Height (inches)",
-                        "type" => "text",
+                        "type" => "number",
                         "required" => true,
+                        "validation" => [
+                            "min" => 0,
+                            "max" => 11,
+                            "message" => "Inches must be between 0 and 11",
+                        ],
                     ],
                     [
                         "text" => "Weight (lbs)",
-                        "type" => "text",
+                        "type" => "number",
                         "required" => true,
+                        "validation" => [
+                            "min" => 50,
+                            "max" => 800,
+                            "message" =>
+                                "Weight must be between 50 and 800 lbs",
+                        ],
                     ],
                     [
                         "text" => "Calculated BMI",
-                        "type" => "text",
+                        "type" => "number",
                         "required" => true,
                         "calculated" => [
                             "formula" =>
@@ -383,6 +399,9 @@ class GLP1Seeder extends Seeder
                     "is_required" => $question["required"] ?? true,
                     "calculated" => isset($question["calculated"])
                         ? json_encode($question["calculated"])
+                        : null,
+                    "validation" => isset($question["validation"])
+                        ? json_encode($question["validation"])
                         : null,
                     "created_at" => now(),
                     "updated_at" => now(),

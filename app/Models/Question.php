@@ -18,11 +18,13 @@ class Question extends Model
         "question_type",
         "is_required",
         "calculated",
+        "validation",
     ];
 
     protected $casts = [
         "is_required" => "boolean",
         "calculated" => "json",
+        "validation" => "json",
     ];
 
     /*

@@ -29,9 +29,13 @@ return new class extends Migration {
                     "select",
                     "date",
                     "yes_no",
+                    "tel",
+                    "email",
+                    "number",
                 ])
                 ->default("text");
             $table->json("calculated")->nullable();
+            $table->json("validation")->nullable();
             $table->boolean("is_required")->default(true);
             $table->timestamps();
 
