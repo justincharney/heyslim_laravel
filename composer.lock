@@ -4,8 +4,70 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "9abe9f3b716ad60a504f1805772f835c",
+    "content-hash": "e214265c59865eff6ee8fcf9295e5712",
     "packages": [
+        {
+            "name": "awobaz/compoships",
+            "version": "2.4.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/topclaudy/compoships.git",
+                "reference": "49ef79d912201c8649651d63b5682afae092502e"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/topclaudy/compoships/zipball/49ef79d912201c8649651d63b5682afae092502e",
+                "reference": "49ef79d912201c8649651d63b5682afae092502e",
+                "shasum": ""
+            },
+            "require": {
+                "illuminate/database": ">=5.6 <13.0"
+            },
+            "require-dev": {
+                "ext-sqlite3": "*",
+                "fakerphp/faker": "^1.18",
+                "phpunit/phpunit": "^6.0|^8.0|^9.0|^10.0|^11.0"
+            },
+            "suggest": {
+                "awobaz/blade-active": "Blade directives for the Laravel 'Active' package",
+                "awobaz/eloquent-auto-append": "Automatically append accessors to model serialization",
+                "awobaz/eloquent-mutators": "Reusable mutators (getters/setters) for Laravel 5's Eloquent",
+                "awobaz/syntactic": "Syntactic sugar for named and indexed parameters call."
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Awobaz\\Compoships\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Claudin J. Daniel",
+                    "email": "cdaniel@awobaz.com"
+                }
+            ],
+            "description": "Laravel relationships with support for composite/multiple keys",
+            "keywords": [
+                "laravel",
+                "laravel composite keys",
+                "laravel relationships"
+            ],
+            "support": {
+                "issues": "https://github.com/topclaudy/compoships/issues",
+                "source": "https://github.com/topclaudy/compoships/tree/2.4.1"
+            },
+            "funding": [
+                {
+                    "url": "https://paypal.me/awobaz",
+                    "type": "custom"
+                }
+            ],
+            "time": "2025-02-24T15:12:08+00:00"
+        },
         {
             "name": "brick/math",
             "version": "0.12.3",
@@ -5772,6 +5834,53 @@
                 }
             ],
             "time": "2025-01-17T11:39:41+00:00"
+        },
+        {
+            "name": "thiagoprz/eloquent-composite-key",
+            "version": "1.0.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/thiagoprz/eloquent-composite-key.git",
+                "reference": "43012fa195db8517a5344355aa83cd39aaa466aa"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/thiagoprz/eloquent-composite-key/zipball/43012fa195db8517a5344355aa83cd39aaa466aa",
+                "reference": "43012fa195db8517a5344355aa83cd39aaa466aa",
+                "shasum": ""
+            },
+            "require": {
+                "php": "^7.1 || ^8.0 || ^8.1"
+            },
+            "require-dev": {
+                "orchestra/testbench": "6",
+                "squizlabs/php_codesniffer": "4.0.x-dev"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Thiagoprz\\CompositeKey\\": "src"
+                },
+                "classmap": [
+                    "src/"
+                ]
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Thiago Przyczynski",
+                    "email": "przyczynski@gmail.com"
+                }
+            ],
+            "description": "Eloquent Composite Key Support Package",
+            "support": {
+                "issues": "https://github.com/thiagoprz/eloquent-composite-key/issues",
+                "source": "https://github.com/thiagoprz/eloquent-composite-key/tree/1.0.1"
+            },
+            "time": "2022-04-20T19:12:31+00:00"
         },
         {
             "name": "tijsverkoyen/css-to-inline-styles",

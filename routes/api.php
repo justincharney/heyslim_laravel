@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\QuestionnaireController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
@@ -46,4 +47,34 @@ Route::middleware(["web", "auth:sanctum"])->group(function () {
         AuthenticatedSessionController::class,
         "destroy",
     ])->name("logout");
+
+    // Questionnaire routes
+    Route::prefix("questionnaires")->group(function () {
+        // Get all questionnaires for authenticated user
+        Route::get("/", [
+            QuestionnaireController::class,
+            "getPatientQuestionnaires",
+        ]);
+
+        // Get detailed questionnaire submission
+        Route::get("/{submission_id}", [
+            QuestionnaireController::class,
+            "getQuestionnaireDetails",
+        ]);
+
+        // Initialize a draft questionnaire
+        Route::post("/draft", [
+            QuestionnaireController::class,
+            "initializeDraft",
+        ]);
+
+        // Save partial answers
+        Route::post("/save-partial", [
+            QuestionnaireController::class,
+            "savePartial",
+        ]);
+
+        // Submit completed questionnaire
+        Route::post("/submit", [QuestionnaireController::class, "store"]);
+    });
 });
