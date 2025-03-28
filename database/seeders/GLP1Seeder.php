@@ -59,21 +59,6 @@ class GLP1Seeder extends Seeder
                         "options" => ["Male", "Female"],
                     ],
                     [
-                        "text" => "Email",
-                        "type" => "email",
-                        "required" => true,
-                    ],
-                    [
-                        "text" => "Phone number",
-                        "type" => "tel",
-                        "required" => true,
-                    ],
-                    [
-                        "text" => "Residential Address (UK-only)",
-                        "type" => "textarea",
-                        "required" => true,
-                    ],
-                    [
                         "text" => "Ethnicity (for clinical risk assessment)",
                         "type" => "select",
                         "required" => true,
@@ -160,9 +145,9 @@ class GLP1Seeder extends Seeder
                             "formula" =>
                                 "weight / ((feet*12 + inches)^2) * 703",
                             "inputs" => [
-                                "weight" => 14, // question number for weight
-                                "feet" => 12, // question number for height (feet)
-                                "inches" => 13, // question number for height (inches)
+                                "feet" => 9,
+                                "inches" => 10,
+                                "weight" => 11,
                             ],
                         ],
                     ],
@@ -172,25 +157,16 @@ class GLP1Seeder extends Seeder
                 "title" => "Eligibility Screening",
                 "questions" => [
                     [
-                        "text" => "Is your BMI 30 or above?",
-                        "type" => "yes_no",
-                        "required" => true,
-                    ],
-                    [
                         "text" =>
-                            "If your BMI is between 27-29.9, do you have any of the following conditions?",
+                            "Do you have any of the following conditions?",
                         "type" => "multi-select",
-                        "required" => false,
-                        "depends_on" => [
-                            "question" => 14, // Question number for BMI 30+ question
-                            "condition" => "===",
-                            "value" => false,
-                        ],
+                        "required" => true,
                         "options" => [
                             "Type 2 Diabetes",
                             "High blood pressure",
                             "Dyslipidemia",
                             "Sleep apnea",
+                            "None of the above",
                         ],
                     ],
                 ],
@@ -214,6 +190,7 @@ class GLP1Seeder extends Seeder
                             "Kidney or liver disease",
                             "Eating disorders (e.g., anorexia nervosa, bulimia)",
                             "Depression or mental health conditions",
+                            "None of the above",
                         ],
                     ],
                     [
@@ -225,13 +202,13 @@ class GLP1Seeder extends Seeder
                         "text" =>
                             "Have you had any bariatric (weight loss) surgery?",
                         "type" => "yes_no",
-                        "required" => true,
+                        "required" => false,
                     ],
                     [
                         "text" =>
                             "Have you undergone any other surgeries in the past 12 months?",
                         "type" => "yes_no",
-                        "required" => true,
+                        "required" => false,
                     ],
                 ],
             ],
@@ -254,10 +231,10 @@ class GLP1Seeder extends Seeder
                         "text" =>
                             "Do you have any known allergies (e.g., medications, food, or other substances)?",
                         "type" => "yes_no",
-                        "required" => true,
+                        "required" => false,
                     ],
                     [
-                        "text" => "If yes, please specify allergies",
+                        "text" => "Please specify any allergies",
                         "type" => "textarea",
                         "required" => false,
                     ],
@@ -265,11 +242,11 @@ class GLP1Seeder extends Seeder
                         "text" =>
                             "Have you previously used weight loss medications (e.g., Saxenda, Orlistat)?",
                         "type" => "yes_no",
-                        "required" => true,
+                        "required" => false,
                     ],
                     [
                         "text" =>
-                            "If yes, please specify the medication, dosage, and outcomes",
+                            "Please specify the medication, dosage, and outcomes",
                         "type" => "textarea",
                         "required" => false,
                     ],
@@ -301,6 +278,7 @@ class GLP1Seeder extends Seeder
                             "Swimming",
                             "Cycling",
                             "Other",
+                            "None of the above",
                         ],
                     ],
                     [
@@ -318,7 +296,7 @@ class GLP1Seeder extends Seeder
                         "text" =>
                             "Are you pregnant, planning to become pregnant, or currently breastfeeding?",
                         "type" => "yes_no",
-                        "required" => true,
+                        "required" => false,
                     ],
                     [
                         "text" =>
@@ -329,24 +307,24 @@ class GLP1Seeder extends Seeder
                     [
                         "text" => "Do you smoke or use tobacco products?",
                         "type" => "yes_no",
-                        "required" => true,
+                        "required" => false,
                     ],
                     [
                         "text" => "Do you use recreational drugs?",
                         "type" => "yes_no",
-                        "required" => true,
+                        "required" => false,
                     ],
                     [
                         "text" =>
                             "Do you have a family history of medullary thyroid carcinoma (MTC) or multiple endocrine neoplasia syndrome type 2 (MEN 2)?",
                         "type" => "yes_no",
-                        "required" => true,
+                        "required" => false,
                     ],
                     [
                         "text" =>
                             "Have you experienced any hypersensitivity to GLP-1 receptor agonists?",
                         "type" => "yes_no",
-                        "required" => true,
+                        "required" => false,
                     ],
                 ],
             ],

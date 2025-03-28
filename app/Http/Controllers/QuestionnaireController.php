@@ -89,6 +89,7 @@ class QuestionnaireController extends Controller
                                 );
 
                                 return [
+                                    "id" => $question->id,
                                     "number" => $question->question_number,
                                     "text" => $question->question_text,
                                     "type" => $question->question_type,
@@ -238,7 +239,7 @@ class QuestionnaireController extends Controller
                     "required|exists:questionnaire_submissions,id",
                 "answers" => "required|array",
                 "answers.*.question_id" => "required|integer",
-                "answers.*.answer_text" => "nullable", // Remove the |string restriction
+                "answers.*.answer_text" => "nullable",
             ]);
 
             DB::beginTransaction();
