@@ -52,6 +52,8 @@ class WorkOSAuthController extends Controller
                 } else {
                     // Update user with Shopify customer ID
                     $user->shopify_customer_id = $shopifyCustomerId;
+                    // Assign the patient role to the user
+                    $user->assignRole("patient");
                     $user->save();
                 }
 
