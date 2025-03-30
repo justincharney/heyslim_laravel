@@ -1,10 +1,15 @@
 <?php
 
+use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\QuestionnaireController;
+use App\Http\Controllers\TeamController;
+use App\Http\Middleware\SetTeamContextMiddleware;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Log;
 
-// Routes for any authenticated user
+// Routes for any user
 Route::middleware(["web", "auth:sanctum"])->group(function () {
     Route::get("/user", function (Request $request) {
         $user = auth("web")->user();
@@ -13,6 +18,16 @@ Route::middleware(["web", "auth:sanctum"])->group(function () {
         $userData["roles"] = $user->getRoleNames();
         return response()->json($userData);
     });
+
+    Route::post("/login", [
+        AuthenticatedSessionController::class,
+        "store",
+    ])->name("login");
+
+    Route::post("/logout", [
+        AuthenticatedSessionController::class,
+        "destroy",
+    ])->name("logout");
 });
 
 // Routes for patients
@@ -47,3 +62,37 @@ Route::middleware(["web", "auth:sanctum", "role:patient"])->group(function () {
         Route::post("/submit", [QuestionnaireController::class, "store"]);
     });
 });
+
+// Routes for admins
+Route::middleware(["web", "auth:sanctum", "role:admin"])
+    ->prefix("admin")
+    ->group(function () {
+        Route::apiResource("teams", TeamController::class);
+        Route::get("teams/{team}/members", [TeamController::class, "members"]);
+        Route::post("teams/{team}/members", [
+            TeamController::class,
+            "addMember",
+        ]);
+        Route::delete("teams/{team}/members", [
+            TeamController::class,
+            "removeMember",
+        ]);
+        Route::post("teams/{team}/roles", [
+            TeamController::class,
+            "assignRole",
+        ]);
+
+        // Get all users (for selecting team members)
+        Route::get("/users", function () {
+            return response()->json([
+                "users" => User::all(["id", "name", "email"]),
+            ]);
+        });
+
+        // Get all available roles
+        Route::get("/roles", function () {
+            return response()->json([
+                "roles" => Spatie\Permission\Models\Role::all()->pluck("name"),
+            ]);
+        });
+    });

@@ -1,66 +1,124 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Project Seeding Guide
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+This project uses Laravel with [Spatie's Laravel Permission package](https://github.com/spatie/laravel-permission) configured to work with teams. The seeders create roles, permissions, teams, and sample questionnaire data. This README explains the seeding process and how the team context is managed.
 
-## About Laravel
+Database Setup
+--------------
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+1.  **Migrate the Database**
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+    Run the migrations to create all necessary tables. This includes the standard Laravel tables along with those required by the Spatie package (roles, permissions, team-specific pivot tables, etc.):
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+    ```bash
+    php artisan migrate
+    ```
 
-## Learning Laravel
+2.  **`current_team_id` on Users**
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+    A migration adds a `current_team_id` column to the `users` table. This column can be used to track the "active" team for each user, making it easier to determine the team context throughout the application.
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+Seeders Overview
+----------------
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### 1\. RolesAndPermissionsSeeder
 
-## Laravel Sponsors
+-   **Purpose:**\
+    Creates all permissions and roles needed by the application, including:
+    -   Patient, provider, pharmacist, and admin-specific permissions
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+    -   **Roles:**
 
-### Premium Partners
+        -   `patient`
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+        -   `provider`
 
-## Contributing
+        -   `pharmacist`
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+        -   `admin`
 
-## Code of Conduct
+-   **Usage:**
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+    If not already seeded, run:
 
-## Security Vulnerabilities
+    ```bash
+    php artisan db:seed --class=RolesAndPermissionsSeeder
+    ```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+### 2\. TeamSeeder
 
-## License
+-   **Purpose:**\
+    Creates sample teams and a default admin user. It demonstrates how to assign roles within a team context using the Spatie package.
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+    **Role Assignment:**\
+    Uses the team context when assigning the "admin" role.\
+    For example, within the seeder:
+
+    ```php
+    $admin = User::create([
+        "name"              => "System Admin",
+        "email"             => "admin@email.com",
+        "password"          => Hash::make("admin123"),
+        "email_verified_at" => now(),
+    ]);
+
+    $team1 = Team::create([
+        "name"        => "Main Clinic",
+        "description" => "The main clinic team",
+    ]);
+
+    // Set the team context for permission operations
+    setPermissionsTeamId($team1->id);
+    // Assign the admin role using the team context
+    $admin->assignRole("admin");
+    // Set the admin's current_team_id
+    $admin->current_team_id = $team1->id;
+    $admin->save();
+    ```
+
+-   **Usage:**
+
+    Run the TeamSeeder with:
+
+    ```bash
+    php artisan db:seed --class=TeamSeeder
+    ```
+
+### 3\. GLP1Seeder
+
+-   **Purpose:**\
+    Seeds a GLP-1 Weight Loss Medication Questionnaire along with its associated questions, options, and a draft submission for a user.
+
+-   **Usage:**
+
+    Run the GLP1Seeder with:
+
+    ```bash
+    php artisan db:seed --class=GLP1Seeder
+    ```
+
+Using Teams with Spatie Laravel Permission
+------------------------------------------
+
+When using teams with Spatie's package, it's important to set the team context so that the package queries and assignments are scoped correctly.
+
+-   **Setting the Team Context Globally**
+
+    Use the `setPermissionsTeamId()` method from the PermissionRegistrar before performing operations related to roles or permissions. For example:
+
+-   **Assigning a Role with a Team Context**
+
+    Once the team context is set, you can assign roles without manually passing the team id each time:
+
+    ```php
+    $admin->assignRole('admin');
+    ```
+
+Additional Notes
+----------------
+
+-   **Order of Operations:**\
+    Always ensure that the roles and permissions are seeded (or created) before running the TeamSeeder.
+
+
+-   **Configuration Check:**\
+    Verify your `config/permission.php` file to ensure that teams are enabled (`'teams' => true`). This setting allows the package to use team-specific roles and permissions.

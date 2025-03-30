@@ -26,6 +26,7 @@ class User extends Authenticatable
         "shopify_customer_id",
         "workos_id",
         "avatar",
+        "current_team_id",
     ];
 
     /**
@@ -46,5 +47,21 @@ class User extends Authenticatable
             "email_verified_at" => "datetime",
             "password" => "hashed",
         ];
+    }
+
+    public function teams()
+    {
+        return $this->belongsToMany(
+            Team::class,
+            config("permission.table_names.model_has_roles", "model_id")
+        );
+    }
+
+    /*
+    Determine which team is "active" for a user
+    */
+    public function currentTeam()
+    {
+        return $this->belongsTo(Team::class, "current_team_id");
     }
 }

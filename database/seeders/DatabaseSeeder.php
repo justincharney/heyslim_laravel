@@ -20,6 +20,10 @@ class DatabaseSeeder extends Seeder
         //     'email' => 'test@example.com',
         // ]);
 
-        $this->call([GLP1Seeder::class]);
+        $this->call([
+            GLP1Seeder::class,
+            RolesAndPermissionsSeeder::class,
+            TeamSeeder::class,
+        ]);
     }
 }

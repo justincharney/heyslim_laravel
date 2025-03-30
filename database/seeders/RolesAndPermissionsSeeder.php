@@ -33,6 +33,13 @@ class RolesAndPermissionsSeeder extends Seeder
         Permission::create(["name" => "read prescriptions"]);
         Permission::create(["name" => "write prescriptions"]);
 
+        // Admin permissions
+        Permission::create(["name" => "manage teams"]);
+        Permission::create(["name" => "manage users"]);
+        Permission::create(["name" => "manage roles"]);
+        Permission::create(["name" => "manage permissions"]);
+        Permission::create(["name" => "manage system"]);
+
         // Create roles and assign permissions
         $patientRole = Role::create(["name" => "patient"]);
         $patientRole->givePermissionTo([
@@ -67,5 +74,8 @@ class RolesAndPermissionsSeeder extends Seeder
             "read prescriptions",
             "write prescriptions",
         ]);
+
+        $adminRole = Role::create(["name" => "admin"]);
+        $adminRole->givePermissionTo(Permission::all());
     }
 }
