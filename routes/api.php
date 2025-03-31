@@ -86,16 +86,17 @@ Route::middleware(["web", "auth:sanctum", "role:admin"])
         ]);
 
         // Get all users (for selecting team members)
-        Route::get("/users", function () {
-            return response()->json([
-                "users" => User::all(["id", "name", "email"]),
-            ]);
-        });
+        // Route::get("/users", function () {
+        //     return response()->json([
+        //         "users" => User::all(["id", "name", "email"]),
+        //     ]);
+        // });
 
-        // Get all available roles
-        Route::get("/roles", function () {
-            return response()->json([
-                "roles" => Spatie\Permission\Models\Role::all()->pluck("name"),
-            ]);
-        });
+        Route::get("/teams/{team}/available-users", [
+            TeamController::class,
+            "availableUsers",
+        ]);
+
+        // Get all available roles other than 'patient'
+        Route::get("/roles", [TeamController::class, "getNonPatientRoles"]);
     });

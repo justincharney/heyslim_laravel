@@ -10,6 +10,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Spatie\Permission\Models\Role;
+use Illuminate\Validation\Rules;
+use Illuminate\Support\Facades\Hash;
 
 class TeamController extends Controller
 {
@@ -58,10 +60,26 @@ class TeamController extends Controller
     {
         $this->authorize(Permission::MANAGE_TEAMS);
 
-        $team->load("users");
+        // Set the team context for retrieving roles
+        setPermissionsTeamId($team->id);
+
+        // Get team members with their roles in this specific team
+        $members = $team
+            ->users()
+            ->with("roles")
+            ->get()
+            ->reject(function ($user) {
+                return $user->hasRole("patient");
+            })
+            ->values();
 
         return response()->json([
-            "team" => $team,
+            "team" => [
+                "id" => $team->id,
+                "name" => $team->name,
+                "description" => $team->description,
+                "members" => $members,
+            ],
         ]);
     }
 
@@ -114,24 +132,73 @@ class TeamController extends Controller
         ]);
     }
 
-    /**
-     * Add a user to a team.
+    /*
+     * Get non-patient members in the team
      */
-    public function addMember(Request $request)
+    public function availableUsers(Team $team)
+    {
+        $this->authorize(Permission::MANAGE_TEAMS);
+
+        $teamUserIds = $team->users()->pluck("id");
+
+        $availableUsers = User::whereNotIn("id", $teamUserIds)
+            ->with("roles")
+            ->get(["id", "name", "email"])
+            ->reject(function ($user) {
+                return $user->roles->count() === 1 && $user->hasRole("patient");
+            })
+            ->values();
+
+        return response()->json([
+            "users" => $availableUsers,
+        ]);
+    }
+
+    /*
+     * Get all roles other than 'patient'
+     */
+    public function getNonPatientRoles()
+    {
+        $this->authorize(Permission::MANAGE_TEAMS);
+
+        $roles = Role::where("name", "!=", "patient")->pluck("name");
+
+        return response()->json(["roles" => $roles]);
+    }
+
+    /**
+     * Create a user and add them to the team
+     */
+    public function addMember(Request $request, Team $team)
     {
         $this->authorize(Permission::MANAGE_TEAMS);
 
         $validated = $request->validate([
-            "email" => "required|exists:users,email",
+            "email" => "required|email",
+            "firstName" => "required|string|max:255",
+            "lastName" => "required|string|max:255",
+            "password" => ["required", "confirmed", Rules\Password::defaults()],
+            "role" => "required|string|exists:roles,name",
         ]);
 
-        $user = User::where("email", $validated["email"])->firstOrFail();
+        // Create the user
+        $user = User::create([
+            "name" => $validated["firstName"] . " " . $validated["lastName"],
+            "email" => $validated["email"],
+            "password" => Hash::make($validated["password"]),
+        ]);
 
-        // Could check if user is already in the team
-        $teamId = getPermissionsTeamId();
         // Set the user's team
-        $user->current_team_id = $teamId;
+        $user->current_team_id = $team->id;
         $user->save();
+
+        // Set the team context for permissions
+        setPermissionsTeamId($team->id);
+        // Remove all roles first
+        $user->syncRoles([]);
+        // Assign the new role
+        $user->assignRole($validated["role"]);
+
         return response()->json([
             "message" => "User added to team successfully",
         ]);
@@ -148,6 +215,14 @@ class TeamController extends Controller
             "user_id" => "required|exists:users,id",
         ]);
 
+        $user = User::findOrFail($validated["user_id"]);
+
+        // Reset current_team_id to null if this was their current team
+        if ($user->current_team_id === $team->id) {
+            $user->current_team_id = null;
+            $user->save();
+        }
+
         $team->users()->detach($validated["user_id"]);
 
         return response()->json([
@@ -163,14 +238,22 @@ class TeamController extends Controller
         $this->authorize(Permission::MANAGE_TEAMS);
 
         $validated = $request->validate([
-            "email" => "required|exists:users,email",
+            "user_id" => "required|exists:users,id",
             "role" => "required|string|exists:roles,name",
         ]);
 
-        $user = User::where("email", $validated["email"])->firstOrFail();
+        $user = User::findOrFail($validated["user_id"]);
 
         // Could check that user is in the team
-        // $teamId = getPermissionsTeamId();
+        $teamId = getPermissionsTeamId();
+        if ($user->current_team_id != $teamId) {
+            return response()->json(
+                [
+                    "message" => "User is not a member of this team",
+                ],
+                400
+            );
+        }
 
         // Remove all roles first by using syncRoles with an empty array
         $user->syncRoles([]);
