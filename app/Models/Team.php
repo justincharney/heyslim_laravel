@@ -10,6 +10,7 @@ class Team extends Model
     use HasFactory;
 
     protected $fillable = ["name", "description"];
+    public $timestamps = true;
 
     public function users()
     {

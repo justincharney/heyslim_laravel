@@ -12,10 +12,11 @@ use Illuminate\Support\Facades\Log;
 use Spatie\Permission\Models\Role;
 use Illuminate\Validation\Rules;
 use Illuminate\Support\Facades\Hash;
+use App\Traits\OptimisticLocking;
 
 class TeamController extends Controller
 {
-    use AuthorizesRequests;
+    use AuthorizesRequests, OptimisticLocking;
     /**
      * Display a listing of the teams.
      */
@@ -23,7 +24,14 @@ class TeamController extends Controller
     {
         $this->authorize(Permission::MANAGE_TEAMS);
 
-        $teams = Team::withCount("users")->get();
+        // Get teams with a count of non-patient users
+        $teams = Team::withCount([
+            "users" => function ($query) {
+                $query->whereDoesntHave("roles", function ($q) {
+                    $q->where("name", "patient");
+                });
+            },
+        ])->get();
 
         return response()->json([
             "teams" => $teams,
@@ -79,6 +87,7 @@ class TeamController extends Controller
                 "name" => $team->name,
                 "description" => $team->description,
                 "members" => $members,
+                "updated_at" => $team->updated_at,
             ],
         ]);
     }
@@ -93,9 +102,26 @@ class TeamController extends Controller
         $validated = $request->validate([
             "name" => "required|string|max:255",
             "description" => "nullable|string",
+            "last_updated_at" => "required|date", // Client sends back the timestamp for optimistic locking
         ]);
 
-        $team->update($validated);
+        // Check for conflicts
+        if (
+            $lockCheck = $this->checkOptimisticLock(
+                $team,
+                $validated["last_updated_at"]
+            )
+        ) {
+            return response()->json(
+                ["message" => $lockCheck["message"]],
+                $lockCheck["status"]
+            );
+        }
+
+        $team->update([
+            "name" => $validated["name"],
+            "description" => $validated["description"],
+        ]);
 
         return response()->json([
             "message" => "Team updated successfully",
