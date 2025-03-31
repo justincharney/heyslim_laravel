@@ -172,21 +172,38 @@ class TeamController extends Controller
     public function addMember(Request $request, Team $team)
     {
         $this->authorize(Permission::MANAGE_TEAMS);
-
-        $validated = $request->validate([
+        // Validation that applies to old and new users
+        $baseValidation = [
             "email" => "required|email",
-            "firstName" => "required|string|max:255",
-            "lastName" => "required|string|max:255",
-            "password" => ["required", "confirmed", Rules\Password::defaults()],
             "role" => "required|string|exists:roles,name",
-        ]);
+        ];
 
-        // Create the user
-        $user = User::create([
-            "name" => $validated["firstName"] . " " . $validated["lastName"],
-            "email" => $validated["email"],
-            "password" => Hash::make($validated["password"]),
-        ]);
+        $exitingUser = User::where("email", $request->email)->first();
+
+        if ($exitingUser) {
+            // Just the base Validation
+            $validated = $request->validate($baseValidation);
+            $user = $exitingUser;
+        } else {
+            $fullValidation = array_merge($baseValidation, [
+                "firstName" => "required|string|max:255",
+                "lastName" => "required|string|max:255",
+                "password" => [
+                    "required",
+                    "confirmed",
+                    Rules\Password::defaults(),
+                ],
+            ]);
+
+            $validated = $request->validate($fullValidation);
+            // Create the user
+            $user = User::create([
+                "name" =>
+                    $validated["firstName"] . " " . $validated["lastName"],
+                "email" => $validated["email"],
+                "password" => Hash::make($validated["password"]),
+            ]);
+        }
 
         // Set the user's team
         $user->current_team_id = $team->id;
