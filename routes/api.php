@@ -13,6 +13,9 @@ use Illuminate\Support\Facades\Log;
 Route::middleware(["web", "auth:sanctum"])->group(function () {
     Route::get("/user", function (Request $request) {
         $user = auth("web")->user();
+        if (!$user) {
+            return response()->json(["error" => "Unauthenticated"], 401);
+        }
         $userData = $user->toArray();
         // Add roles to the userData
         $userData["roles"] = $user->getRoleNames();

@@ -5,11 +5,15 @@ namespace App\Http\Controllers;
 use App\Enums\Permission;
 use App\Models\Team;
 use App\Models\User;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Spatie\Permission\Models\Role;
 
 class TeamController extends Controller
 {
+    use AuthorizesRequests;
     /**
      * Display a listing of the teams.
      */
@@ -17,7 +21,7 @@ class TeamController extends Controller
     {
         $this->authorize(Permission::MANAGE_TEAMS);
 
-        $teams = Team::all();
+        $teams = Team::withCount("users")->get();
 
         return response()->json([
             "teams" => $teams,
@@ -113,28 +117,21 @@ class TeamController extends Controller
     /**
      * Add a user to a team.
      */
-    public function addMember(Request $request, Team $team)
+    public function addMember(Request $request)
     {
         $this->authorize(Permission::MANAGE_TEAMS);
 
         $validated = $request->validate([
-            "user_id" => "required|exists:users,id",
+            "email" => "required|exists:users,email",
         ]);
 
-        $user = User::findOrFail($validated["user_id"]);
+        $user = User::where("email", $validated["email"])->firstOrFail();
 
-        // Check if user is already in the team
-        if ($team->users()->where("user_id", $user->id)->exists()) {
-            return response()->json(
-                [
-                    "message" => "User is already a member of this team",
-                ],
-                422
-            );
-        }
-
-        $team->users()->attach($user->id);
-
+        // Could check if user is already in the team
+        $teamId = getPermissionsTeamId();
+        // Set the user's team
+        $user->current_team_id = $teamId;
+        $user->save();
         return response()->json([
             "message" => "User added to team successfully",
         ]);
@@ -161,32 +158,25 @@ class TeamController extends Controller
     /**
      * Assign a role to a team member.
      */
-    public function assignRole(Request $request, Team $team)
+    public function assignRole(Request $request)
     {
         $this->authorize(Permission::MANAGE_TEAMS);
 
         $validated = $request->validate([
-            "user_id" => "required|exists:users,id",
+            "email" => "required|exists:users,email",
             "role" => "required|string|exists:roles,name",
         ]);
 
-        $user = User::findOrFail($validated["user_id"]);
+        $user = User::where("email", $validated["email"])->firstOrFail();
 
-        // Make sure user is in the team
-        if (!$team->users()->where("user_id", $user->id)->exists()) {
-            return response()->json(
-                [
-                    "message" => "User is not a member of this team",
-                ],
-                422
-            );
-        }
+        // Could check that user is in the team
+        // $teamId = getPermissionsTeamId();
 
-        // Remove any existing roles first
-        DB::transaction(function () use ($user, $validated, $team) {
-            $user->roles()->detach();
-            $user->assignRole($validated["role"], $team);
-        });
+        // Remove all roles first by using syncRoles with an empty array
+        $user->syncRoles([]);
+
+        // Assign the new role
+        $user->assignRole($validated["role"]);
 
         return response()->json([
             "message" => "Role assigned successfully",

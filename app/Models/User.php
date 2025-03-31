@@ -53,7 +53,9 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(
             Team::class,
-            config("permission.table_names.model_has_roles", "model_id")
+            config("permission.table_names.model_has_roles"),
+            "model_id", // foreign key on the pivot table for the user
+            "team_id" // related key on the pivot table for the team
         );
     }
 
