@@ -68,4 +68,44 @@ class User extends Authenticatable
     {
         return $this->belongsTo(Team::class, "current_team_id");
     }
+
+    /**
+     * Get the clinical plans where the user is the patient.
+     */
+    public function clinicalPlansAsPatient()
+    {
+        return $this->hasMany(ClinicalPlan::class, "patient_id");
+    }
+
+    /**
+     * Get the clinical management plans where the user is the provider.
+     */
+    public function clinicalPlansAsProvider()
+    {
+        return $this->hasMany(ClinicalPlan::class, "provider_id");
+    }
+
+    /**
+     * Get the clinical plans where the user is the pharmacist.
+     */
+    public function clinicalPlansAsPharmacist()
+    {
+        return $this->hasMany(ClinicalPlan::class, "provider_id");
+    }
+
+    /**
+     * Get the prescriptions where the user is the patient.
+     */
+    public function prescriptionsAsPatient()
+    {
+        return $this->hasMany(Prescription::class, "patient_id");
+    }
+
+    /**
+     * Get the prescriptions where the user is the prescriber.
+     */
+    public function prescriptionsAsPrescriber()
+    {
+        return $this->hasMany(Prescription::class, "prescriber_id");
+    }
 }

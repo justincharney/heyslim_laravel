@@ -3,6 +3,9 @@
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\QuestionnaireController;
 use App\Http\Controllers\TeamController;
+use App\Http\Controllers\PatientController;
+use App\Http\Controllers\PrescriptionController;
+use App\Http\Controllers\ClinicalPlanController;
 use App\Http\Middleware\SetTeamContextMiddleware;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -99,4 +102,52 @@ Route::middleware(["web", "auth:sanctum", "role:admin"])
 
         // Get all available roles other than 'patient'
         Route::get("/roles", [TeamController::class, "getNonPatientRoles"]);
+    });
+
+// Routes for providers
+Route::middleware(["web", "auth:sanctum", "role:provider"])
+    ->prefix("provider")
+    ->group(function () {
+        // Patient management
+        Route::get("/patients", [PatientController::class, "index"]);
+        Route::get("/patients/{patient}", [PatientController::class, "show"]);
+        Route::get("/patients/{patient}/questionnaires/{submission}", [
+            PatientController::class,
+            "showQuestionnaire",
+        ]);
+
+        // Clinical plans
+        Route::get("/clinical-plans", [ClinicalPlanController::class, "index"]);
+        Route::post("/clinical-plans", [
+            ClinicalPlanController::class,
+            "store",
+        ]);
+        Route::post("/clinical-plans/from-questionnaire", [
+            ClinicalPlanController::class,
+            "createFromQuestionnaire",
+        ]);
+        Route::get("/clinical-plans/{clinicalPlan}", [
+            ClinicalPlanController::class,
+            "show",
+        ]);
+        Route::put("/clinical-plans/{clinicalPlan}", [
+            ClinicalPlanController::class,
+            "update",
+        ]);
+
+        // Prescriptions
+        Route::get("/prescriptions", [PrescriptionController::class, "index"]);
+        Route::post("/prescriptions", [PrescriptionController::class, "store"]);
+        Route::get("/prescriptions/{prescription}", [
+            PrescriptionController::class,
+            "show",
+        ]);
+        Route::put("/prescriptions/{prescription}", [
+            PrescriptionController::class,
+            "update",
+        ]);
+        Route::get("/patients/{patient}/prescriptions", [
+            PrescriptionController::class,
+            "getForPatient",
+        ]);
     });
