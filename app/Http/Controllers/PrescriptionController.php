@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Prescription;
 use App\Models\User;
+use App\Models\ClinicalPlan;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use App\Enums\Permission;
@@ -19,7 +19,9 @@ class PrescriptionController extends Controller
     */
     public function index()
     {
-        $teamId = Auth::user()->current_team_id;
+        $user = auth()->user();
+        $teamId = $user->current_team_id;
+
         if (!$teamId) {
             return response()->json(
                 [
@@ -30,18 +32,17 @@ class PrescriptionController extends Controller
             );
         }
 
+        // Set team context for permissions
+        setPermissionsTeamId($teamId);
+
         // If provider or pharmacist, get prescriptions they created
         if ($user->hasRole(["provider", "pharmacist"])) {
             $prescriptions = $user
                 ->prescriptionsAsPrescriber()
                 ->whereHas("patient", function ($query) use ($teamId) {
-                    $query->whereHas("teams", function ($subQuery) use (
-                        $teamId
-                    ) {
-                        $subQuery->where("id", $teamId);
-                    });
+                    $query->where("current_team_id", $teamId);
                 })
-                ->with(["patient:id,name", "clinicalManagementPlan"])
+                ->with(["patient:id,name", "clinicalPlan"])
                 ->orderBy("created_at", "desc")
                 ->get();
         }
@@ -50,14 +51,12 @@ class PrescriptionController extends Controller
             $prescriptions = Prescription::whereHas("patient", function (
                 $query
             ) use ($teamId) {
-                $query->whereHas("teams", function ($subQuery) use ($teamId) {
-                    $subQuery->where("id", $teamId);
-                });
+                $query->where("current_team_id", $teamId);
             })
                 ->with([
                     "patient:id,name",
                     "prescriber:id,name",
-                    "clinicalManagementPlan",
+                    "clinicalPlan",
                 ])
                 ->orderBy("created_at", "desc")
                 ->get();
@@ -66,7 +65,7 @@ class PrescriptionController extends Controller
         else {
             // Patients can only see their own prescriptions
             $prescriptions = Prescription::where("patient_id", $user->id)
-                ->with(["prescriber:id,name", "clinicalManagementPlan"])
+                ->with(["prescriber:id,name", "clinicalPlan"])
                 ->orderBy("created_at", "desc")
                 ->get();
         }
@@ -99,17 +98,37 @@ class PrescriptionController extends Controller
 
         $this->authorize(Permission::WRITE_PRESCRIPTIONS);
 
-        $validated = $request->validate([
+        // Base validation rules
+        $validationRules = [
             "patient_id" => "required|exists:users,id",
-            "clinical_plan_id" => "nullable|exists:clinical_plans,id",
             "medication_name" => "required|string|max:255",
-            "dose" => "required|string|max:255",
-            "schedule" => "required|string|max:255",
-            "specific_indications" => "nullable|string",
+            "dose" => "required|string",
+            "schedule" => "required|string",
+            "refills" => "required|integer|between:0,12",
+            "directions" => "nullable|string",
             "status" => "required|in:active,completed,cancelled",
             "start_date" => "required|date",
             "end_date" => "nullable|date|after_or_equal:start_date",
-        ]);
+        ];
+
+        // Pharmacists MUST have a clinical plan
+        if ($user->hasRole("pharmacist")) {
+            $validationRules["clinical_plan_id"] =
+                "required|exists:clinical_plans,id";
+        } else {
+            $validationRules["clinical_plan_id"] =
+                "nullable|exists:clinical_plans,id";
+        }
+
+        $validated = $request->validate($validationRules);
+
+        // If no end date, set it to one year after start date
+        if (empty($validated["end_date"])) {
+            $startDate = new \DateTime($validated["start_date"]);
+            $validated["end_date"] = $startDate
+                ->modify("+1 year")
+                ->format("Y-m-d");
+        }
 
         // Verify that the patient belongs to the prescriber's team
         $patient = User::findOrFail($validated["patient_id"]);
@@ -123,11 +142,9 @@ class PrescriptionController extends Controller
             );
         }
 
-        // If a clinical management plan was provided, validate that the user can prescribe based on the plan
-        if (isset($validated["clinical_management_plan_id"])) {
-            $plan = ClinicalManagementPlan::findOrFail(
-                $validated["clinical_management_plan_id"]
-            );
+        // If a clinical plan was provided, validate that the user can prescribe based on the plan
+        if (isset($validated["clinical_plan_id"])) {
+            $plan = ClinicalPlan::findOrFail($validated["clinical_plan_id"]);
 
             // Make sure the plan is active
             if ($plan->status !== "active") {
@@ -209,14 +226,58 @@ class PrescriptionController extends Controller
      */
     public function show($id)
     {
+        $user = auth()->user();
+        $teamId = $user->current_team_id;
+
+        if (!$teamId) {
+            return response()->json(
+                [
+                    "message" =>
+                        "You must be associated with a team to view prescriptions",
+                ],
+                403
+            );
+        }
+
+        // Set team context for permissions
+        setPermissionsTeamId($teamId);
+
         $this->authorize(Permission::READ_PRESCRIPTIONS);
 
         $prescription = Prescription::findOrFail($id);
-        $prescription->load([
-            "patient",
-            "prescriber",
-            "clinicalManagementPlan",
-        ]);
+
+        // Verify this prescription belongs to the user's team
+        $patientTeamId = $prescription->patient->current_team_id;
+        $prescriberTeamId = $prescription->prescriber->current_team_id;
+
+        // If user is patient, they can only see their own prescriptions
+        if (
+            $user->hasRole("patient") &&
+            $prescription->patient_id !== $user->id
+        ) {
+            return response()->json(
+                [
+                    "message" => "You can only view your own prescriptions",
+                ],
+                403
+            );
+        }
+
+        // If user is provider/pharmacist/admin, they can only see prescriptions in their team
+        if (
+            !$user->hasRole("patient") &&
+            $patientTeamId !== $teamId &&
+            $prescriberTeamId !== $teamId
+        ) {
+            return response()->json(
+                [
+                    "message" => "Prescription not found in your team",
+                ],
+                404
+            );
+        }
+
+        $prescription->load(["patient", "prescriber", "clinicalPlan"]);
 
         return response()->json([
             "prescription" => $prescription,
@@ -228,24 +289,60 @@ class PrescriptionController extends Controller
      */
     public function update(Request $request, $id)
     {
+        $user = auth()->user();
+        $teamId = $user->current_team_id;
+
+        if (!$teamId) {
+            return response()->json(
+                [
+                    "message" =>
+                        "You must be associated with a team to update prescriptions",
+                ],
+                403
+            );
+        }
+
+        // Set team context for permissions
+        setPermissionsTeamId($teamId);
+
         $this->authorize(Permission::WRITE_PRESCRIPTIONS);
 
         $prescription = Prescription::findOrFail($id);
 
-        // Only allow updating certain fields and only by the prescriber
-        if ($prescription->prescriber_id !== auth()->id()) {
+        // Check if the prescription belongs to user's team
+        $prescriptionTeamId = $prescription->patient->current_team_id;
+        if ($prescriptionTeamId !== $teamId) {
             return response()->json(
                 [
                     "message" =>
-                        "Only the original prescriber can update this prescription",
+                        "You can only update prescriptions in your team",
+                ],
+                403
+            );
+        }
+
+        // Only allow updating by the prescriber, except for admins
+        if (
+            $prescription->prescriber_id !== $user->id &&
+            !$user->hasRole("admin")
+        ) {
+            return response()->json(
+                [
+                    "message" =>
+                        "Only the original prescriber or an admin can update this prescription",
                 ],
                 403
             );
         }
 
         $validated = $request->validate([
-            "specific_indications" => "nullable|string",
+            "medication_name" => "sometimes|string|max:255",
+            "dose" => "sometimes|string",
+            "schedule" => "sometimes|string",
+            "refills" => "sometimes|integer|between:0,12",
+            "directions" => "nullable|string",
             "status" => "sometimes|in:active,completed,cancelled",
+            "start_date" => "sometimes|date",
             "end_date" => "nullable|date|after_or_equal:start_date",
         ]);
 
@@ -262,16 +359,42 @@ class PrescriptionController extends Controller
      */
     public function getForPatient($patientId)
     {
+        $user = auth()->user();
+        $teamId = $user->current_team_id;
+
+        if (!$teamId) {
+            return response()->json(
+                [
+                    "message" =>
+                        "You must be associated with a team to view patient prescriptions",
+                ],
+                403
+            );
+        }
+
+        // Set team context for permissions
+        setPermissionsTeamId($teamId);
+
         $this->authorize(Permission::READ_PRESCRIPTIONS);
 
         $patient = User::findOrFail($patientId);
+
+        // Verify the patient is in the same team
+        if ($patient->current_team_id !== $teamId) {
+            return response()->json(
+                [
+                    "message" => "Patient not found in your team",
+                ],
+                404
+            );
+        }
 
         if (!$patient->hasRole("patient")) {
             return response()->json(
                 [
                     "message" => "User is not a patient",
                 ],
-                404
+                400
             );
         }
 

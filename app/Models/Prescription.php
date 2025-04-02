@@ -12,7 +12,7 @@ class Prescription extends Model
     protected $fillable = [
         "patient_id",
         "prescriber_id",
-        "clinical_management_plan_id",
+        "clinical_plan_id",
         "medication_name",
         "dose",
         "schedule",
@@ -31,7 +31,7 @@ class Prescription extends Model
     /**
      * Get the patient that owns the prescription.
      */
-    public function patient(): BelongsTo
+    public function patient()
     {
         return $this->belongsTo(User::class, "patient_id");
     }

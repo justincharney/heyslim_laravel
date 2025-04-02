@@ -39,11 +39,7 @@ class ClinicalPlanController extends Controller
         if ($user->hasRole("provider")) {
             $plans = $user
                 ->clinicalPlansAsProvider()
-                ->with([
-                    "patient",
-                    "pharmacist",
-                    "questionnaireSubmission.questionnaire",
-                ])
+                ->with(["patient", "pharmacist", "provider"])
                 ->whereHas("patient", function ($query) use ($teamId) {
                     $query->where("current_team_id", $teamId);
                 })
@@ -63,11 +59,7 @@ class ClinicalPlanController extends Controller
                 ->whereHas("provider", function ($query) use ($teamId) {
                     $query->where("current_team_id", $teamId);
                 })
-                ->with([
-                    "patient",
-                    "provider",
-                    "questionnaireSubmission.questionnaire",
-                ])
+                ->with(["patient", "pharmacist", "provider"])
                 ->orderBy("created_at", "desc")
                 ->get();
         }
@@ -289,13 +281,13 @@ class ClinicalPlanController extends Controller
             $clinicalManagementPlan->update([
                 "pharmacist_id" => $user->id,
                 "pharmacist_agreed_at" => now(),
+                "status" => "active",
             ]);
 
             DB::commit();
 
             return response()->json([
                 "message" => "Pharmacist agreement recorded successfully",
-                "clinical_plan" => $clinicalManagementPlan->fresh(),
             ]);
         } catch (\Exception $e) {
             DB::rollBack();

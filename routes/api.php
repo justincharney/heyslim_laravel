@@ -108,31 +108,37 @@ Route::middleware(["web", "auth:sanctum", "role:admin"])
 Route::middleware(["web", "auth:sanctum", "role:provider"])
     ->prefix("provider")
     ->group(function () {
-        // Patient management
+        // Clinical plans (writing)
+        Route::post("/clinical-plans", [
+            ClinicalPlanController::class,
+            "store",
+        ]);
+        Route::put("/clinical-plans/{clinicalPlan}", [
+            ClinicalPlanController::class,
+            "update",
+        ]);
+    });
+
+// Routes for pharmacists
+Route::middleware(["web", "auth:sanctum", "role:pharmacist|admin"])
+    ->prefix("pharmacist")
+    ->group(function () {
+        // Pharmacist-specific clinical plan actions
+        Route::put("/clinical-plans/{clinicalPlan}/agree", [
+            ClinicalPlanController::class,
+            "agreeAsPharmacist",
+        ]);
+    });
+
+// Routes shared between providers and pharmacists
+Route::middleware(["web", "auth:sanctum", "role:provider|pharmacist"])->group(
+    function () {
+        // Patient management (view functionality)
         Route::get("/patients", [PatientController::class, "index"]);
         Route::get("/patients/{patient}", [PatientController::class, "show"]);
         Route::get("/patients/{patient}/questionnaires/{submission}", [
             PatientController::class,
             "showQuestionnaire",
-        ]);
-
-        // Clinical plans
-        Route::get("/clinical-plans", [ClinicalPlanController::class, "index"]);
-        Route::post("/clinical-plans", [
-            ClinicalPlanController::class,
-            "store",
-        ]);
-        Route::post("/clinical-plans/from-questionnaire", [
-            ClinicalPlanController::class,
-            "createFromQuestionnaire",
-        ]);
-        Route::get("/clinical-plans/{clinicalPlan}", [
-            ClinicalPlanController::class,
-            "show",
-        ]);
-        Route::put("/clinical-plans/{clinicalPlan}", [
-            ClinicalPlanController::class,
-            "update",
         ]);
 
         // Prescriptions
@@ -142,12 +148,20 @@ Route::middleware(["web", "auth:sanctum", "role:provider"])
             PrescriptionController::class,
             "show",
         ]);
-        Route::put("/prescriptions/{prescription}", [
-            PrescriptionController::class,
-            "update",
-        ]);
         Route::get("/patients/{patient}/prescriptions", [
             PrescriptionController::class,
             "getForPatient",
         ]);
-    });
+        Route::put("/prescriptions/{prescription}", [
+            PrescriptionController::class,
+            "update",
+        ]);
+
+        // Clinical plans (read-only)
+        Route::get("/clinical-plans", [ClinicalPlanController::class, "index"]);
+        Route::get("/clinical-plans/{clinicalPlan}", [
+            ClinicalPlanController::class,
+            "show",
+        ]);
+    }
+);
