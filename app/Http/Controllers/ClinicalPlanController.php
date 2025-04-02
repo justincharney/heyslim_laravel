@@ -300,4 +300,119 @@ class ClinicalPlanController extends Controller
             );
         }
     }
+
+    /**
+     * Get clinical plans that require pharmacist approval
+     */
+    public function getPlansNeedingPharmacistApproval()
+    {
+        $user = auth()->user();
+        $teamId = $user->current_team_id;
+
+        if (!$teamId) {
+            return response()->json(
+                [
+                    "message" =>
+                        "You must be associated with a team to view clinical plans",
+                ],
+                403
+            );
+        }
+
+        // Set team context for permissions
+        setPermissionsTeamId($teamId);
+
+        // Check if user is a pharmacist
+        if (!$user->hasRole("pharmacist")) {
+            return response()->json(
+                [
+                    "message" => "Only pharmacists can access this endpoint",
+                ],
+                403
+            );
+        }
+
+        // Get clinical plans that don't have pharmacist approval
+        $plans = ClinicalPlan::whereNull("pharmacist_agreed_at")
+            ->whereHas("patient", function ($query) use ($teamId) {
+                $query->where("current_team_id", $teamId);
+            })
+            ->whereHas("provider", function ($query) use ($teamId) {
+                $query->where("current_team_id", $teamId);
+            })
+            ->with(["patient", "pharmacist", "provider"])
+            ->orderBy("created_at", "desc")
+            ->get();
+
+        return response()->json([
+            "clinical_plans" => $plans,
+        ]);
+    }
+
+    /**
+     * Get clinical plans that don't have any prescriptions
+     */
+    public function getPlansWithoutPrescriptions()
+    {
+        $user = auth()->user();
+        $teamId = $user->current_team_id;
+
+        if (!$teamId) {
+            return response()->json(
+                [
+                    "message" =>
+                        "You must be associated with a team to view clinical plans",
+                ],
+                403
+            );
+        }
+
+        // Set team context for permissions
+        setPermissionsTeamId($teamId);
+
+        // Check if user is a provider or pharmacist
+        if (!$user->hasRole(["provider", "pharmacist", "admin"])) {
+            return response()->json(
+                [
+                    "message" =>
+                        "You don't have permission to access this endpoint",
+                ],
+                403
+            );
+        }
+
+        // First, get all active clinical plans
+        $plansQuery = ClinicalPlan::where("status", "active")
+            ->whereHas("patient", function ($query) use ($teamId) {
+                $query->where("current_team_id", $teamId);
+            })
+            ->whereDoesntHave("prescriptions");
+
+        // If provider, filter plans they created for patients in their team
+        if ($user->hasRole("provider")) {
+            $plansQuery->where("provider_id", $user->id);
+        }
+        // If pharmacist, filter plans where they're the pharmacist or plans in their team
+        elseif ($user->hasRole("pharmacist")) {
+            $plansQuery
+                ->where(function ($query) use ($user) {
+                    $query
+                        ->where("pharmacist_id", $user->id)
+                        ->orWhere("pharmacist_id", null);
+                })
+                ->whereHas("provider", function ($query) use ($teamId) {
+                    $query->where("current_team_id", $teamId);
+                });
+        }
+
+        // Get plans
+        $plans = $plansQuery
+            ->with(["patient", "pharmacist", "provider"])
+            ->orderBy("created_at", "desc")
+            ->get();
+
+        return response()->json([
+            "clinical_plans" => $plans,
+        ]);
+    }
 }

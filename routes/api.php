@@ -128,6 +128,11 @@ Route::middleware(["web", "auth:sanctum", "role:pharmacist|admin"])
             ClinicalPlanController::class,
             "agreeAsPharmacist",
         ]);
+
+        Route::get("/clinical-plans/needing-approval", [
+            ClinicalPlanController::class,
+            "getPlansNeedingPharmacistApproval",
+        ]);
     });
 
 // Routes shared between providers and pharmacists
@@ -159,6 +164,10 @@ Route::middleware(["web", "auth:sanctum", "role:provider|pharmacist"])->group(
 
         // Clinical plans (read-only)
         Route::get("/clinical-plans", [ClinicalPlanController::class, "index"]);
+        Route::get("/clinical-plans/without-prescriptions", [
+            ClinicalPlanController::class,
+            "getPlansWithoutPrescriptions",
+        ]);
         Route::get("/clinical-plans/{clinicalPlan}", [
             ClinicalPlanController::class,
             "show",
