@@ -215,35 +215,36 @@ class ClinicalPlanController extends Controller
         $clinicalManagementPlan = ClinicalPlan::findOrFail($id);
 
         $validated = $request->validate([
-            "title" => "sometimes|string|max:255",
-            "condition_treated" => "sometimes|string",
-            "aim_of_treatment" => "sometimes|string",
-            "guidelines" => "nullable|string",
-            "monitoring_frequency" => "nullable|string",
-            "process_for_reporting_adrs" => "nullable|string",
-            "medicines_that_may_be_prescribed" => "nullable|string",
-            "patient_allergies" => "nullable|string",
-            "status" => "sometimes|in:draft,active,completed,abandoned",
-            "last_updated_at" => "required|date", // For optimistic locking
+            "patient_id" => "required|exists:users,id",
+            "questionnaire_submission_id" =>
+                "nullable|exists:questionnaire_submissions,id",
+            "condition_treated" => "required|string",
+            "medicines_that_may_be_prescribed" => "required|string",
+            "dose_schedule" => "required|string",
+            "guidelines" => "required|string",
+            "monitoring_frequency" => "required|string",
+            "process_for_reporting_adrs" => "required|string",
+            "patient_allergies" => "required|string",
+            "status" => "required|in:draft,active,completed,abandoned",
         ]);
 
-        // Check for conflicts
-        if (
-            $lockCheck = $this->checkOptimisticLock(
-                $clinicalManagementPlan,
-                $validated["last_updated_at"]
-            )
-        ) {
-            return response()->json(
-                ["message" => $lockCheck["message"]],
-                $lockCheck["status"]
-            );
-        }
+        // // Check for conflicts
+        // if (
+        //     $lockCheck = $this->checkOptimisticLock(
+        //         $clinicalManagementPlan,
+        //         $validated["last_updated_at"]
+        //     )
+        // ) {
+        //     return response()->json(
+        //         ["message" => $lockCheck["message"]],
+        //         $lockCheck["status"]
+        //     );
+        // }
 
         DB::beginTransaction();
 
         try {
-            unset($validated["last_updated_at"]);
+            // unset($validated["last_updated_at"]);
 
             $clinicalManagementPlan->update($validated);
 
@@ -251,7 +252,6 @@ class ClinicalPlanController extends Controller
 
             return response()->json([
                 "message" => "Clinical management plan updated successfully",
-                "clinical_plan" => $clinicalManagementPlan->fresh(),
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -302,63 +302,6 @@ class ClinicalPlanController extends Controller
             return response()->json(
                 [
                     "message" => "Failed to record pharmacist agreement",
-                    "error" => $e->getMessage(),
-                ],
-                500
-            );
-        }
-    }
-
-    /**
-     * Create a clinical management plan from a questionnaire submission
-     */
-    public function createFromQuestionnaire(Request $request)
-    {
-        $this->authorize(Permission::WRITE_TREATMENT_PLANS);
-
-        $validated = $request->validate([
-            "questionnaire_submission_id" =>
-                "required|exists:questionnaire_submissions,id",
-            "title" => "required|string|max:255",
-            "condition_treated" => "required|string",
-            "aim_of_treatment" => "required|string",
-            "guidelines" => "nullable|string",
-            "monitoring_frequency" => "nullable|string",
-            "process_for_reporting_adrs" => "nullable|string",
-            "medicines_that_may_be_prescribed" => "nullable|string",
-            "patient_allergies" => "nullable|string",
-        ]);
-
-        $submission = QuestionnaireSubmission::findOrFail(
-            $validated["questionnaire_submission_id"]
-        );
-
-        // Add default fields
-        $validated["patient_id"] = $submission->user_id;
-        $validated["provider_id"] = auth()->id();
-        $validated["provider_agreed_at"] = now();
-        $validated["status"] = "draft";
-
-        DB::beginTransaction();
-
-        try {
-            $plan = ClinicalPlan::create($validated);
-
-            DB::commit();
-
-            return response()->json(
-                [
-                    "message" =>
-                        "Clinical management plan created from questionnaire submission",
-                    "clinical_plan" => $plan,
-                ],
-                201
-            );
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json(
-                [
-                    "message" => "Failed to create clinical management plan",
                     "error" => $e->getMessage(),
                 ],
                 500
