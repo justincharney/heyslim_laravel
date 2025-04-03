@@ -24,6 +24,8 @@ class DatabaseSeeder extends Seeder
             GLP1Seeder::class,
             RolesAndPermissionsSeeder::class,
             TeamSeeder::class,
+            PatientSeeder::class,
+            FrontendTokenSeeder,
         ]);
     }
 }

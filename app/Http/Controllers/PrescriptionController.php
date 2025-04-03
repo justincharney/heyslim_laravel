@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Chat;
+use App\Models\Message;
 use App\Models\Prescription;
 use App\Models\User;
 use App\Models\ClinicalPlan;
@@ -200,12 +202,29 @@ class PrescriptionController extends Controller
         try {
             $prescription = Prescription::create($validated);
 
+            // Create the chat for the prescription
+            $chat = Chat::create([
+                "prescription_id" => $prescription->id,
+                "patient_id" => $validated["patient_id"],
+                "provider_id" => $validated["prescriber_id"],
+                "status" => "active",
+            ]);
+
+            // Add an initial message from the provider
+            Message::create([
+                "chat_id" => $chat->id,
+                "user_id" => $validated["prescriber_id"],
+                "message" => "Hello! I've prescribed {$validated["medication_name"]} for you. Feel free to ask any questions about this medication or its usage.",
+                "read" => false,
+            ]);
+
             DB::commit();
 
             return response()->json(
                 [
                     "message" => "Prescription created successfully",
                     "prescription" => $prescription,
+                    "chat", => $chat
                 ],
                 201
             );

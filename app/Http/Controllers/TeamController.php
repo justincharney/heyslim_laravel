@@ -24,17 +24,38 @@ class TeamController extends Controller
     {
         $this->authorize(Permission::MANAGE_TEAMS);
 
-        // Get teams with a count of non-patient users
-        $teams = Team::withCount([
-            "users" => function ($query) {
-                $query->whereDoesntHave("roles", function ($q) {
+        // Get all teams
+        $teams = Team::all();
+
+        $teamsWithCounts = $teams->map(function ($team) {
+            // Set the team context for permissions
+            setPermissionsTeamId($team->id);
+
+            // Count patient users in this team context
+            $patientCount = User::role("patient")->count();
+
+            // Count non-patient users in this team context
+            $nonPatientCount = $team
+                ->users()
+                ->whereDoesntHave("roles", function ($q) {
                     $q->where("name", "patient");
-                });
-            },
-        ])->get();
+                })
+                ->count();
+
+            // Return team with both counts
+            return [
+                "id" => $team->id,
+                "name" => $team->name,
+                "description" => $team->description,
+                "created_at" => $team->created_at,
+                "updated_at" => $team->updated_at,
+                "patient_count" => $patientCount,
+                "non_patient_count" => $nonPatientCount,
+            ];
+        });
 
         return response()->json([
-            "teams" => $teams,
+            "teams" => $teamsWithCounts,
         ]);
     }
 

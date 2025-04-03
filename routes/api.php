@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\ChatController;
 use App\Http\Controllers\QuestionnaireController;
 use App\Http\Controllers\TeamController;
 use App\Http\Controllers\PatientController;
@@ -34,6 +35,16 @@ Route::middleware(["web", "auth:sanctum"])->group(function () {
         AuthenticatedSessionController::class,
         "destroy",
     ])->name("logout");
+
+    // Chat routes
+    // Get all chats for the authenticated user
+    Route::get("/chats", [ChatController::class, "index"]);
+
+    // Get a specific chat with messages
+    Route::get("/chats/{id}", [ChatController::class, "show"]);
+
+    // Send a message in a chat
+    Route::post("/chats/{id}/messages", [ChatController::class, "sendMessage"]);
 });
 
 // Routes for patients
@@ -172,5 +183,11 @@ Route::middleware(["web", "auth:sanctum", "role:provider|pharmacist"])->group(
             ClinicalPlanController::class,
             "show",
         ]);
+
+        // Chat actions
+        // Close a chat (provider only)
+        Route::put("/chats/{id}/close", [ChatController::class, "closeChat"]);
+        // Reopen a chat (provider only)
+        Route::put("/chats/{id}/reopen", [ChatController::class, "reopenChat"]);
     }
 );

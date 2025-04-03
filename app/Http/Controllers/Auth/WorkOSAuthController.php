@@ -38,12 +38,11 @@ class WorkOSAuthController extends Controller
         $teamCounts = [];
 
         foreach ($teams as $team) {
-            // Count patient users in this team
-            $patientCount = User::where("current_team_id", $team->id)
-                ->whereHas("roles", function ($query) {
-                    $query->where("name", "patient");
-                })
-                ->count();
+            // Set the team context for permissions
+            setPermissionsTeamId($team->id);
+
+            // Count users with patient role in this team context
+            $patientCount = User::role("patient")->count();
 
             $teamCounts[$team->id] = $patientCount;
         }
