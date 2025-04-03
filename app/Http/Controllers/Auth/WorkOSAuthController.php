@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use App\Services\ShopifyService;
@@ -19,6 +20,36 @@ class WorkOSAuthController extends Controller
     public function __construct(ShopifyService $shopifyService)
     {
         $this->shopifyService = $shopifyService;
+    }
+
+    /**
+     * Find the team with the fewest patient users
+     * Return the ID of the team with the fewest patients, or null if no teams exist
+     */
+    private function findTeamWithFewestPatients(): int|null
+    {
+        // Get all teams
+        $teams = \App\Models\Team::all();
+
+        if ($teams->isEmpty()) {
+            return null;
+        }
+
+        $teamCounts = [];
+
+        foreach ($teams as $team) {
+            // Count patient users in this team
+            $patientCount = User::where("current_team_id", $team->id)
+                ->whereHas("roles", function ($query) {
+                    $query->where("name", "patient");
+                })
+                ->count();
+
+            $teamCounts[$team->id] = $patientCount;
+        }
+
+        // Find the team with the minimum count
+        return array_keys($teamCounts, min($teamCounts))[0];
     }
 
     public function showLogin(AuthKitLoginRequest $request)
@@ -40,7 +71,22 @@ class WorkOSAuthController extends Controller
             try {
                 DB::beginTransaction();
 
-                // Create a Shopify customer
+                // Handle local user creation first
+                // Find the team with the fewest patients first
+                $teamId = $this->findTeamWithFewestPatients();
+
+                if (!$teamId) {
+                    throw new \Exception(
+                        "No available team found for patient assignment"
+                    );
+                }
+
+                // Set the user's current team and team context for roles
+                $user->current_team_id = $teamId;
+                setPermissionsTeamId($teamId);
+                $user->assignRole("patient");
+
+                // Only create the Shopify customer if local operations succeeded
                 $shopifyCustomerId = $this->shopifyService->createCustomer(
                     $firstName,
                     $lastName,
@@ -50,10 +96,8 @@ class WorkOSAuthController extends Controller
                 if (!$shopifyCustomerId) {
                     throw new \Exception("Failed to create Shopify customer");
                 } else {
-                    // Update user with Shopify customer ID
+                    // Update the user with the Shopify customer ID
                     $user->shopify_customer_id = $shopifyCustomerId;
-                    // Assign the patient role to the user
-                    $user->assignRole("patient");
                     $user->save();
                 }
 
