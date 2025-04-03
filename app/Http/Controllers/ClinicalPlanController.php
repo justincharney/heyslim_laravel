@@ -70,12 +70,7 @@ class ClinicalPlanController extends Controller
             ) {
                 $query->where("current_team_id", $teamId);
             })
-                ->with([
-                    "patient",
-                    "provider",
-                    "pharmacist",
-                    "questionnaireSubmission.questionnaire",
-                ])
+                ->with(["patient", "provider", "pharmacist"])
                 ->orderBy("created_at", "desc")
                 ->get();
         } else {

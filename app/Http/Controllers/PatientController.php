@@ -75,7 +75,7 @@ class PatientController extends Controller
         // Load clinical management plans with team context
         $clinicalPlans = $patient
             ->clinicalPlansAsPatient()
-            ->with(["provider", "pharmacist"])
+            ->with(["provider", "pharmacist", "patient"])
             ->whereHas("provider", function ($query) use ($teamId) {
                 $query->where("current_team_id", $teamId);
             })
@@ -85,7 +85,7 @@ class PatientController extends Controller
         // Load prescriptions with team context
         $prescriptions = $patient
             ->prescriptionsAsPatient()
-            ->with(["prescriber", "clinicalPlan"])
+            ->with(["prescriber", "clinicalPlan", "patient"])
             ->whereHas("prescriber", function ($query) use ($teamId) {
                 $query->where("current_team_id", $teamId);
             })
@@ -95,7 +95,7 @@ class PatientController extends Controller
         return response()->json([
             "patient" => $patient,
             "questionnaire_submissions" => $submissions,
-            "clinical_management_plans" => $clinicalPlans,
+            "clinical_plans" => $clinicalPlans,
             "prescriptions" => $prescriptions,
         ]);
     }
