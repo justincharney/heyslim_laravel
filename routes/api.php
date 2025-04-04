@@ -137,6 +137,12 @@ Route::middleware(["web", "auth:sanctum", "role:provider"])
             PatientController::class,
             "getPatientsNeedingClinicalPlans",
         ]);
+
+        // Reject questionnaire submission
+        Route::put("/questionnaire-submissions/{id}/reject", [
+            QuestionnaireController::class,
+            "reject",
+        ]);
     });
 
 // Routes for pharmacists

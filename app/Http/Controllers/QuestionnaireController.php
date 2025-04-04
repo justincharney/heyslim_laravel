@@ -339,4 +339,24 @@ class QuestionnaireController extends Controller
             201
         );
     }
+
+    public function reject(Request $request, $id)
+    {
+        $submission = QuestionnaireSubmission::findOrFail($id);
+
+        $validated = $request->validate([
+            "review_notes" => "required|string",
+        ]);
+
+        $submission->update([
+            "status" => "rejected",
+            "review_notes" => $validated["review_notes"],
+            "reviewed_by" => auth()->id(),
+            "reviewed_at" => now(),
+        ]);
+
+        return response()->json([
+            "message" => "Questionnaire submission rejected",
+        ]);
+    }
 }
