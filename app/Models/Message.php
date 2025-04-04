@@ -37,6 +37,29 @@ class Message extends Model
                 $message->chat_id,
                 $broadcastData
             );
+
+            // Also broadcast to the chat list channels for both users
+            $chat = $message->chat;
+
+            // For patient
+            app(SupabaseService::class)->broadcastToChannel(
+                "user-chats:{$chat->patient_id}",
+                "new_message",
+                [
+                    "chat_id" => $chat->id,
+                    "message" => $broadcastData,
+                ]
+            );
+
+            // For provider
+            app(SupabaseService::class)->broadcastToChannel(
+                "user-chats:{$chat->provider_id}",
+                "new_message",
+                [
+                    "chat_id" => $chat->id,
+                    "message" => $broadcastData,
+                ]
+            );
         });
     }
 

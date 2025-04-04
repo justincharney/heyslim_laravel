@@ -146,6 +146,20 @@ class ClinicalPlanController extends Controller
         try {
             $plan = ClinicalPlan::create($validated);
 
+            // Update the associated questionnaire to be 'approved'
+            if ($validated["questionnaire_submission_id"]) {
+                $submission = QuestionnaireSubmission::find(
+                    $validated["questionnaire_submission_id"]
+                );
+                if ($submission) {
+                    $submission->update([
+                        "status" => "approved",
+                        "reviewed_by" => auth()->id(),
+                        "reviewed_at" => now(),
+                    ]);
+                }
+            }
+
             DB::commit();
 
             return response()->json(

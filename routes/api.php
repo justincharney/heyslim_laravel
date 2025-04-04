@@ -45,6 +45,9 @@ Route::middleware(["web", "auth:sanctum"])->group(function () {
 
     // Send a message in a chat
     Route::post("/chats/{id}/messages", [ChatController::class, "sendMessage"]);
+
+    // Read messages
+    Route::post("/chats/{id}/read", [ChatController::class, "markAsRead"]);
 });
 
 // Routes for patients

@@ -25,6 +25,9 @@ class ChatController extends Controller
                 "prescription:id,medication_name",
                 "provider:id,name",
                 "patient:id,name",
+                "messages" => function ($query) {
+                    $query->latest()->limit(1);
+                },
             ])
             ->withCount([
                 "messages as unread_count" => function ($query) use ($user) {
@@ -151,6 +154,34 @@ class ChatController extends Controller
         return response()->json([
             "message" => "Chat reopened successfully",
             "chat" => $chat,
+        ]);
+    }
+
+    /**
+     * Mark all unread messages in a chat as read
+     */
+    public function markAsRead($id)
+    {
+        $user = auth()->user();
+
+        // Check if the user is part of this chat
+        $chat = Chat::where("id", $id)
+            ->where(function ($query) use ($user) {
+                $query
+                    ->where("patient_id", $user->id)
+                    ->orWhere("provider_id", $user->id);
+            })
+            ->firstOrFail();
+
+        // Mark all unread messages from other users as read
+        $updatedCount = Message::where("chat_id", $chat->id)
+            ->where("user_id", "!=", $user->id)
+            ->where("read", false)
+            ->update(["read" => true]);
+
+        return response()->json([
+            "success" => true,
+            "updated_count" => $updatedCount,
         ]);
     }
 }
