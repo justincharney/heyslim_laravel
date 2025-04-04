@@ -16,7 +16,7 @@ class GLP1Seeder extends Seeder
     {
         // Check if questionnaire already exists
         $existingQuestionnaire = DB::table("questionnaires")
-            ->where("title", "GLP-1 Weight Loss Medication Questionnaire")
+            ->where("title", "GLP-1 Weight Management Treatment Plan")
             ->first();
 
         if ($existingQuestionnaire) {
@@ -24,9 +24,9 @@ class GLP1Seeder extends Seeder
         } else {
             // Create the questionnaire
             $questionnaireId = DB::table("questionnaires")->insertGetId([
-                "title" => "GLP-1 Weight Loss Medication Questionnaire",
+                "title" => "GLP-1 Weight Management Treatment Plan",
                 "description" =>
-                    "Pre-screening questionnaire for GLP-1 weight loss medication prescription",
+                    "Start your assessment for GLP-1 weight management therapy",
                 "created_at" => now(),
                 "updated_at" => now(),
             ]);

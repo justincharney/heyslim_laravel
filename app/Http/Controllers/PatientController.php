@@ -150,4 +150,50 @@ class PatientController extends Controller
             "submission" => $submission,
         ]);
     }
+
+    /**
+     * Get patients who have questionnaire submissions but no clinical plans
+     */
+    public function getPatientsNeedingClinicalPlans()
+    {
+        $user = auth()->user();
+        $teamId = $user->current_team_id;
+
+        if (!$teamId) {
+            return response()->json(
+                [
+                    "message" =>
+                        "You must be associated with a team to view patients",
+                ],
+                403
+            );
+        }
+
+        // Set team context for permissions
+        setPermissionsTeamId($teamId);
+
+        // Check if user is a provider, pharmacist or admin
+        if (!$user->hasRole(["provider", "pharmacist", "admin"])) {
+            return response()->json(
+                [
+                    "message" =>
+                        "You don't have permission to access this endpoint",
+                ],
+                403
+            );
+        }
+
+        // Get patients who have questionnaire submissions but no clinical plans
+        $patients = User::role("patient")
+            ->where("current_team_id", $teamId)
+            ->whereHas("questionnaireSubmissions", function ($query) {
+                $query->where("status", "submitted");
+            })
+            ->whereDoesntHave("clinicalPlansAsPatient")
+            ->get();
+
+        return response()->json([
+            "patients" => $patients,
+        ]);
+    }
 }

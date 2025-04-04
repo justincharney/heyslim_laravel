@@ -1,6 +1,7 @@
 <?php namespace App\Http\Controllers;
 
 use App\Models\QuestionAnswer;
+use App\Models\Questionnaire;
 use App\Models\QuestionnaireSubmission;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
@@ -9,6 +10,32 @@ use Illuminate\Support\Facades\Log;
 
 class QuestionnaireController extends Controller
 {
+    public function index(Request $request)
+    {
+        // Get all questionnaires
+        $questionnaires = Questionnaire::select(
+            "id",
+            "title",
+            "description",
+            "created_at"
+        )
+            ->orderBy("created_at", "desc")
+            ->get();
+
+        return response()->json([
+            "questionnaires" => $questionnaires->map(function ($questionnaire) {
+                return [
+                    "id" => $questionnaire->id,
+                    "title" => $questionnaire->title,
+                    "description" => $questionnaire->description,
+                    "created_at" => $questionnaire->created_at->format(
+                        "Y-m-d H:i:s"
+                    ),
+                ];
+            }),
+        ]);
+    }
+
     public function getPatientQuestionnaires(Request $request)
     {
         $submissions = QuestionnaireSubmission::with(["questionnaire"])
@@ -99,6 +126,51 @@ class QuestionnaireController extends Controller
             "questionnaire_id" => "required|exists:questionnaires,id",
         ]);
 
+        // Check if the user already has any submission for this questionnaire
+        $existingSubmission = QuestionnaireSubmission::where([
+            "questionnaire_id" => $validated["questionnaire_id"],
+            "user_id" => auth()->id(),
+        ])
+            ->orderBy("created_at", "desc")
+            ->first();
+
+        // If there's an existing submission, handle based on its status
+        if ($existingSubmission) {
+            // If it's a draft, return it
+            if ($existingSubmission->status === "draft") {
+                return response()->json([
+                    "message" => "Existing draft found",
+                    "submission_id" => $existingSubmission->id,
+                    "questionnaire_id" => $existingSubmission->questionnaire_id,
+                    "status" => "draft",
+                    "is_new" => false,
+                ]);
+            }
+
+            // If it's submitted or approved, prevent creating a new one
+            if (
+                $existingSubmission->status === "submitted" ||
+                $existingSubmission->status === "approved"
+            ) {
+                return response()->json(
+                    [
+                        "message" =>
+                            "You already have an active submission for this questionnaire",
+                        "submission_id" => $existingSubmission->id,
+                        "questionnaire_id" =>
+                            $existingSubmission->questionnaire_id,
+                        "status" => $existingSubmission->status,
+                        "submitted_at" => $existingSubmission->submitted_at?->format(
+                            "Y-m-d H:i:s"
+                        ),
+                    ],
+                    403
+                );
+            }
+            // If it's rejected, we'll allow a new submission (fall through to creation code)
+        }
+
+        // Create new draft if none exists
         $submission = QuestionnaireSubmission::create([
             "questionnaire_id" => $validated["questionnaire_id"],
             "user_id" => auth()->id(),
@@ -108,6 +180,7 @@ class QuestionnaireController extends Controller
         return response()->json(
             [
                 "message" => "Draft questionnaire created",
+                "submission_id" => $submission->id,
             ],
             201
         );

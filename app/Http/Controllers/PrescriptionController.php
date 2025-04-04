@@ -224,7 +224,7 @@ class PrescriptionController extends Controller
                 [
                     "message" => "Prescription created successfully",
                     "prescription" => $prescription,
-                    "chat", => $chat
+                    "chat" => $chat,
                 ],
                 201
             );

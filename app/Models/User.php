@@ -108,4 +108,12 @@ class User extends Authenticatable
     {
         return $this->hasMany(Prescription::class, "prescriber_id");
     }
+
+    /**
+     * Get the questionnaire submissions for this user.
+     */
+    public function questionnaireSubmissions()
+    {
+        return $this->hasMany(QuestionnaireSubmission::class, "user_id");
+    }
 }

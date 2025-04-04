@@ -51,8 +51,11 @@ Route::middleware(["web", "auth:sanctum"])->group(function () {
 Route::middleware(["web", "auth:sanctum", "role:patient"])->group(function () {
     // Questionnaire routes
     Route::prefix("questionnaires")->group(function () {
+        // List all available questionnaires
+        Route::get("/", [QuestionnaireController::class, "index"]);
+
         // Get all questionnaires for authenticated user
-        Route::get("/", [
+        Route::get("/user", [
             QuestionnaireController::class,
             "getPatientQuestionnaires",
         ]);
@@ -127,6 +130,12 @@ Route::middleware(["web", "auth:sanctum", "role:provider"])
         Route::put("/clinical-plans/{clinicalPlan}", [
             ClinicalPlanController::class,
             "update",
+        ]);
+
+        // Patients needing attention
+        Route::get("/patients/needing-clinical-plans", [
+            PatientController::class,
+            "getPatientsNeedingClinicalPlans",
         ]);
     });
 
