@@ -61,4 +61,15 @@ class Chat extends Model
     {
         return $this->hasMany(Message::class);
     }
+
+    /**
+     * Get the other participant in the conversation
+     */
+    public function getOtherParticipant(User $user): User
+    {
+        if ($user->id == $this->patient_id) {
+            return $this->provider;
+        }
+        return $this->patient;
+    }
 }
