@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Chat;
 use App\Models\Message;
 use App\Models\Prescription;
+use App\Models\PrescriptionTemplate;
 use App\Models\User;
 use App\Models\ClinicalPlan;
 use Illuminate\Http\Request;
@@ -426,6 +427,29 @@ class PrescriptionController extends Controller
         return response()->json([
             "patient" => $patient,
             "prescriptions" => $prescriptions,
+        ]);
+    }
+
+    public function getTemplateData($id)
+    {
+        $template = PrescriptionTemplate::findOrFail($id);
+
+        // Check access: either global or in user's team
+        $user = auth()->user();
+        if (
+            !$template->is_global &&
+            $template->team_id !== $user->current_team_id
+        ) {
+            return response()->json(
+                [
+                    "message" => "Template not found in your team",
+                ],
+                404
+            );
+        }
+
+        return response()->json([
+            "template" => $template,
         ]);
     }
 }

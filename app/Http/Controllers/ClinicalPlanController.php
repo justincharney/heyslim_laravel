@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ClinicalPlan;
+use App\Models\ClinicalPlanTemplate;
 use App\Models\QuestionnaireSubmission;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -422,6 +423,29 @@ class ClinicalPlanController extends Controller
 
         return response()->json([
             "clinical_plans" => $plans,
+        ]);
+    }
+
+    public function getTemplateData($id)
+    {
+        $template = ClinicalPlanTemplate::findOrFail($id);
+
+        // Check access: either global or in user's team
+        $user = auth()->user();
+        if (
+            !$template->is_global &&
+            $template->team_id !== $user->current_team_id
+        ) {
+            return response()->json(
+                [
+                    "message" => "Template not found in your team",
+                ],
+                404
+            );
+        }
+
+        return response()->json([
+            "template" => $template,
         ]);
     }
 }

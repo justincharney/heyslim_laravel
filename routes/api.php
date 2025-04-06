@@ -7,6 +7,7 @@ use App\Http\Controllers\TeamController;
 use App\Http\Controllers\PatientController;
 use App\Http\Controllers\PrescriptionController;
 use App\Http\Controllers\ClinicalPlanController;
+use App\Http\Controllers\TemplateController;
 use App\Http\Middleware\SetTeamContextMiddleware;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -207,5 +208,23 @@ Route::middleware(["web", "auth:sanctum", "role:provider|pharmacist"])->group(
         Route::put("/chats/{id}/close", [ChatController::class, "closeChat"]);
         // Reopen a chat (provider only)
         Route::put("/chats/{id}/reopen", [ChatController::class, "reopenChat"]);
+
+        // Template Access
+        Route::get("/clinical-plan-templates", [
+            TemplateController::class,
+            "listClinicalPlanTemplates",
+        ]);
+        Route::get("/clinical-plan-templates/{id}", [
+            ClinicalPlanController::class,
+            "getTemplateData",
+        ]);
+        Route::get("/prescription-templates", [
+            TemplateController::class,
+            "listPrescriptionTemplates",
+        ]);
+        Route::get("/prescription-templates/{id}", [
+            PrescriptionController::class,
+            "getTemplateData",
+        ]);
     }
 );

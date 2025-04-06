@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\User;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use League\Uri\UriTemplate\Template;
 
 class DatabaseSeeder extends Seeder
 {
@@ -25,7 +26,8 @@ class DatabaseSeeder extends Seeder
             RolesAndPermissionsSeeder::class,
             TeamSeeder::class,
             PatientSeeder::class,
-            FrontendTokenSeeder,
+            FrontendTokenSeeder::class,
+            TemplateSeeder::class,
         ]);
     }
 }
