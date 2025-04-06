@@ -121,7 +121,7 @@ class WorkOSAuthController extends Controller
             }
         }
 
-        return redirect(config("app.front_end_url") . "/dashboard");
+        return redirect(config("app.front_end_url") . "/post-login");
     }
 
     public function logout(AuthKitLogoutRequest $request)
