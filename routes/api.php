@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\ChatController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\QuestionnaireController;
 use App\Http\Controllers\TeamController;
 use App\Http\Controllers\PatientController;
@@ -225,6 +226,14 @@ Route::middleware(["web", "auth:sanctum", "role:provider|pharmacist"])->group(
         Route::get("/prescription-templates/{id}", [
             PrescriptionController::class,
             "getTemplateData",
+        ]);
+
+        // Profile Routes
+        Route::get("/provider/profile", [ProfileController::class, "show"]);
+        Route::put("/provider/profile", [ProfileController::class, "update"]);
+        Route::put("/provider/profile/password", [
+            ProfileController::class,
+            "updatePassword",
         ]);
     }
 );

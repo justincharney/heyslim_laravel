@@ -28,6 +28,7 @@ class User extends Authenticatable
         "shopify_customer_id",
         "workos_id",
         "avatar",
+        "calendly_url",
         "current_team_id",
     ];
 
