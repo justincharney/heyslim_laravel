@@ -1,9 +1,12 @@
 <?php namespace App\Http\Controllers;
 
+use App\Config\ShopifyProductMapping;
 use App\Models\QuestionAnswer;
 use App\Models\Questionnaire;
 use App\Models\QuestionnaireSubmission;
+use App\Models\User;
 use App\Notifications\QuestionnaireRejectedNotification;
+use App\Services\ShopifyService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
@@ -327,19 +330,57 @@ class QuestionnaireController extends Controller
             );
         }
 
-        $submission->update([
-            "status" => "submitted",
-            "submitted_at" => now(),
-        ]);
+        // Check for treatment (product) selection question (there's only one)
+        $treatmentSelectionQuestion = $submission->questionnaire
+            ->questions()
+            ->where("label", "Treatment Selection")
+            ->first();
 
-        DB::commit();
+        if ($treatmentSelectionQuestion) {
+            // Find the answer for this question
+            $treatmentAnswer = null;
+            foreach ($validated["answers"] as $answer) {
+                if ($answer["question_id"] == $treatmentSelectionQuestion->id) {
+                    $treatmentAnswer = $answer["answer_text"];
+                    break;
+                }
+            }
 
-        return response()->json(
-            [
-                "message" => "Questionnaire submitted successfully",
-            ],
-            201
-        );
+            if ($treatmentAnswer) {
+                // Get the product ID from the mapping
+                $productId = ShopifyProductMapping::getProductId(
+                    $treatmentAnswer
+                );
+
+                if ($productId) {
+                    // Create a Shopify checkout
+                    $shopifyService = app(ShopifyService::class);
+                    $cart = $shopifyService->createCheckout(
+                        $productId,
+                        $submission->id
+                    );
+
+                    if ($cart) {
+                        // Set status to pending_payment
+                        $submission->update([
+                            "status" => "pending_payment",
+                            "submitted_at" => now(),
+                        ]);
+
+                        DB::commit();
+
+                        return response()->json([
+                            "message" =>
+                                "Questionnaire requires payment to complete.",
+                            "checkout_url" => $cart["checkoutUrl"],
+                        ]);
+                    }
+                }
+            }
+        }
+
+        // If no product selection or checkout creation fails, throw an exception
+        throw new \Exception("Failed to create checkout");
     }
 
     public function reject(Request $request, $id)

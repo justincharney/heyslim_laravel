@@ -352,6 +352,21 @@ class GLP1Seeder extends Seeder
                 ],
             ],
             [
+                "title" => "Treatment Selection",
+                "questions" => [
+                    [
+                        "text" => "Please select your preferred medication",
+                        "type" => "select",
+                        "required" => true,
+                        "options" => [
+                            "Mounjaro (£199.00)",
+                            "Ozempic (£189.00)",
+                            "Wegovy (£209.00)",
+                        ],
+                    ],
+                ],
+            ],
+            [
                 "title" => "Declaration",
                 "questions" => [
                     [
