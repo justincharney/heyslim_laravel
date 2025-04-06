@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ProfileController;
@@ -86,6 +87,16 @@ Route::middleware(["web", "auth:sanctum", "role:patient"])->group(function () {
         // Submit completed questionnaire
         Route::post("/submit", [QuestionnaireController::class, "store"]);
     });
+
+    // Appointment Routes
+    Route::get("/appointments/providers", [
+        AppointmentController::class,
+        "getAvailableProviders",
+    ]);
+    Route::get("/appointments/eligibility", [
+        AppointmentController::class,
+        "checkEligibility",
+    ]);
 });
 
 // Routes for admins
