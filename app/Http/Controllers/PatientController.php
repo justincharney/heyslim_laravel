@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ClinicalPlan;
 use App\Models\User;
 use App\Models\QuestionnaireSubmission;
 use Illuminate\Http\Request;
@@ -145,9 +146,16 @@ class PatientController extends Controller
             ->where("user_id", $patient->id)
             ->findOrFail($submissionId);
 
+        // Check if there's a clinical plan associated with this questionnaire submission
+        $clinicalPlan = ClinicalPlan::where(
+            "questionnaire_submission_id",
+            $submissionId
+        )->first();
+
         return response()->json([
             "patient" => $patient,
             "submission" => $submission,
+            "clinical_plan" => $clinicalPlan,
         ]);
     }
 

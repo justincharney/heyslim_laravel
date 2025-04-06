@@ -3,10 +3,12 @@
 use App\Models\QuestionAnswer;
 use App\Models\Questionnaire;
 use App\Models\QuestionnaireSubmission;
+use App\Notifications\QuestionnaireRejectedNotification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 class QuestionnaireController extends Controller
 {
@@ -354,6 +356,19 @@ class QuestionnaireController extends Controller
             "reviewed_by" => auth()->id(),
             "reviewed_at" => now(),
         ]);
+
+        // Get the provider who reviewed the submission
+        $provider = auth()->user();
+
+        // Send email notification to user
+        $patient = $submission->user;
+        $patient->notify(
+            new QuestionnaireRejectedNotification(
+                $submission,
+                $provider,
+                $validated["review_notes"]
+            )
+        );
 
         return response()->json([
             "message" => "Questionnaire submission rejected",
