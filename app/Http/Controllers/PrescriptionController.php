@@ -452,4 +452,32 @@ class PrescriptionController extends Controller
             "template" => $template,
         ]);
     }
+
+    /**
+     * Get the chat associated with a prescription
+     */
+    public function getChat($id)
+    {
+        $user = auth()->user();
+
+        $prescription = $user->prescriptionsAsPatient()->findOrFail($id);
+
+        $chat = Chat::where("prescription_id", $prescription->id)
+            ->where("patient_id", $user->id)
+            ->first();
+
+        if ($user->id != $chat->patient_id) {
+            return response()->json(
+                [
+                    "message" =>
+                        "Users can only access chats for their prescriptions",
+                ],
+                404
+            );
+        }
+
+        return response()->json([
+            "chat" => $chat,
+        ]);
+    }
 }

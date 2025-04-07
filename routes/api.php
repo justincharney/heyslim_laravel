@@ -5,6 +5,7 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\QuestionnaireController;
+use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\TeamController;
 use App\Http\Controllers\PatientController;
 use App\Http\Controllers\PrescriptionController;
@@ -97,6 +98,35 @@ Route::middleware(["web", "auth:sanctum", "role:patient"])->group(function () {
         AppointmentController::class,
         "checkEligibility",
     ]);
+
+    // Patient-specific prescription routes
+    Route::prefix("patient")->group(function () {
+        // Get all prescriptions for the patient
+        Route::get("/prescriptions", [PrescriptionController::class, "index"]);
+
+        // Get a specific prescription
+        Route::get("/prescriptions/{id}", [
+            PrescriptionController::class,
+            "show",
+        ]);
+
+        // Get the chat associated with a prescription
+        Route::get("/prescriptions/{id}/chat", [
+            PrescriptionController::class,
+            "getChat",
+        ]);
+
+        // Subscription management
+        Route::get("/subscriptions", [SubscriptionController::class, "index"]);
+        Route::get("/prescriptions/{id}/subscription", [
+            SubscriptionController::class,
+            "show",
+        ]);
+        Route::post("/subscriptions/{id}/cancel", [
+            SubscriptionController::class,
+            "cancel",
+        ]);
+    });
 });
 
 // Routes for admins

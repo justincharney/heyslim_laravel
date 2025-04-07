@@ -47,6 +47,7 @@ class RolesAndPermissionsSeeder extends Seeder
             "edit own profile",
             "view own questionnaires",
             "submit questionnaires",
+            "read prescriptions",
         ]);
 
         $providerRole = Role::create(["name" => "provider"]);

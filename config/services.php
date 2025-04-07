@@ -48,6 +48,11 @@ return [
         "storefront_access_token" => env("SHOPIFY_STOREFRONT_API_TOKEN"),
     ],
 
+    "recharge" => [
+        "api_key" => env("RECHARGE_API_KEY"),
+        "endpoint" => env("RECHARGE_ENDPOINT", "https://api.rechargeapps.com"),
+    ],
+
     "workos" => [
         "client_id" => env("WORKOS_CLIENT_ID"),
         "secret" => env("WORKOS_API_KEY"),
