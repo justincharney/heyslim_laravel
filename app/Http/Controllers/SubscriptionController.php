@@ -183,6 +183,13 @@ class SubscriptionController extends Controller
             return $result;
         }
 
+        // Extract just the numeric part from the Shopify GID
+        // format like "gid://shopify/Customer/1234567890"
+        if (strpos($shopifyCustomerId, "gid://") === 0) {
+            $parts = explode("/", $shopifyCustomerId);
+            $shopifyCustomerId = end($parts); // Get the numeric ID at the end
+        }
+
         try {
             // Get the recharge customer based on the shopify customer
             $customerResponse = Http::withHeaders([

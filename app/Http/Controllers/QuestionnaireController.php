@@ -41,6 +41,61 @@ class QuestionnaireController extends Controller
         ]);
     }
 
+    public function cancel(Request $request, $submission_id)
+    {
+        $submission = QuestionnaireSubmission::where("user_id", auth()->id())
+            ->where("id", $submission_id)
+            ->first();
+
+        if (!$submission) {
+            return response()->json(
+                [
+                    "message" =>
+                        "Submission not found or you do not have permission to cancel it.",
+                ],
+                404
+            );
+        }
+
+        // Only allow cancellation of draft or pending_payment submissions
+        if (!in_array($submission->status, ["draft", "pending_payment"])) {
+            return response()->json(
+                [
+                    "message" =>
+                        "Only submissions in draft or pending payment status can be cancelled.",
+                ],
+                403
+            );
+        }
+
+        DB::beginTransaction();
+        try {
+            // Delete all answers for this submission
+            QuestionAnswer::where("submission_id", $submission_id)->delete();
+
+            // Delete the submission itself
+            $submission->delete();
+
+            DB::commit();
+
+            return response()->json([
+                "message" => "Questionnaire submission successfully cancelled.",
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error(
+                "Failed to cancel questionnaire submission: " . $e->getMessage()
+            );
+
+            return response()->json(
+                [
+                    "message" => "Failed to cancel questionnaire submission.",
+                ],
+                500
+            );
+        }
+    }
+
     public function getPatientQuestionnaires(Request $request)
     {
         $submissions = QuestionnaireSubmission::with(["questionnaire"])

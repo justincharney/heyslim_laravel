@@ -85,6 +85,12 @@ Route::middleware(["web", "auth:sanctum", "role:patient"])->group(function () {
             "savePartial",
         ]);
 
+        // Cancel/delete questionnaire submission
+        Route::delete("/{submission_id}", [
+            QuestionnaireController::class,
+            "cancel",
+        ]);
+
         // Submit completed questionnaire
         Route::post("/submit", [QuestionnaireController::class, "store"]);
     });
