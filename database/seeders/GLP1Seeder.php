@@ -297,12 +297,14 @@ class GLP1Seeder extends Seeder
                             "Are you pregnant, planning to become pregnant, or currently breastfeeding?",
                         "type" => "yes_no",
                         "required" => false,
+                        "required_answer" => "no",
                     ],
                     [
                         "text" =>
                             "Do you consume alcohol? If yes, specify weekly units",
                         "type" => "text",
                         "required" => true,
+                        "required_answer" => "no",
                     ],
                     [
                         "text" => "Do you smoke or use tobacco products?",
@@ -319,12 +321,14 @@ class GLP1Seeder extends Seeder
                             "Do you have a family history of medullary thyroid carcinoma (MTC) or multiple endocrine neoplasia syndrome type 2 (MEN 2)?",
                         "type" => "yes_no",
                         "required" => false,
+                        "required_answer" => "no",
                     ],
                     [
                         "text" =>
                             "Have you experienced any hypersensitivity to GLP-1 receptor agonists?",
                         "type" => "yes_no",
                         "required" => false,
+                        "required_answer" => "no",
                     ],
                 ],
             ],
@@ -390,6 +394,7 @@ class GLP1Seeder extends Seeder
                     "label" => $section["title"],
                     "question_type" => $question["type"],
                     "is_required" => $question["required"] ?? true,
+                    "required_answer" => $question["required_answer"] ?? null,
                     "calculated" => isset($question["calculated"])
                         ? json_encode($question["calculated"])
                         : null,

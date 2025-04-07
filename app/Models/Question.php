@@ -17,6 +17,7 @@ class Question extends Model
         "description",
         "question_type",
         "is_required",
+        "required_answer",
         "calculated",
         "validation",
     ];

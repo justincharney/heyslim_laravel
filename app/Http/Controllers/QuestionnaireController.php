@@ -104,6 +104,7 @@ class QuestionnaireController extends Controller
                                 "label" => $question->label,
                                 "description" => $question->description,
                                 "is_required" => $question->is_required,
+                                "required_answer" => $question->required_answer,
                                 "calculated" => $question->calculated,
                                 "validation" => $question->validation,
                                 "answer" => $answer
