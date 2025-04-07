@@ -114,8 +114,22 @@ GRAPHQL;
             return null;
         }
 
+        // Get the selling plan ID (subscription) for the product
+        $sellingPlanId = $this->getFirstSellingPlanId($productId);
+        if (!$sellingPlanId) {
+            Log::error("Failed to get selling plan ID for subscription", [
+                "product_id" => $productId,
+            ]);
+            return null;
+        }
+
         // Create a cart and return it
-        return $this->createCart($variantId, $submissionId, $quantity);
+        return $this->createCart(
+            $variantId,
+            $sellingPlanId,
+            $submissionId,
+            $quantity
+        );
     }
 
     /**
@@ -123,6 +137,7 @@ GRAPHQL;
      */
     private function createCart(
         string $variantId,
+        string $sellingPlanId,
         int $submissionId,
         int $quantity = 1
     ): ?array {
@@ -146,6 +161,7 @@ GRAPHQL;
                 [
                     "merchandiseId" => $variantId,
                     "quantity" => $quantity,
+                    "sellingPlanId" => $sellingPlanId, // Added for subscription checkout
                 ],
             ],
         ];
@@ -248,6 +264,70 @@ GRAPHQL;
                     "id"
                 ];
             }
+        }
+
+        return null;
+    }
+
+    /**
+     * Get the first available selling plan ID for a product (subscription)
+     */
+    private function getFirstSellingPlanId(string $productId): ?string
+    {
+        $query = <<<'GRAPHQL'
+query getSellingPlans($productId: ID!) {
+  product(id: $productId) {
+    sellingPlanGroups(first: 1) {
+      edges {
+        node {
+          sellingPlans(first: 1) {
+            edges {
+              node {
+                id
+                name
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+GRAPHQL;
+
+        $response = Http::withHeaders([
+            "Content-Type" => "application/json",
+            "X-Shopify-Storefront-Access-Token" => $this->storefrontAccessToken,
+        ])->post($this->storefrontEndpoint, [
+            "query" => $query,
+            "variables" => [
+                "productId" => $productId,
+            ],
+        ]);
+
+        if ($response->successful()) {
+            $data = $response->json();
+            if (
+                isset(
+                    $data["data"]["product"]["sellingPlanGroups"]["edges"][0][
+                        "node"
+                    ]["sellingPlans"]["edges"][0]["node"]["id"]
+                )
+            ) {
+                return $data["data"]["product"]["sellingPlanGroups"][
+                    "edges"
+                ][0]["node"]["sellingPlans"]["edges"][0]["node"]["id"];
+            } else {
+                Log::warning(
+                    "No selling plans (subscriptions) found for product",
+                    [
+                        "product_id" => $productId,
+                        "response" => $data,
+                    ]
+                );
+            }
+        } else {
+            Log::error("Failed to get selling plans", $response->json());
         }
 
         return null;
