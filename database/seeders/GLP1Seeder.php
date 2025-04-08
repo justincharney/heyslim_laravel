@@ -425,26 +425,26 @@ class GLP1Seeder extends Seeder
         }
 
         // Create a draft questionnaire submission for user 1
-        $user = User::find(1);
+        // $user = User::find(1);
 
-        if ($user) {
-            // Delete any existing submissions for theis user and questionnaire
-            DB::table("questionnaire_submissions")
-                ->where("user_id", $user->id)
-                ->where("questionnaire_id", $questionnaireId)
-                ->delete();
+        // if ($user) {
+        //     // Delete any existing submissions for theis user and questionnaire
+        //     DB::table("questionnaire_submissions")
+        //         ->where("user_id", $user->id)
+        //         ->where("questionnaire_id", $questionnaireId)
+        //         ->delete();
 
-            // Create new draft submission
-            DB::table("questionnaire_submissions")->insertGetId([
-                "questionnaire_id" => $questionnaireId,
-                "user_id" => $user->id,
-                "status" => "draft",
-                "submitted_at" => now(),
-                "created_at" => now(),
-                "updated_at" => now(),
-            ]);
-        } else {
-            echo "User 1 not found - couldn't create the draft submission\n";
-        }
+        //     // Create new draft submission
+        //     DB::table("questionnaire_submissions")->insertGetId([
+        //         "questionnaire_id" => $questionnaireId,
+        //         "user_id" => $user->id,
+        //         "status" => "draft",
+        //         "submitted_at" => now(),
+        //         "created_at" => now(),
+        //         "updated_at" => now(),
+        //     ]);
+        // } else {
+        //     echo "User 1 not found - couldn't create the draft submission\n";
+        // }
     }
 }
