@@ -6,16 +6,30 @@ use App\Models\Prescription;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 
 class SubscriptionController extends Controller
 {
     protected $endpoint;
     protected $apiKey;
+    protected $cacheDuration = 60 * 10; // 10 minutes
 
     public function __construct()
     {
         $this->endpoint = config("services.recharge.endpoint");
         $this->apiKey = config("services.recharge.api_key");
+    }
+
+    protected function getCacheKey($type = "subscriptions", $identifier = null)
+    {
+        $userId = auth()->id();
+        $key = "recharge_{$type}_{$userId}";
+
+        if ($identifier) {
+            $key .= "_{$identifier}";
+        }
+
+        return $key;
     }
 
     public function index()
@@ -156,6 +170,8 @@ class SubscriptionController extends Controller
         // Update the prescription status
         $prescription->update(["status" => "cancelled"]);
 
+        Cache::forget($this->getCacheKey("subscriptions"));
+
         // Log the cancellation
         Log::info(
             "Subscription for prescription #$prescriptionId cancelled by patient #$user->id. Reason: {$validated["reason"]}"
@@ -175,6 +191,11 @@ class SubscriptionController extends Controller
     {
         $result = [];
         $shopifyCustomerId = auth()->user()->shopify_customer_id;
+        $cacheKey = $this->getCacheKey("subscriptions");
+
+        if (Cache::has($cacheKey)) {
+            return Cache::get($cacheKey);
+        }
 
         if (!$shopifyCustomerId) {
             Log::warning(
@@ -208,7 +229,17 @@ class SubscriptionController extends Controller
                 return $result;
             }
 
-            $customerId = $customerResponse->json()["customers"][0]["id"];
+            $customers = $customerResponse->json()["customers"] ?? [];
+
+            // Check if customers array exists and has at least one customer
+            if (empty($customers)) {
+                Log::warning(
+                    "No customers found in Recharge for Shopify customer ID: $shopifyCustomerId"
+                );
+                return $result;
+            }
+
+            $customerId = $customers[0]["id"];
 
             // Get all subscriptions for this customer
             $subscriptionsResponse = Http::withHeaders([
@@ -221,8 +252,8 @@ class SubscriptionController extends Controller
 
             if (!$subscriptionsResponse->successful()) {
                 Log::error("Failed to fetch subscriptions from Recharge API", [
-                    "status" => $subscriptionResponse->status(),
-                    "response" => $subscriptionResponse->json(),
+                    "status" => $subscriptionsResponse->status(),
+                    "response" => $subscriptionsResponse->json(),
                 ]);
                 return $result;
             }
@@ -251,6 +282,8 @@ class SubscriptionController extends Controller
                     "cancelled_at" => $subscription["cancelled_at"],
                 ];
             }
+
+            Cache::put($cacheKey, $result, $this->cacheDuration);
             return $result;
         } catch (\Exception $e) {
             Log::error("Exception while fetching subscriptions from Recharge", [
@@ -260,7 +293,6 @@ class SubscriptionController extends Controller
             return $result;
         }
     }
-
     /**
      * Get the Recharge subscription ID for a prescription
      *
@@ -300,9 +332,6 @@ class SubscriptionController extends Controller
         }
 
         if (!$treatmentSelection) {
-            Log::warning(
-                "No treatment selection found for prescription ID: $prescriptionId"
-            );
             return null;
         }
 
@@ -383,112 +412,4 @@ class SubscriptionController extends Controller
             return false;
         }
     }
-
-    // /**
-    //  * Pause a subscription in Recharge
-    //  *
-    //  * @param int $prescriptionId The prescription ID
-    //  * @param string $resumeDate The date to resume the subscription (format: Y-m-d)
-    //  * @return bool Success status
-    //  */
-    // protected function pauseSubscriptionInRecharge($prescriptionId, $resumeDate)
-    // {
-    //     try {
-    //         // First, get the Recharge subscription ID from our prescription ID
-    //         $subscriptions = $this->fetchSubscriptionsFromRecharge([
-    //             $prescriptionId,
-    //         ]);
-
-    //         if (empty($subscriptions)) {
-    //             Log::error(
-    //                 "No subscription found for prescription ID: $prescriptionId"
-    //             );
-    //             return false;
-    //         }
-
-    //         $subscriptionId = $subscriptions[0]["id"];
-
-    //         // Pause the subscription in Recharge
-    //         $response = Http::withHeaders([
-    //             "X-Recharge-Access-Token" => $this->apiKey,
-    //             "Accept" => "application/json",
-    //             "Content-Type" => "application/json",
-    //         ])->post(
-    //             "{$this->endpoint}/subscriptions/{$subscriptionId}/pause",
-    //             [
-    //                 "pause" => [
-    //                     "resume_at" => $resumeDate,
-    //                 ],
-    //             ]
-    //         );
-
-    //         if (!$response->successful()) {
-    //             Log::error("Failed to pause subscription in Recharge API", [
-    //                 "subscription_id" => $subscriptionId,
-    //                 "status" => $response->status(),
-    //                 "response" => $response->json(),
-    //             ]);
-    //             return false;
-    //         }
-
-    //         return true;
-    //     } catch (\Exception $e) {
-    //         Log::error("Exception while pausing subscription in Recharge", [
-    //             "error" => $e->getMessage(),
-    //             "trace" => $e->getTraceAsString(),
-    //         ]);
-    //         return false;
-    //     }
-    // }
-
-    // /**
-    //  * Resume a paused subscription in Recharge
-    //  *
-    //  * @param int $prescriptionId The prescription ID
-    //  * @return bool Success status
-    //  */
-    // protected function resumeSubscriptionInRecharge($prescriptionId)
-    // {
-    //     try {
-    //         // First, get the Recharge subscription ID from our prescription ID
-    //         $subscriptions = $this->fetchSubscriptionsFromRecharge([
-    //             $prescriptionId,
-    //         ]);
-
-    //         if (empty($subscriptions)) {
-    //             Log::error(
-    //                 "No subscription found for prescription ID: $prescriptionId"
-    //             );
-    //             return false;
-    //         }
-
-    //         $subscriptionId = $subscriptions[0]["id"];
-
-    //         // Resume the subscription in Recharge
-    //         $response = Http::withHeaders([
-    //             "X-Recharge-Access-Token" => $this->apiKey,
-    //             "Accept" => "application/json",
-    //             "Content-Type" => "application/json",
-    //         ])->post(
-    //             "{$this->endpoint}/subscriptions/{$subscriptionId}/resume"
-    //         );
-
-    //         if (!$response->successful()) {
-    //             Log::error("Failed to resume subscription in Recharge API", [
-    //                 "subscription_id" => $subscriptionId,
-    //                 "status" => $response->status(),
-    //                 "response" => $response->json(),
-    //             ]);
-    //             return false;
-    //         }
-
-    //         return true;
-    //     } catch (\Exception $e) {
-    //         Log::error("Exception while resuming subscription in Recharge", [
-    //             "error" => $e->getMessage(),
-    //             "trace" => $e->getTraceAsString(),
-    //         ]);
-    //         return false;
-    //     }
-    // }
 }
