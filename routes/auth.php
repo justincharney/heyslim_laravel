@@ -3,9 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\WorkOSAuthController;
 
-Route::get("login", [WorkOSAuthController::class, "showLogin"])
-    ->middleware(["guest"])
-    ->name("login");
+Route::get("login", [WorkOSAuthController::class, "showLogin"])->name("login");
 
 Route::get("authenticate", [
     WorkOSAuthController::class,
