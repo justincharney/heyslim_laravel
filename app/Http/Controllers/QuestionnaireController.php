@@ -6,6 +6,7 @@ use App\Models\Questionnaire;
 use App\Models\QuestionnaireSubmission;
 use App\Models\User;
 use App\Notifications\QuestionnaireRejectedNotification;
+use App\Services\RechargeService;
 use App\Services\ShopifyService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
@@ -447,28 +448,55 @@ class QuestionnaireController extends Controller
             "review_notes" => "required|string",
         ]);
 
-        $submission->update([
-            "status" => "rejected",
-            "review_notes" => $validated["review_notes"],
-            "reviewed_by" => auth()->id(),
-            "reviewed_at" => now(),
-        ]);
+        DB::beginTransaction();
 
-        // Get the provider who reviewed the submission
-        $provider = auth()->user();
+        try {
+            $submission->update([
+                "status" => "rejected",
+                "review_notes" => $validated["review_notes"],
+                "reviewed_by" => auth()->id(),
+                "reviewed_at" => now(),
+            ]);
 
-        // Send email notification to user
-        $patient = $submission->user;
-        $patient->notify(
-            new QuestionnaireRejectedNotification(
+            // Get the provider who reviewed the submission
+            $provider = auth()->user();
+
+            // Cancel related subscription
+            $rechargeService = app(RechargeService::class);
+            $rechargeService->cancelSubscriptionForRejectedQuestionnaire(
                 $submission,
-                $provider,
-                $validated["review_notes"]
-            )
-        );
+                "Questionnaire rejected by healthcare provider"
+            );
 
-        return response()->json([
-            "message" => "Questionnaire submission rejected",
-        ]);
+            // Send email notification to user
+            $patient = $submission->user;
+            $patient->notify(
+                new QuestionnaireRejectedNotification(
+                    $submission,
+                    $provider,
+                    $validated["review_notes"]
+                )
+            );
+
+            DB::commit();
+
+            return response()->json([
+                "message" =>
+                    "Questionnaire submission rejected and related subscription cancelled",
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Failed to reject questionnaire submission", [
+                "error" => $e->getMessage(),
+                "submission_id" => $id,
+            ]);
+
+            return response()->json(
+                [
+                    "message" => "Failed to reject questionnaire submission",
+                ],
+                500
+            );
+        }
     }
 }

@@ -90,4 +90,99 @@ class ShopifyWebhookController extends Controller
             return response("No matching submission found", 200);
         }
     }
+
+    /**
+     * Handle order fulfillment webhook from Shopify.
+     */
+    public function orderFulfilled(Request $request)
+    {
+        Log::info("Order fulfillment webhook received");
+
+        // Retrieve the raw request body
+        $data = $request->getContent();
+
+        // Get the HMAC header from Shopify
+        $hmacHeader = $request->header("X-Shopify-Hmac-Sha256");
+
+        // Use Shopify webhook secret stored in configuration
+        $secret = config("services.shopify.webhook_secret");
+
+        // Calculate the HMAC
+        $calculatedHmac = base64_encode(
+            hash_hmac("sha256", $data, $secret, true)
+        );
+
+        // Verify the HMAC
+        $hmacMatch = hash_equals($hmacHeader, $calculatedHmac);
+
+        if (!$hmacMatch) {
+            Log::error("Shopify webhook HMAC verification failed");
+            return response()->json(
+                ["message" => "Invalid webhook signature"],
+                401
+            );
+        }
+
+        // Decode the webhook payload
+        $payload = json_decode($data, true);
+
+        // Process the fulfillment
+        $orderId = $payload["id"] ?? null;
+        $fulfillmentStatus = $payload["fulfillment_status"] ?? null;
+
+        if (!$orderId || $fulfillmentStatus !== "fulfilled") {
+            return response()->json([
+                "message" => "Not a fulfillment event or order not fulfilled",
+            ]);
+        }
+
+        // Get the Shopify customer ID from the order
+        $shopifyCustomerId = $payload["customer"]["id"] ?? null;
+
+        if (!$shopifyCustomerId) {
+            Log::error("No customer ID found in order payload");
+            return response()->json(
+                [
+                    "message" => "No customer ID found in order",
+                ],
+                400
+            );
+        }
+
+        // Calculate the next order date (30 days from fulfillment)
+        $fulfillmentDate = isset($payload["fulfillments"][0]["created_at"])
+            ? new \DateTime($payload["fulfillments"][0]["created_at"])
+            : new \DateTime();
+
+        $nextOrderDate = clone $fulfillmentDate;
+        $nextOrderDate->modify("+30 days");
+        $nextOrderDateStr = $nextOrderDate->format("Y-m-d");
+
+        // Update the next order date in Recharge
+        $rechargeService = app(RechargeService::class);
+        $updated = $rechargeService->updateNextOrderDate(
+            $shopifyCustomerId,
+            $nextOrderDateStr
+        );
+
+        if (!$updated) {
+            Log::error("Failed to update next order date in Recharge");
+            return response()->json(
+                [
+                    "message" =>
+                        "Failed to update subscription next order date",
+                ],
+                500
+            );
+        }
+
+        Log::info("Order fulfillment processed successfully", [
+            "next_order_date" => $nextOrderDateStr,
+        ]);
+
+        return response()->json([
+            "message" => "Order fulfillment processed successfully",
+            "next_order_date" => $nextOrderDateStr,
+        ]);
+    }
 }

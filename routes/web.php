@@ -12,4 +12,9 @@ Route::post("/webhooks/shopify/orders/paid", [
     "orderPaid",
 ]);
 
+Route::post("/webhooks/shopify/orders/fulfilled", [
+    ShopifyWebhookController::class,
+    "orderFulfilled",
+]);
+
 require __DIR__ . "/auth.php";
