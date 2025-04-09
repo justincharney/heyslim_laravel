@@ -104,6 +104,7 @@ class PrescriptionController extends Controller
         // Base validation rules
         $validationRules = [
             "patient_id" => "required|exists:users,id",
+            "clinical_plan_id" => "required|exists:clinical_plans,id",
             "medication_name" => "required|string|max:255",
             "dose" => "required|string",
             "schedule" => "required|string",
@@ -115,13 +116,13 @@ class PrescriptionController extends Controller
         ];
 
         // Pharmacists MUST have a clinical plan
-        if ($user->hasRole("pharmacist")) {
-            $validationRules["clinical_plan_id"] =
-                "required|exists:clinical_plans,id";
-        } else {
-            $validationRules["clinical_plan_id"] =
-                "nullable|exists:clinical_plans,id";
-        }
+        // if ($user->hasRole("pharmacist")) {
+        //     $validationRules["clinical_plan_id"] =
+        //         "required|exists:clinical_plans,id";
+        // } else {
+        //     $validationRules["clinical_plan_id"] =
+        //         "nullable|exists:clinical_plans,id";
+        // }
 
         $validated = $request->validate($validationRules);
 
