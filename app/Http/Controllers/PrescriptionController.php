@@ -68,7 +68,11 @@ class PrescriptionController extends Controller
         else {
             // Patients can only see their own prescriptions
             $prescriptions = Prescription::where("patient_id", $user->id)
-                ->with(["prescriber:id,name", "clinicalPlan"])
+                ->with([
+                    "patient:id,name",
+                    "prescriber:id,name",
+                    "clinicalPlan:id,questionnaire_submission_id",
+                ])
                 ->orderBy("created_at", "desc")
                 ->get();
         }
@@ -149,9 +153,10 @@ class PrescriptionController extends Controller
         // If a clinical plan was provided, validate that the user can prescribe based on the plan
         if (isset($validated["clinical_plan_id"])) {
             $plan = ClinicalPlan::findOrFail($validated["clinical_plan_id"]);
+            $autoApproved = false;
 
-            // Make sure the plan is active
-            if ($plan->status !== "active") {
+            // Make sure the plan is active (only if the user is a pharmacist)
+            if ($plan->status !== "active" && $user->hasRole("pharmacist")) {
                 return response()->json(
                     [
                         "message" =>
@@ -194,6 +199,12 @@ class PrescriptionController extends Controller
                     400
                 );
             }
+
+            // If user is a provider and the plan doesn't have pharmacist approval
+            // We will auto-approve it
+            if ($user->hasRole("provider") && !$plan->pharmacist_agreed_at) {
+                $autoApproved = true;
+            }
         }
 
         // Add the authenticated user as the prescriber
@@ -203,6 +214,15 @@ class PrescriptionController extends Controller
 
         try {
             $prescription = Prescription::create($validated);
+
+            // Auto-approve clinical plan if needed
+            if ($autoApproved) {
+                $plan->update([
+                    "pharmacist_agreed_at" => now(),
+                    "pharmacist_id" => $user->id, // Provider is acting as pharmacist in this case
+                    "status" => "active",
+                ]);
+            }
 
             // Create the chat for the prescription
             $chat = Chat::create([
