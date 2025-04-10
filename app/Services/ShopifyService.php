@@ -30,6 +30,9 @@ class ShopifyService
         string $email,
         string $password
     ): ?string {
+        // Get the client's IP address
+        $clientIp = request()->ip();
+
         $mutation = <<<'GRAPHQL'
 mutation customerCreate($input: CustomerCreateInput!) {
   customerCreate(input: $input) {
@@ -58,6 +61,7 @@ GRAPHQL;
         $response = Http::withHeaders([
             "Content-Type" => "application/json",
             "Shopify-Storefront-Private-Token" => $this->storefrontAccessToken,
+            "Shopify-Storefront-Buyer-IP" => $clientIp,
         ])->post($this->storefrontEndpoint, [
             "query" => $mutation,
             "variables" => [
@@ -93,6 +97,147 @@ GRAPHQL;
         }
 
         return null;
+    }
+
+    /**
+     * Add tags to a customer using the Admin API's tagsAdd mutation
+     *
+     * @param string $customerId The Shopify customer ID (gid://shopify/Customer/...)
+     * @param array|string $tags Tags to add to the customer
+     * @return bool Whether the operation was successful
+     */
+    public function addTagsToCustomer(string $customerId, $tags): bool
+    {
+        // Convert string to array if necessary
+        if (is_string($tags)) {
+            $tags = [$tags];
+        }
+
+        $mutation = <<<'GRAPHQL'
+mutation addTags($id: ID!, $tags: [String!]!) {
+  tagsAdd(id: $id, tags: $tags) {
+    node {
+      id
+    }
+    userErrors {
+      message
+    }
+  }
+}
+GRAPHQL;
+
+        $response = Http::withHeaders([
+            "Content-Type" => "application/json",
+            "X-Shopify-Access-Token" => $this->accessToken,
+        ])->post($this->endpoint, [
+            "query" => $mutation,
+            "variables" => [
+                "id" => $customerId,
+                "tags" => $tags,
+            ],
+        ]);
+
+        if ($response->successful()) {
+            $data = $response->json();
+
+            if (
+                isset($data["data"]["tagsAdd"]["userErrors"]) &&
+                !empty($data["data"]["tagsAdd"]["userErrors"])
+            ) {
+                Log::error(
+                    "Shopify tagsAdd mutation returned errors",
+                    $data["data"]["tagsAdd"]["userErrors"]
+                );
+                return false;
+            }
+
+            if (isset($data["data"]["tagsAdd"]["node"]["id"])) {
+                // Log::info("Successfully added tags to customer", [
+                //     "customer_id" => $customerId,
+                //     "tags" => $tags,
+                // ]);
+                return true;
+            } else {
+                Log::error(
+                    "Shopify tagsAdd mutation did not return expected data",
+                    $data
+                );
+                return false;
+            }
+        } else {
+            Log::error(
+                "Shopify API call failed (tagsAdd mutation)",
+                $response->json()
+            );
+            return false;
+        }
+    }
+
+    /**
+     * Delete a Shopify customer using the Admin API
+     *
+     * @param string $customerId The Shopify customer ID
+     * @return bool Whether the deletion was successful
+     */
+    public function deleteCustomer(string $customerId): bool
+    {
+        $mutation = <<<'GRAPHQL'
+mutation customerDelete($input: CustomerDeleteInput!) {
+  customerDelete(input: $input) {
+    deletedCustomerId
+    userErrors {
+      field
+      message
+    }
+  }
+}
+GRAPHQL;
+
+        $response = Http::withHeaders([
+            "Content-Type" => "application/json",
+            "X-Shopify-Access-Token" => $this->accessToken,
+        ])->post($this->endpoint, [
+            "query" => $mutation,
+            "variables" => [
+                "input" => [
+                    "id" => $customerId,
+                ],
+            ],
+        ]);
+
+        if ($response->successful()) {
+            $data = $response->json();
+
+            if (
+                isset($data["data"]["customerDelete"]["userErrors"]) &&
+                !empty($data["data"]["customerDelete"]["userErrors"])
+            ) {
+                Log::error(
+                    "Shopify customer deletion returned errors",
+                    $data["data"]["customerDelete"]["userErrors"]
+                );
+                return false;
+            }
+
+            if (isset($data["data"]["customerDelete"]["deletedCustomerId"])) {
+                Log::info("Successfully deleted Shopify customer", [
+                    "customer_id" => $customerId,
+                ]);
+                return true;
+            } else {
+                Log::error(
+                    "Shopify customer deletion did not return expected data",
+                    $data
+                );
+                return false;
+            }
+        } else {
+            Log::error(
+                "Shopify API call failed (customer deletion)",
+                $response->json()
+            );
+            return false;
+        }
     }
 
     /**

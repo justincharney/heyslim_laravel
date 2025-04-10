@@ -12,6 +12,7 @@ use Laravel\WorkOS\Http\Requests\AuthKitAccountDeletionRequest;
 use Laravel\WorkOS\Http\Requests\AuthKitAuthenticationRequest;
 use Laravel\WorkOS\Http\Requests\AuthKitLoginRequest;
 use Laravel\WorkOS\Http\Requests\AuthKitLogoutRequest;
+use Illuminate\Support\Str;
 
 class WorkOSAuthController extends Controller
 {
@@ -85,24 +86,45 @@ class WorkOSAuthController extends Controller
                 setPermissionsTeamId($teamId);
                 $user->assignRole("patient");
 
+                // Create the shopify password
+                $shopifyPassword = Str::random(12);
+
                 // Only create the Shopify customer if local operations succeeded
                 $shopifyCustomerId = $this->shopifyService->createCustomer(
                     $firstName,
                     $lastName,
-                    $user->email
+                    $user->email,
+                    $shopifyPassword
                 );
 
                 if (!$shopifyCustomerId) {
                     throw new \Exception("Failed to create Shopify customer");
                 } else {
-                    // Update the user with the Shopify customer ID
+                    // Add "authorized" tag to user
+                    $tagsAdded = $this->shopifyService->addTagsToCustomer(
+                        $shopifyCustomerId,
+                        ["authorized"]
+                    );
+                    if (!$tagsAdded) {
+                        throw new \Exception(
+                            "Failed to add authorized tag to Shopify customer"
+                        );
+                    }
+                    // Update the user with the Shopify customer ID and password
                     $user->shopify_customer_id = $shopifyCustomerId;
+                    $user->shopify_password = encrypt($shopifyPassword);
                     $user->save();
                 }
 
                 DB::commit();
             } catch (\Exception $e) {
                 DB::rollBack();
+
+                // Clean up Shopify customer if it was created
+                if ($shopifyCustomerId) {
+                    $this->shopifyService->deleteCustomer($shopifyCustomerId);
+                }
+
                 Log::error(
                     "Shopify customer creation failed during WorkOS authentication",
                     [
@@ -116,7 +138,7 @@ class WorkOSAuthController extends Controller
                 $deletionRequest->delete(fn($user) => $user->delete());
                 return redirect(
                     config("app.front_end_url") .
-                        "/error?msg=shopify_creation_exception"
+                        "/error?msg=account_creation_exception"
                 );
             }
         }
