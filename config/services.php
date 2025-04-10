@@ -39,12 +39,12 @@ return [
         "endpoint" =>
             "https://" .
             env("PUBLIC_SHOPIFY_DOMAIN") .
-            "/admin/api/2025-01/graphql.json",
+            "/admin/api/unstable/graphql.json",
         "webhook_secret" => env("SHOPIFY_WEBHOOK_SECRET"),
         "storefront_endpoint" =>
             "https://" .
             env("PUBLIC_SHOPIFY_DOMAIN") .
-            "/api/2025-01/graphql.json",
+            "/api/unstable/graphql.json",
         "storefront_access_token" => env("SHOPIFY_STOREFRONT_API_TOKEN"),
     ],
 

@@ -27,10 +27,11 @@ class ShopifyService
     public function createCustomer(
         string $firstName,
         string $lastName,
-        string $email
+        string $email,
+        string $password
     ): ?string {
         $mutation = <<<'GRAPHQL'
-mutation customerCreate($input: CustomerInput!) {
+mutation customerCreate($input: CustomerCreateInput!) {
   customerCreate(input: $input) {
     customer {
       id
@@ -38,7 +39,7 @@ mutation customerCreate($input: CustomerInput!) {
       firstName
       lastName
     }
-    userErrors {
+    customerUserErrors {
       field
       message
     }
@@ -46,37 +47,35 @@ mutation customerCreate($input: CustomerInput!) {
 }
 GRAPHQL;
 
-        $shopifyCustomerInput = [
+        $customerInput = [
             "firstName" => $firstName,
             "lastName" => $lastName,
             "email" => $email,
-            "emailMarketingConsent" => [
-                "marketingState" => "SUBSCRIBED",
-                "marketingOptInLevel" => "SINGLE_OPT_IN",
-            ],
+            "password" => $password,
+            "acceptsMarketing" => true,
         ];
 
         $response = Http::withHeaders([
             "Content-Type" => "application/json",
-            "X-Shopify-Access-Token" => $this->accessToken,
-        ])->post($this->endpoint, [
+            "Shopify-Storefront-Private-Token" => $this->storefrontAccessToken,
+        ])->post($this->storefrontEndpoint, [
             "query" => $mutation,
             "variables" => [
-                "input" => $shopifyCustomerInput,
+                "input" => $customerInput,
             ],
         ]);
 
         if ($response->successful()) {
             $data = $response->json();
-            // Log::info("Shopify response", $data);
+            Log::info("Shopify customer creation response", $data);
 
             if (
-                isset($data["data"]["customerCreate"]["userErrors"]) &&
-                !empty($data["data"]["customerCreate"]["userErrors"])
+                isset($data["data"]["customerCreate"]["customerUserErrors"]) &&
+                !empty($data["data"]["customerCreate"]["customerUserErrors"])
             ) {
                 Log::error(
                     "Shopify customer creation returned errors",
-                    $data["data"]["customerCreate"]["userErrors"]
+                    $data["data"]["customerCreate"]["customerUserErrors"]
                 );
                 return null;
             }
@@ -87,7 +86,10 @@ GRAPHQL;
                 Log::error("Shopify customer ID not found in response", $data);
             }
         } else {
-            Log::error("Shopify API call failed", $response->json());
+            Log::error(
+                "Shopify API call failed (create customer)",
+                $response->json()
+            );
         }
 
         return null;
@@ -105,6 +107,9 @@ GRAPHQL;
         int $submissionId,
         int $quantity = 1
     ): ?array {
+        // Get the client's IP
+        $clientIp = request()->ip();
+
         // Get the first variant ID for the product
         $variantId = $this->getFirstProductVariantId($productId);
         if (!$variantId) {
@@ -123,13 +128,233 @@ GRAPHQL;
             return null;
         }
 
-        // Create a cart and return it
+        // Create and return the cart
         return $this->createCart(
             $variantId,
             $sellingPlanId,
             $submissionId,
+            $clientIp,
             $quantity
         );
+
+        // $cartId = $this->createCart(
+        //     $variantId,
+        //     $sellingPlanId,
+        //     $submissionId,
+        //     $clientIp,
+        //     $quantity
+        // );
+
+        // // Get the access token for the customer
+        // $accessToken = $this->getCustomerAccessToken(
+        //     $email,
+        //     $password,
+        //     $clientIp
+        // );
+
+        // Log::info("Customer access token retrieved", [
+        //     "email" => $email,
+        //     "token" => $accessToken,
+        // ]);
+
+        // if ($accessToken) {
+        //     // Update the cart with the customer's access token
+        //     $success = $this->associateCustomerWithCart(
+        //         $cartId,
+        //         $accessToken,
+        //         $email,
+        //         $clientIp
+        //     );
+
+        //     if (!$success) {
+        //         Log::warning("Failed to associate customer with cart", [
+        //             "email" => $email,
+        //             "cart_id" => $cartId,
+        //         ]);
+        //     }
+
+        //     // Get the cart and return it
+        //     return $this->getCart($cartId, $clientIp);
+        // } else {
+        //     Log::warning("Failed to get customer access token", [
+        //         "email" => $email,
+        //     ]);
+        // }
+
+        // return null;
+    }
+
+    /**
+     * Get customer access token (for login)
+     *
+     * @param string $email Customer's email
+     * @param string $password Customer's password
+     * @return string|null The customer access token if successful, null otherwise
+     */
+    public function getCustomerAccessToken(
+        string $email,
+        string $password,
+        string $clientIp
+    ): ?string {
+        $mutation = <<<'GRAPHQL'
+mutation customerAccessTokenCreate($input: CustomerAccessTokenCreateInput!) {
+  customerAccessTokenCreate(input: $input) {
+    customerAccessToken {
+      accessToken
+      expiresAt
+    }
+    customerUserErrors {
+      field
+      message
+    }
+  }
+}
+GRAPHQL;
+
+        $response = Http::withHeaders([
+            "Content-Type" => "application/json",
+            "Shopify-Storefront-Private-Token" => $this->storefrontAccessToken,
+            "Shopify-Storefront-Buyer-IP" => $clientIp,
+        ])->post($this->storefrontEndpoint, [
+            "query" => $mutation,
+            "variables" => [
+                "input" => [
+                    "email" => $email,
+                    "password" => $password,
+                ],
+            ],
+        ]);
+
+        if ($response->successful()) {
+            $data = $response->json();
+
+            if (
+                isset(
+                    $data["data"]["customerAccessTokenCreate"][
+                        "customerUserErrors"
+                    ]
+                ) &&
+                !empty(
+                    $data["data"]["customerAccessTokenCreate"][
+                        "customerUserErrors"
+                    ]
+                )
+            ) {
+                Log::error(
+                    "Shopify customer access token creation returned errors",
+                    $data["data"]["customerAccessTokenCreate"][
+                        "customerUserErrors"
+                    ]
+                );
+                return null;
+            }
+
+            if (
+                isset(
+                    $data["data"]["customerAccessTokenCreate"][
+                        "customerAccessToken"
+                    ]["accessToken"]
+                )
+            ) {
+                return $data["data"]["customerAccessTokenCreate"][
+                    "customerAccessToken"
+                ]["accessToken"];
+            } else {
+                Log::error(
+                    "Shopify customer access token not found in response",
+                    $data
+                );
+            }
+        } else {
+            Log::error(
+                "Shopify API call failed (customer access token creation)",
+                $response->json()
+            );
+        }
+
+        return null;
+    }
+
+    /**
+     * Associate a customer with a cart
+     *
+     * @param string $cartId The cart ID
+     * @param string $customerAccessToken The customer access token
+     * @return bool Whether the association was successful
+     */
+    public function associateCustomerWithCart(
+        string $cartId,
+        string $customerAccessToken,
+        string $email,
+        string $customerIp
+    ): bool {
+        $mutation = <<<'GRAPHQL'
+mutation cartBuyerIdentityUpdate($buyerIdentity: CartBuyerIdentityInput!, $cartId: ID!) {
+  cartBuyerIdentityUpdate(buyerIdentity: $buyerIdentity, cartId: $cartId) {
+    cart {
+      id
+      buyerIdentity {
+          email
+      }
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}
+GRAPHQL;
+
+        $response = Http::withHeaders([
+            "Content-Type" => "application/json",
+            "Shopify-Storefront-Private-Token" => $this->storefrontAccessToken,
+            "Shopify-Storefront-Buyer-IP" => $customerIp,
+        ])->post($this->storefrontEndpoint, [
+            "query" => $mutation,
+            "variables" => [
+                "cartId" => $cartId,
+                "buyerIdentity" => [
+                    "customerAccessToken" => $customerAccessToken,
+                    "countryCode" => "GB",
+                    "email" => $email,
+                ],
+            ],
+        ]);
+
+        if ($response->successful()) {
+            $data = $response->json();
+
+            if (
+                isset($data["data"]["cartBuyerIdentityUpdate"]["userErrors"]) &&
+                !empty($data["data"]["cartBuyerIdentityUpdate"]["userErrors"])
+            ) {
+                Log::error(
+                    "Shopify cart buyer identity update returned errors",
+                    $data["data"]["cartBuyerIdentityUpdate"]["userErrors"]
+                );
+                return false;
+            }
+
+            if (
+                isset(
+                    $data["data"]["cartBuyerIdentityUpdate"]["cart"][
+                        "buyerIdentity"
+                    ]["email"]
+                )
+            ) {
+                // Return true
+                return true;
+            } else {
+                Log::error("Email not found in response", $data);
+            }
+        } else {
+            Log::error(
+                "Shopify API call failed (cart buyer identity update)",
+                $response->json()
+            );
+        }
+
+        return false;
     }
 
     /**
@@ -139,6 +364,7 @@ GRAPHQL;
         string $variantId,
         string $sellingPlanId,
         int $submissionId,
+        string $clientIp,
         int $quantity = 1
     ): ?array {
         $mutation = <<<'GRAPHQL'
@@ -178,7 +404,8 @@ GRAPHQL;
 
         $response = Http::withHeaders([
             "Content-Type" => "application/json",
-            "X-Shopify-Storefront-Access-Token" => $this->storefrontAccessToken,
+            "Shopify-Storefront-Private-Token" => $this->storefrontAccessToken,
+            "Shopify-Storefront-Buyer-IP" => $clientIp,
         ])->post($this->storefrontEndpoint, [
             "query" => $mutation,
             "variables" => [
@@ -222,6 +449,38 @@ GRAPHQL;
         return null;
     }
 
+    // Get the cart
+    private function getCart(string $cartId, string $clientIp): ?array
+    {
+        $query = <<<'GRAPHQL'
+query checkoutUrl($cartId: ID!) {
+    cart(id: $cartId){
+        checkoutUrl
+    }
+}
+GRAPHQL;
+
+        $response = Http::withHeaders([
+            "Content-Type" => "application/json",
+            "Shopify-Storefront-Private-Token" => $this->storefrontAccessToken,
+            "Shopify-Storefront-Buyer-IP" => $clientIp,
+        ])->post($this->storefrontEndpoint, [
+            "query" => $query,
+            "variables" => [
+                "cartId" => $cartId,
+            ],
+        ]);
+
+        if ($response->successful()) {
+            $data = $response->json();
+            if (isset($data["data"]["cart"]["checkoutUrl"])) {
+                return $data["data"]["cart"];
+            }
+        }
+
+        return null;
+    }
+
     /**
      * Get the first variant ID for a product
      */
@@ -243,7 +502,7 @@ GRAPHQL;
 
         $response = Http::withHeaders([
             "Content-Type" => "application/json",
-            "X-Shopify-Storefront-Access-Token" => $this->storefrontAccessToken,
+            "Shopify-Storefront-Private-Token" => $this->storefrontAccessToken,
         ])->post($this->storefrontEndpoint, [
             "query" => $query,
             "variables" => [
@@ -297,7 +556,7 @@ GRAPHQL;
 
         $response = Http::withHeaders([
             "Content-Type" => "application/json",
-            "X-Shopify-Storefront-Access-Token" => $this->storefrontAccessToken,
+            "Shopify-Storefront-Private-Token" => $this->storefrontAccessToken,
         ])->post($this->storefrontEndpoint, [
             "query" => $query,
             "variables" => [
