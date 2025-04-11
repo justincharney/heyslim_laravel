@@ -12,15 +12,17 @@ return new class extends Migration {
     {
         Schema::create("subscriptions", function (Blueprint $table) {
             $table->id();
-            $table->string("recharge_subscription_id")->nullable();
+            $table->string("recharge_subscription_id");
             $table->string("recharge_customer_id")->nullable();
             $table->string("shopify_product_id")->nullable();
-            $table->string("product_name");
+            $table->string("product_name")->nullable();
             $table
                 ->enum("status", ["active", "paused", "cancelled"])
                 ->default("active");
+            $table->date("next_charge_scheduled_at")->nullable();
             $table
                 ->foreignId("questionnaire_submission_id")
+                ->nullable()
                 ->constrained()
                 ->onDelete("set null");
             $table
@@ -28,7 +30,11 @@ return new class extends Migration {
                 ->nullable()
                 ->constrained()
                 ->onDelete("set null");
-            $table->foreignId("user_id")->constrained()->onDelete("cascade");
+            $table
+                ->foreignId("user_id")
+                ->nullable()
+                ->constrained()
+                ->onDelete("cascade");
             $table->timestamps();
 
             // Indexes for quick lookup

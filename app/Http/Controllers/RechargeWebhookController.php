@@ -53,9 +53,9 @@ class RechargeWebhookController extends Controller
         // }
 
         $data = json_decode($request->getContent(), true);
-        Log::info("orderCreated webhook", [
-            "data" => $data,
-        ]);
+        // Log::info("orderCreated webhook", [
+        //     "data" => $data,
+        // ]);
 
         // Extract subscription information
         $order = $data["order"] ?? null;
@@ -91,31 +91,48 @@ class RechargeWebhookController extends Controller
         if ($questionnaireSubId) {
             $submission = QuestionnaireSubmission::find($questionnaireSubId);
             if ($submission) {
-                // Find user by email
-                $user = User::where("email", $email)->first();
+                try {
+                    // Find user by email
+                    $user = User::where("email", $email)->first();
 
-                if (!$user) {
-                    Log::error("User not found from email in Recharge order", [
-                        "email" => $email,
+                    if (!$user) {
+                        Log::error(
+                            "User not found from email in Recharge order",
+                            [
+                                "email" => $email,
+                            ]
+                        );
+                        return response()->json(
+                            ["error" => "User not found"],
+                            404
+                        );
+                    }
+
+                    // Update submission status to submitted
+                    $submission->update(["status" => "submitted"]);
+
+                    // Create or update the subscription
+                    $subscription = Subscription::updateOrCreate(
+                        ["recharge_subscription_id" => $rechargeSubId],
+                        [
+                            "recharge_customer_id" => $rechargeCustomerId,
+                            "shopify_product_id" => $shopifyProductId,
+                            "product_name" => $productName,
+                            "status" => "active",
+                            "user_id" => $user->id,
+                            "questionnaire_submission_id" => $questionnaireSubId,
+                        ]
+                    );
+                } catch (\Exception $e) {
+                    Log::error("Error processing Recharge order", [
+                        "order_id" => $orderId,
+                        "error" => $e->getMessage(),
                     ]);
-                    return response()->json(["error" => "User not found"], 404);
+                    return response()->json(
+                        ["error" => "Error processing order"],
+                        500
+                    );
                 }
-
-                // Update submission status to submitted
-                $submission->update(["status" => "submitted"]);
-
-                // Create or update the subscription
-                $subscription = Subscription::updateOrCreate(
-                    ["recharge_subscription_id" => $rechargeSubId],
-                    [
-                        "recharge_customer_id" => $rechargeCustomerId,
-                        "shopify_product_id" => $shopifyProductId,
-                        "product_name" => $productName,
-                        "status" => "active",
-                        "user_id" => $user->id,
-                        "questionnaire_submission_id" => $questionnaireSubId,
-                    ]
-                );
             } else {
                 Log::error("Submission record not found in database", [
                     "submission_id" => $questionnaireSubId,
@@ -207,6 +224,56 @@ class RechargeWebhookController extends Controller
                 "recharge_id" => $rechargeSubId,
             ]);
             return response()->json(["error" => "Subscription not found"], 404);
+        }
+    }
+
+    /**
+     * Handle subscription created webhook
+     */
+    public function subscriptionCreated(Request $request)
+    {
+        // if (!$this->validateWebhook($request)) {
+        //     Log::error("Invalid Recharge webhook signature");
+        //     return response()->json(["error" => "Invalid signature"], 401);
+        // }
+
+        $data = json_decode($request->getContent(), true);
+        Log::info("Recharge subscription created webhook", ["data" => $data]);
+
+        // Extract the subscription object from the data
+        $subscriptionData = $data["subscription"] ?? null;
+        // Extract relevant information to update the existing subscription
+        $rechargeSubId = $subscriptionData["id"] ?? null;
+        $nextChargeScheduledAt =
+            $subscriptionData["next_charge_scheduled_at"] ?? null;
+
+        try {
+            // Check if we already have a subscription record for this recharge subscription
+            $subscription = Subscription::where(
+                "recharge_subscription_id",
+                $rechargeSubId
+            )->first();
+
+            // Create/update the subscription record
+            $subscription = Subscription::updateOrCreate(
+                ["recharge_subscription_id" => $rechargeSubId],
+                [
+                    "next_charge_scheduled_at" => $nextChargeScheduledAt,
+                ]
+            );
+
+            return response()->json([
+                "message" => "Webhook processed successfully",
+            ]);
+        } catch (\Exception $e) {
+            Log::error("Error processing subscription created webhook", [
+                "error" => $e->getMessage(),
+                "data" => $data,
+            ]);
+            return response()->json(
+                ["error" => "Error processing webhook"],
+                500
+            );
         }
     }
 }

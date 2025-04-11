@@ -62,6 +62,10 @@ class SetupRechargeWebhooks extends Command
                 "topic" => "order/created",
                 "address" => $this->webhookBaseUrl . "/order/created",
             ],
+            [
+                "topic" => "subscription/created",
+                "address" => $this->webhookBaseUrl . "/subscription/created",
+            ],
         ];
 
         // If --force flag is used, delete all existing webhooks first
