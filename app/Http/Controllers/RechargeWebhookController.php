@@ -238,7 +238,7 @@ class RechargeWebhookController extends Controller
         // }
 
         $data = json_decode($request->getContent(), true);
-        Log::info("Recharge subscription created webhook", ["data" => $data]);
+        // Log::info("Recharge subscription created webhook", ["data" => $data]);
 
         // Extract the subscription object from the data
         $subscriptionData = $data["subscription"] ?? null;
