@@ -51,4 +51,12 @@ class Prescription extends Model
     {
         return $this->belongsTo(ClinicalPlan::class);
     }
+
+    /**
+     * Get the subscription associated with the prescription.
+     */
+    public function subscription()
+    {
+        return $this->hasOne(Subscription::class);
+    }
 }
