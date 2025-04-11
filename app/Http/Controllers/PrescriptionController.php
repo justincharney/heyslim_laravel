@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use App\Enums\Permission;
+use App\Models\Subscription;
 
 class PrescriptionController extends Controller
 {
@@ -72,6 +73,7 @@ class PrescriptionController extends Controller
                     "patient:id,name",
                     "prescriber:id,name",
                     "clinicalPlan:id,questionnaire_submission_id",
+                    "subscription",
                 ])
                 ->orderBy("created_at", "desc")
                 ->get();
@@ -222,6 +224,43 @@ class PrescriptionController extends Controller
                     "pharmacist_id" => $user->id, // Provider is acting as pharmacist in this case
                     "status" => "active",
                 ]);
+            }
+
+            // Approve the questionnaire submission if not already approved
+            if ($plan->questionnaire_submission_id) {
+                $submission = QuestionnaireSubmission::find(
+                    $plan->questionnaire_submission_id
+                );
+                if ($submission && $submission->status !== "approved") {
+                    $submission->update([
+                        "status" => "approved",
+                        "reviewed_by" => auth()->id(),
+                        "reviewed_at" => now(),
+                    ]);
+                }
+            }
+
+            // Link to existing subscription through the prescription's associated clinical plan questionnaire submission
+            $subscription = Subscription::where(
+                "user_id",
+                $validated["patient_id"]
+            )
+                ->where(
+                    "questionnaire_submission_id",
+                    $plan->questionnaire_submission_id
+                )
+                ->where("status", "active")
+                ->where("prescription_id", null)
+                ->first();
+
+            if ($subscription) {
+                $subscription->update([
+                    "prescription_id" => $prescription->id,
+                ]);
+            } else {
+                throw new \Exception(
+                    "No active subscription found for the patient"
+                );
             }
 
             // Create the chat for the prescription
