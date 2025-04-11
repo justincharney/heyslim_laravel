@@ -13,6 +13,8 @@ use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use App\Models\ClinicalPlan;
+use App\Models\Prescription;
 
 class QuestionnaireController extends Controller
 {
@@ -209,25 +211,54 @@ class QuestionnaireController extends Controller
                 ]);
             }
 
-            // If it's submitted or approved, prevent creating a new one
+            // If it's submitted or approved, check if there's an active prescription
             if (
-                $existingSubmission->status === "submitted" ||
-                $existingSubmission->status === "approved"
+                in_array($existingSubmission->status, ["submitted", "approved"])
             ) {
-                return response()->json(
-                    [
-                        "message" =>
-                            "You already have an active submission for this questionnaire",
-                        "submission_id" => $existingSubmission->id,
-                        "questionnaire_id" =>
-                            $existingSubmission->questionnaire_id,
-                        "status" => $existingSubmission->status,
-                        "submitted_at" => $existingSubmission->submitted_at?->format(
-                            "Y-m-d H:i:s"
-                        ),
-                    ],
-                    403
-                );
+                // First check if there's a clinical plan
+                $clinicalPlan = ClinicalPlan::where(
+                    "questionnaire_submission_id",
+                    $existingSubmission->id
+                )->first();
+
+                // If no clinical plan exists yet, they should wait for review
+                if (!$clinicalPlan) {
+                    return response()->json(
+                        [
+                            "message" =>
+                                "Your previous submission is still being reviewed. Please wait for the review to complete.",
+                            "submission_id" => $existingSubmission->id,
+                            "questionnaire_id" =>
+                                $existingSubmission->questionnaire_id,
+                            "status" => $existingSubmission->status,
+                        ],
+                        403
+                    );
+                }
+
+                // Check if there are any active prescriptions
+                $hasActivePrescription = Prescription::where(
+                    "clinical_plan_id",
+                    $clinicalPlan->id
+                )
+                    ->where("status", "active")
+                    ->where("end_date", ">=", now())
+                    ->exists();
+
+                if ($hasActivePrescription) {
+                    return response()->json(
+                        [
+                            "message" =>
+                                "You already have an active treatment plan. A new submission is not allowed at this time.",
+                            "submission_id" => $existingSubmission->id,
+                            "questionnaire_id" =>
+                                $existingSubmission->questionnaire_id,
+                            "status" => $existingSubmission->status,
+                        ],
+                        403
+                    );
+                }
+                // If they had prescriptions but all are completed/cancelled, we fall through to allow creation
             }
             // If it's rejected, we'll allow a new submission (fall through to creation code)
         }
