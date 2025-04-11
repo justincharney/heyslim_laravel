@@ -55,4 +55,12 @@ class QuestionnaireSubmission extends Model
     {
         return $this->hasMany(QuestionAnswer::class, "submission_id");
     }
+
+    /**
+     * Get the subscription associated with the submission.
+     */
+    public function subscription()
+    {
+        return $this->hasOne(Subscription::class);
+    }
 }
