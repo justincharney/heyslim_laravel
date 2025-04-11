@@ -63,4 +63,9 @@ class QuestionnaireSubmission extends Model
     {
         return $this->hasOne(Subscription::class);
     }
+
+    public function clinicalPlan()
+    {
+        return $this->hasOne(ClinicalPlan::class);
+    }
 }
