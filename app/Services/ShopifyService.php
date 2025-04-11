@@ -560,7 +560,7 @@ GRAPHQL;
 
         if ($response->successful()) {
             $data = $response->json();
-            Log::info("Shopify cart response", $data);
+            // Log::info("Shopify cart response", $data);
 
             if (
                 isset($data["data"]["cartCreate"]["userErrors"]) &&
