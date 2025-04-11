@@ -191,14 +191,23 @@ class PatientController extends Controller
             );
         }
 
-        // Get patients who have questionnaire submissions but no clinical plans
-        $patients = User::role("patient")
-            ->where("current_team_id", $teamId)
-            ->whereHas("questionnaireSubmissions", function ($query) {
-                $query->where("status", "submitted");
+        // Find submitted questionnaires that don't have clinical plans
+        $pendingSubmissions = QuestionnaireSubmission::where(
+            "status",
+            "submitted"
+        )
+            ->whereDoesntHave("clinicalPlan")
+            ->with("user")
+            ->whereHas("user", function ($query) use ($teamId) {
+                $query->where("current_team_id", $teamId);
             })
-            ->whereDoesntHave("clinicalPlansAsPatient")
             ->get();
+
+        // Extract unique patients from these submissions
+        $patientIds = $pendingSubmissions->pluck("user_id")->unique();
+
+        // Get the patient details
+        $patients = User::whereIn("id", $patientIds)->get();
 
         return response()->json([
             "patients" => $patients,
