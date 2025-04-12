@@ -62,12 +62,13 @@ class RechargeWebhookController extends Controller
         $shopifyCustomerId = $order["shopify_customer_id"] ?? null;
         $rechargeCustomerId = $order["customer_id"] ?? null;
         $email = $order["email"] ?? null;
+        $originalShopifyOrderId = $order["shopify_order_id"] ?? null;
 
         // Extract order information
         $lineItems = $order["line_items"] ?? [];
         if (empty($lineItems)) {
             Log::error("Recharge order webhook missing line items", [
-                "order_id" => $shopifyOrderId,
+                "order_id" => $originalShopifyOrderId,
             ]);
             return response()->json(["error" => "Missing line items"], 400);
         }
@@ -117,6 +118,7 @@ class RechargeWebhookController extends Controller
                         [
                             "recharge_customer_id" => $rechargeCustomerId,
                             "shopify_product_id" => $shopifyProductId,
+                            "original_shopify_order_id" => $originalShopifyOrderId,
                             "product_name" => $productName,
                             "status" => "active",
                             "user_id" => $user->id,

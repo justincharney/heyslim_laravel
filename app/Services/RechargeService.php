@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\QuestionnaireSubmission;
+use App\Models\Subscription;
+use App\Models\User;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -18,31 +20,12 @@ class RechargeService
     }
 
     /**
-     * Cancel subscription and process refund when questionnaire is rejected
+     * Get customer by Shopify customer ID
      */
-    public function cancelSubscriptionForRejectedQuestionnaire(
-        QuestionnaireSubmission $submission,
-        string $reason
-    ): bool {
-        $patient = $submission->user;
-        $shopifyCustomerId = $patient->shopify_customer_id;
-
-        if (!$shopifyCustomerId) {
-            Log::warning(
-                "Cannot cancel subscription - no Shopify customer ID found for user {$patient->id}"
-            );
-            return false;
-        }
-
-        // Extract numeric part from Shopify GID if needed
-        if (strpos($shopifyCustomerId, "gid://") === 0) {
-            $parts = explode("/", $shopifyCustomerId);
-            $shopifyCustomerId = end($parts);
-        }
-
+    public function getCustomerByShopifyId($shopifyCustomerId)
+    {
         try {
-            // Get the Recharge customer
-            $customerResponse = Http::withHeaders([
+            $response = Http::withHeaders([
                 "X-Recharge-Access-Token" => $this->apiKey,
                 "Accept" => "application/json",
                 "Content-Type" => "application/json",
@@ -50,23 +33,33 @@ class RechargeService
                 "shopify_customer_id" => $shopifyCustomerId,
             ]);
 
-            if (!$customerResponse->successful()) {
-                Log::error("Failed to fetch customer from Recharge API", [
-                    "status" => $customerResponse->status(),
-                    "response" => $customerResponse->json(),
-                ]);
-                return false;
+            if (!$response->successful()) {
+                return null;
             }
 
-            $customers = $customerResponse->json()["customers"] ?? [];
+            $customers = $response->json()["customers"] ?? [];
+
             if (empty($customers)) {
-                return false;
+                return null;
             }
 
-            $customerId = $customers[0]["id"];
+            return $customers[0];
+        } catch (\Exception $e) {
+            Log::error("Error fetching customer by Shopify ID", [
+                "error" => $e->getMessage(),
+                "shopify_id" => $shopifyCustomerId,
+            ]);
+            return null;
+        }
+    }
 
-            // Get all subscriptions for this customer
-            $subscriptionsResponse = Http::withHeaders([
+    /**
+     * Get subscriptions for a Recharge customer ID
+     */
+    public function getSubscriptionsForCustomerId($customerId)
+    {
+        try {
+            $response = Http::withHeaders([
                 "X-Recharge-Access-Token" => $this->apiKey,
                 "Accept" => "application/json",
                 "Content-Type" => "application/json",
@@ -74,111 +67,216 @@ class RechargeService
                 "customer_id" => $customerId,
             ]);
 
-            if (!$subscriptionsResponse->successful()) {
-                return false;
+            if (!$response->successful()) {
+                return [];
             }
 
-            $subscriptions =
-                $subscriptionsResponse->json()["subscriptions"] ?? [];
-
-            // Get the selected product from the questionnaire submission
-            $productInfo = null;
-            $productAnswer = $submission
-                ->answers()
-                ->whereHas("question", function ($query) {
-                    $query->where("label", "Treatment Selection");
-                })
-                ->first();
-
-            if ($productAnswer) {
-                $productInfo = $productAnswer->answer_text;
-            }
-
-            // Figure out which subscription(s) to cancel
-            $subscriptionsToCancelIds = [];
-
-            // If we could identify the specific product from the questionnaire
-            if ($productInfo) {
-                // Extract product name (e.g., "Mounjaro" from "Mounjaro (£199.00)")
-                $productName = explode(" (", $productInfo)[0];
-
-                // Find subscriptions for this specific product
-                foreach ($subscriptions as $subscription) {
-                    if (
-                        $subscription["status"] === "ACTIVE" &&
-                        stripos(
-                            $subscription["product_title"],
-                            $productName
-                        ) !== false
-                    ) {
-                        $subscriptionsToCancelIds[] = $subscription["id"];
-                    }
-                }
-            }
-
-            // If we couldn't identify specific subscription(s) by product, cancel all active ones
-            // This is also a fallback if the above product matching didn't find any
-            if (empty($subscriptionsToCancelIds)) {
-                foreach ($subscriptions as $subscription) {
-                    if ($subscription["status"] === "ACTIVE") {
-                        $subscriptionsToCancelIds[] = $subscription["id"];
-                    }
-                }
-            }
-
-            if (empty($subscriptionsToCancelIds)) {
-                Log::warning(
-                    "No active subscriptions found to cancel for rejected questionnaire",
-                    [
-                        "submission_id" => $submission->id,
-                        "patient_id" => $patient->id,
-                    ]
-                );
-                return false;
-            }
-
-            // Cancel all identified subscriptions
-            $allCancelled = true;
-            foreach ($subscriptionsToCancelIds as $subscriptionId) {
-                // Cancel the subscription
-                $cancellationData = [
-                    "cancellation_reason" => $reason,
-                    "cancellation_reason_comments" =>
-                        "Questionnaire rejected: " . $submission->review_notes,
-                ];
-
-                $cancelResponse = Http::withHeaders([
-                    "X-Recharge-Access-Token" => $this->apiKey,
-                    "Accept" => "application/json",
-                    "Content-Type" => "application/json",
-                ])->post(
-                    "{$this->endpoint}/subscriptions/{$subscriptionId}/cancel",
-                    $cancellationData
-                );
-
-                if (!$cancelResponse->successful()) {
-                    $allCancelled = false;
-                    Log::error("Failed to cancel subscription", [
-                        "subscription_id" => $subscriptionId,
-                        "response" => $cancelResponse->json(),
-                    ]);
-                } else {
-                    Log::info(
-                        "Subscription cancelled due to rejected questionnaire",
-                        [
-                            "subscription_id" => $subscriptionId,
-                            "questionnaire_id" => $submission->id,
-                        ]
-                    );
-                }
-            }
-
-            return $allCancelled;
+            return $response->json()["subscriptions"] ?? [];
         } catch (\Exception $e) {
-            Log::error("Exception while cancelling subscription", [
+            Log::error("Error fetching subscriptions for customer", [
                 "error" => $e->getMessage(),
-                "trace" => $e->getTraceAsString(),
+                "customer_id" => $customerId,
             ]);
+            return [];
+        }
+    }
+
+    /**
+     * Get a subscription by Recharge subscription ID
+     */
+    public function getSubscriptionByRechargeId($rechargeSubscriptionId)
+    {
+        // First try to get it from our database
+        $subscription = Subscription::where(
+            "recharge_subscription_id",
+            $rechargeSubscriptionId
+        )->first();
+
+        if ($subscription) {
+            return $subscription;
+        }
+
+        // If not found, try to get it from Recharge API
+        try {
+            $response = Http::withHeaders([
+                "X-Recharge-Access-Token" => $this->apiKey,
+                "Accept" => "application/json",
+                "Content-Type" => "application/json",
+            ])->get(
+                "{$this->endpoint}/subscriptions/{$rechargeSubscriptionId}"
+            );
+
+            if (!$response->successful()) {
+                return null;
+            }
+
+            $subscriptionData = $response->json()["subscription"] ?? null;
+            if (!$subscriptionData) {
+                return null;
+            }
+
+            // Try to match with a user by email
+            $email = $subscriptionData["email"] ?? null;
+            if (!$email) {
+                return null;
+            }
+
+            $user = \App\Models\User::where("email", $email)->first();
+            if (!$user) {
+                return null;
+            }
+
+            // Store this subscription in our database
+            return $this->storeSubscription($subscriptionData, $user->id);
+        } catch (\Exception $e) {
+            Log::error("Error retrieving subscription from Recharge API", [
+                "error" => $e->getMessage(),
+                "subscription_id" => $rechargeSubscriptionId,
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * Cancel subscription and process refund when questionnaire is rejected
+     */
+    public function cancelSubscriptionForRejectedQuestionnaire(
+        QuestionnaireSubmission $submission,
+        string $reason
+    ): bool {
+        try {
+            $patient = $submission->user;
+            $success = false;
+
+            // First, try to find subscription directly from our database
+            $subscription = Subscription::where(
+                "questionnaire_submission_id",
+                $submission->id
+            )->first();
+
+            // If we found a subscription linked to this questionnaire
+            if ($subscription && $subscription->status === "active") {
+                // Log::info("Found active subscription to cancel", [
+                //     "subscription_id" => $subscription->id,
+                //     "recharge_id" => $subscription->recharge_subscription_id,
+                //     "shopify_order_id" =>
+                //         $subscription->original_shopify_order_id,
+                // ]);
+
+                // Handle Shopify order cancellation first if we have the order ID
+                $shopifyOrderCancelled = false;
+                if (!empty($subscription->original_shopify_order_id)) {
+                    $shopifyService = app(ShopifyService::class);
+                    $shopifyOrderCancelled = $shopifyService->cancelAndRefundOrder(
+                        $subscription->original_shopify_order_id,
+                        "Questionnaire rejected by healthcare provider: "
+                    );
+
+                    Log::info("Shopify order cancellation attempt", [
+                        "order_id" => $subscription->original_shopify_order_id,
+                        "success" => $shopifyOrderCancelled,
+                    ]);
+                }
+
+                // Cancel the Recharge subscription if we have the ID
+                $rechargeSubscriptionCancelled = false;
+                if (!empty($subscription->recharge_subscription_id)) {
+                    $rechargeSubscriptionCancelled = $this->cancelSubscription(
+                        $subscription->recharge_subscription_id,
+                        $reason,
+                        "Questionnaire rejected: " . $submission->review_notes
+                    );
+
+                    Log::info("Recharge subscription cancellation attempt", [
+                        "recharge_id" =>
+                            $subscription->recharge_subscription_id,
+                        "success" => $rechargeSubscriptionCancelled,
+                    ]);
+                }
+
+                // Update our local subscription record if cancelled
+                if ($shopifyOrderCancelled && $rechargeSubscriptionCancelled) {
+                    $subscription->update([
+                        "status" => "cancelled",
+                    ]);
+                }
+
+                // Return true if both worked
+                return $shopifyOrderCancelled && $rechargeSubscriptionCancelled;
+            } else {
+                // If we don't have a local subscription record, try to find the customer in Recharge
+                // and cancel any active subscriptions
+
+                // Try to get Shopify customer ID if available
+                $shopifyCustomerId = $patient->shopify_customer_id ?? null;
+
+                if ($shopifyCustomerId) {
+                    // Get the Recharge customer by Shopify ID
+                    $rechargeCustomer = $this->getCustomerByShopifyId(
+                        $shopifyCustomerId
+                    );
+
+                    if ($rechargeCustomer) {
+                        $rechargeCustomerId = $rechargeCustomer["id"];
+
+                        // Get all subscriptions for this customer
+                        $subscriptions = $this->getSubscriptionsForCustomerId(
+                            $rechargeCustomerId
+                        );
+
+                        if (!empty($subscriptions)) {
+                            $cancelledCount = 0;
+
+                            foreach ($subscriptions as $subData) {
+                                if ($subData["status"] === "ACTIVE") {
+                                    $rechargeSubId = $subData["id"];
+
+                                    // Cancel the subscription
+                                    $cancelled = $this->cancelSubscription(
+                                        $rechargeSubId,
+                                        $reason,
+                                        "Questionnaire rejected by healthcare provider"
+                                    );
+
+                                    if ($cancelled) {
+                                        $cancelledCount++;
+
+                                        // Store this subscription in our database
+                                        $this->storeSubscription(
+                                            $subData,
+                                            $patient->id,
+                                            $submission->id
+                                        );
+                                    }
+                                }
+                            }
+
+                            if ($cancelledCount > 0) {
+                                Log::info(
+                                    "Cancelled $cancelledCount subscriptions found in Recharge for customer",
+                                    [
+                                        "user_id" => $patient->id,
+                                        "shopify_customer_id" => $shopifyCustomerId,
+                                        "recharge_customer_id" => $rechargeCustomerId,
+                                    ]
+                                );
+                                $success = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            return $success;
+        } catch (\Exception $e) {
+            Log::error(
+                "Exception while cancelling subscription for rejected questionnaire",
+                [
+                    "error" => $e->getMessage(),
+                    "submission_id" => $submission->id,
+                    "user_id" => $submission->user_id,
+                ]
+            );
             return false;
         }
     }
@@ -368,39 +466,48 @@ class RechargeService
     }
 
     /**
-     * Cancel a subscription
+     * Store a subscription from Recharge API in our database
      */
-    public function cancelSubscription(
-        string $subscriptionId,
-        string $reason,
-        ?string $notes = null
-    ): bool {
+    private function storeSubscription(
+        $subscriptionData,
+        $userId,
+        $questionnaireSubmissionId = null
+    ) {
         try {
-            // Prepare cancellation data
-            $cancellationData = [
-                "cancellation_reason" => $reason,
-            ];
+            $rechargeSubId = $subscriptionData["id"];
+            $customerId = $subscriptionData["customer_id"] ?? null;
+            $productName = $subscriptionData["product_title"] ?? null;
+            $shopifyProductId = $subscriptionData["shopify_product_id"] ?? null;
+            $nextBillingDate =
+                $subscriptionData["next_charge_scheduled_at"] ?? null;
 
-            if ($notes) {
-                $cancellationData["cancellation_reason_comments"] = $notes;
+            if (!$rechargeSubId || !$productName) {
+                return null;
             }
 
-            // Cancel the subscription in Recharge
-            $response = Http::withHeaders([
-                "X-Recharge-Access-Token" => $this->apiKey,
-                "Accept" => "application/json",
-                "Content-Type" => "application/json",
-            ])->post(
-                "{$this->endpoint}/subscriptions/{$subscriptionId}/cancel",
-                $cancellationData
+            return Subscription::updateOrCreate(
+                ["recharge_subscription_id" => $rechargeSubId],
+                [
+                    "recharge_customer_id" => $customerId,
+                    "product_name" => $productName,
+                    "shopify_product_id" => $shopifyProductId,
+                    "user_id" => $userId,
+                    "questionnaire_submission_id" => $questionnaireSubmissionId,
+                    "next_billing_date" => $nextBillingDate,
+                    "status" =>
+                        $subscriptionData["status"] === "ACTIVE"
+                            ? "active"
+                            : ($subscriptionData["status"] === "CANCELLED"
+                                ? "cancelled"
+                                : "paused"),
+                ]
             );
-
-            return $response->successful();
         } catch (\Exception $e) {
-            Log::error("Exception while cancelling subscription in Recharge", [
+            Log::error("Error storing subscription in database", [
                 "error" => $e->getMessage(),
+                "subscription_id" => $subscriptionData["id"] ?? "unknown",
             ]);
-            return false;
+            return null;
         }
     }
 }

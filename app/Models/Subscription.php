@@ -10,11 +10,17 @@ class Subscription extends Model
         "recharge_subscription_id",
         "recharge_customer_id",
         "shopify_product_id",
+        "original_shopify_order_id",
         "product_name",
         "status",
         "questionnaire_submission_id",
         "prescription_id",
         "user_id",
+        "next_charge_scheduled_at",
+    ];
+
+    protected $casts = [
+        "next_charge_scheduled_at" => "date",
     ];
 
     /**

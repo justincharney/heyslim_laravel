@@ -51,6 +51,7 @@ return [
     "recharge" => [
         "api_key" => env("RECHARGE_API_KEY"),
         "endpoint" => env("RECHARGE_ENDPOINT", "https://api.rechargeapps.com"),
+        "client_secret" => env("RECHARGE_CLIENT_SECRET"),
     ],
 
     "workos" => [

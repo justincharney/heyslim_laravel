@@ -500,10 +500,29 @@ class QuestionnaireController extends Controller
 
             // Cancel related subscription
             $rechargeService = app(RechargeService::class);
-            $rechargeService->cancelSubscriptionForRejectedQuestionnaire(
+            $cancellationSuccess = $rechargeService->cancelSubscriptionForRejectedQuestionnaire(
                 $submission,
                 "Questionnaire rejected by healthcare provider"
             );
+
+            // If subscription cancellation failed, roll back and return error
+            if (!$cancellationSuccess) {
+                DB::rollBack();
+                Log::error(
+                    "Failed to cancel subscription for rejected questionnaire",
+                    [
+                        "submission_id" => $id,
+                    ]
+                );
+
+                return response()->json(
+                    [
+                        "message" =>
+                            "Failed to cancel subscription for rejected questionnaire",
+                    ],
+                    500
+                );
+            }
 
             // Send email notification to user
             $patient = $submission->user;

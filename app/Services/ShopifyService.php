@@ -736,4 +736,123 @@ GRAPHQL;
 
         return null;
     }
+
+    /**
+     * Cancel and refund a Shopify order
+     *
+     * @param string $orderId The Shopify order ID
+     * @param string $reason The cancellation reason
+     * @return bool Whether the cancellation was successful
+     */
+    public function cancelAndRefundOrder(string $orderId, string $reason): bool
+    {
+        // Check if we have a valid order ID
+        if (empty($orderId)) {
+            Log::warning("Empty Shopify order ID provided for cancellation");
+            return false;
+        }
+
+        try {
+            $cancelMutation = <<<'GRAPHQL'
+mutation orderCancel($orderId: ID!, $reason: OrderCancelReason!, $notifyCustomer: Boolean, $refund: Boolean!, $restock: Boolean!, $staffNote: String) {
+  orderCancel(
+    orderId: $orderId,
+    reason: $reason,
+    notifyCustomer: $notifyCustomer,
+    refund: $refund,
+    restock: $restock,
+    staffNote: $staffNote
+  ) {
+    job {
+      id
+    }
+    orderCancelUserErrors {
+      field
+      message
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}
+GRAPHQL;
+
+            $cancelResponse = Http::withHeaders([
+                "Content-Type" => "application/json",
+                "X-Shopify-Access-Token" => $this->accessToken,
+            ])->post($this->endpoint, [
+                "query" => $cancelMutation,
+                "variables" => [
+                    "orderId" => $this->formatGid($orderId),
+                    "reason" => "OTHER",
+                    "notifyCustomer" => true,
+                    "refund" => true,
+                    "restock" => true,
+                    "staffNote" => $reason,
+                ],
+            ]);
+
+            if (!$cancelResponse->successful()) {
+                Log::error("Failed to cancel order in Shopify", [
+                    "order_id" => $orderId,
+                    "response" => $cancelResponse->json(),
+                ]);
+                return false;
+            }
+
+            $cancelData = $cancelResponse->json();
+
+            // Check for cancellation errors from both error fields
+            if (
+                (isset($cancelData["data"]["orderCancel"]["userErrors"]) &&
+                    !empty($cancelData["data"]["orderCancel"]["userErrors"])) ||
+                (isset(
+                    $cancelData["data"]["orderCancel"]["orderCancelUserErrors"]
+                ) &&
+                    !empty(
+                        $cancelData["data"]["orderCancel"][
+                            "orderCancelUserErrors"
+                        ]
+                    ))
+            ) {
+                Log::error("Order cancellation returned errors", [
+                    "order_id" => $orderId,
+                    "user_errors" =>
+                        $cancelData["data"]["orderCancel"]["userErrors"] ?? [],
+                    "cancel_errors" =>
+                        $cancelData["data"]["orderCancel"][
+                            "orderCancelUserErrors"
+                        ] ?? [],
+                ]);
+                return false;
+            }
+
+            // Log::info("Successfully cancelled order in Shopify", [
+            //     "order_id" => $orderId,
+            // ]);
+            return true;
+        } catch (\Exception $e) {
+            Log::error("Exception while cancelling Shopify order", [
+                "order_id" => $orderId,
+                "error" => $e->getMessage(),
+                "trace" => $e->getTraceAsString(),
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Format ID to Shopify GraphQL global ID format if needed
+     */
+    private function formatGid(string $id): string
+    {
+        // If already in gid format, return as is
+        if (strpos($id, "gid://") === 0) {
+            return $id;
+        }
+
+        // Otherwise convert to gid format
+        return "gid://shopify/Order/{$id}";
+    }
 }
