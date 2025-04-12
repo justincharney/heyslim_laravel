@@ -414,7 +414,7 @@ class RechargeService
                 }
             }
 
-            Log::info($upcomingSubscriptions);
+            // Log::info($upcomingSubscriptions);
 
             return $upcomingSubscriptions;
         } catch (\Exception $e) {

@@ -153,7 +153,7 @@ class TemplateSeeder extends Seeder
                 "medication_name" => "Semaglutide (Wegovy)",
                 "dose" => "0.25mg, 0.5mg, 1.0mg, 1.7mg, 2.4mg pen injectors",
                 "schedule" => "Once weekly injection with dose escalation",
-                "refills" => 12,
+                "refills" => 11,
                 "directions" =>
                     "Week 1-4: Inject 0.25mg subcutaneously once weekly\n" .
                     "Week 5-8: Inject 0.5mg subcutaneously once weekly\n" .
@@ -172,7 +172,7 @@ class TemplateSeeder extends Seeder
                 "dose" =>
                     "2.5mg, 5.0mg, 7.5mg, 10mg, 12.5mg, 15mg pen injectors",
                 "schedule" => "Once weekly injection with dose escalation",
-                "refills" => 12,
+                "refills" => 11,
                 "directions" =>
                     "Week 1-4: Inject 2.5mg subcutaneously once weekly\n" .
                     "Week 5-8: Inject 5.0mg subcutaneously once weekly\n" .
@@ -192,7 +192,7 @@ class TemplateSeeder extends Seeder
                 "dose" =>
                     "6mg/mL multi-dose pen (provides doses of 0.6mg, 1.2mg, 1.8mg, 2.4mg, and 3.0mg)",
                 "schedule" => "Once daily injection with dose escalation",
-                "refills" => 12,
+                "refills" => 11,
                 "directions" =>
                     "Week 1: Inject 0.6mg subcutaneously once daily\n" .
                     "Week 2: Inject 1.2mg subcutaneously once daily\n" .

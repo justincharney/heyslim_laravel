@@ -123,7 +123,7 @@ class ValidateSubscriptionRenewals extends Command
                     "Subscription {$subscriptionId} has an invalid prescription: {$reason}. Cancelling subscription."
                 );
 
-                Cancel the subscription
+                // Cancel the subscription
                 $cancelled = $rechargeService->cancelSubscription(
                     $subscriptionId,
                     $reason,
