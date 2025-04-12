@@ -7,6 +7,7 @@ use App\Models\Subscription;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 
 class RechargeService
 {
@@ -380,17 +381,17 @@ class RechargeService
     public function getUpcomingRenewals(): array
     {
         try {
-            // Calculate tomorrow's date for renewals
+            // Calculate today's and tomorrow's dates for renewals
+            $today = Carbon::today()->format("Y-m-d");
             $tomorrow = Carbon::tomorrow()->format("Y-m-d");
 
-            // Get subscriptions renewing tomorrow
+            // Get all active subscriptions
             $response = Http::withHeaders([
                 "X-Recharge-Access-Token" => $this->apiKey,
                 "Accept" => "application/json",
                 "Content-Type" => "application/json",
             ])->get("{$this->endpoint}/subscriptions", [
                 "status" => "ACTIVE",
-                "next_charge_scheduled_at" => $tomorrow,
             ]);
 
             if (!$response->successful()) {
@@ -399,27 +400,23 @@ class RechargeService
 
             $subscriptions = $response->json()["subscriptions"] ?? [];
 
-            // Load customer details for each subscription
-            foreach ($subscriptions as $key => $subscription) {
-                $customerId = $subscription["customer_id"] ?? null;
-                if ($customerId) {
-                    $customerResponse = Http::withHeaders([
-                        "X-Recharge-Access-Token" => $this->apiKey,
-                        "Accept" => "application/json",
-                        "Content-Type" => "application/json",
-                    ])->get("{$this->endpoint}/customers/{$customerId}");
-
-                    if ($customerResponse->successful()) {
-                        $customer =
-                            $customerResponse->json()["customer"] ?? null;
-                        if ($customer) {
-                            $subscriptions[$key]["customer"] = $customer;
-                        }
-                    }
+            // Filter subscriptions that have a next_charge_scheduled_at today or tomorrow
+            $upcomingSubscriptions = [];
+            foreach ($subscriptions as $subscription) {
+                $nextChargeScheduledAt = Carbon::parse(
+                    $subscription["next_charge_scheduled_at"] ?? null
+                )->format("Y-m-d");
+                if (
+                    $nextChargeScheduledAt === $today ||
+                    $nextChargeScheduledAt === $tomorrow
+                ) {
+                    $upcomingSubscriptions[] = $subscription;
                 }
             }
 
-            return $subscriptions;
+            Log::info($upcomingSubscriptions);
+
+            return $upcomingSubscriptions;
         } catch (\Exception $e) {
             Log::error("Exception while fetching upcoming renewals", [
                 "error" => $e->getMessage(),

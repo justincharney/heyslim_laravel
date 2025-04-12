@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use App\Enums\Permission;
 use App\Models\Subscription;
+use App\Models\QuestionnaireSubmission;
 
 class PrescriptionController extends Controller
 {
@@ -132,11 +133,11 @@ class PrescriptionController extends Controller
 
         $validated = $request->validate($validationRules);
 
-        // If no end date, set it to one year after start date
+        // If no end date, set it to 13 months after start date
         if (empty($validated["end_date"])) {
             $startDate = new \DateTime($validated["start_date"]);
             $validated["end_date"] = $startDate
-                ->modify("+1 year")
+                ->modify("+13 months")
                 ->format("Y-m-d");
         }
 

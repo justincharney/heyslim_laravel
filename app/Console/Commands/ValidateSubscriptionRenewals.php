@@ -8,6 +8,7 @@ use App\Services\RechargeService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
+use App\Models\Subscription;
 
 class ValidateSubscriptionRenewals extends Command
 {
@@ -49,80 +50,94 @@ class ValidateSubscriptionRenewals extends Command
         $validCount = 0;
 
         foreach ($upcomingRenewals as $renewal) {
-            $shopifyCustomerId =
-                $renewal["customer"]["shopify_customer_id"] ?? null;
             $subscriptionId = $renewal["id"] ?? null;
             $productTitle = $renewal["product_title"] ?? "Unknown Product";
 
-            if (!$shopifyCustomerId || !$subscriptionId) {
-                $this->warn(
-                    "Missing customer ID or subscription ID for renewal."
-                );
+            if (!$subscriptionId) {
+                $this->warn("Missing subscription ID for renewal.");
                 continue;
             }
 
-            // Find the user by Shopify customer ID
-            $user = User::where(
-                "shopify_customer_id",
-                $shopifyCustomerId
+            // Find the internal subscription record that corresponds to this Recharge subscription
+            $subscription = Subscription::where(
+                "recharge_subscription_id",
+                $subscriptionId
             )->first();
 
-            if (!$user) {
+            if (!$subscription) {
                 $this->warn(
-                    "No user found for Shopify customer ID: " .
-                        $shopifyCustomerId
+                    "No internal subscription record found for Recharge subscription ID: {$subscriptionId}"
                 );
                 continue;
             }
 
-            // Extract medication name from the product title (removes variant info)
-            $medicationName = preg_replace('/\s+\(.*?\)$/', "", $productTitle);
+            // Get the associated prescription using the relationship
+            $prescription = $subscription->prescription;
 
-            // Check if the user has a matching active prescription
-            $matchingPrescription = Prescription::where("patient_id", $user->id)
-                ->where("status", "active")
-                ->where("end_date", ">=", Carbon::now())
-                ->where(function ($query) use ($medicationName) {
-                    // Try to match by medication name, looking for partial matches
-                    // This handles cases like "Mounjaro" in the subscription matching
-                    // "Tirzepatide (Mounjaro)" in the prescription
-                    $query
-                        ->where(
-                            "medication_name",
-                            "like",
-                            "%{$medicationName}%"
-                        )
-                        ->orWhere(function ($q) use ($medicationName) {
-                            // Handle the reverse case - medication name in prescription
-                            // might be shorter than product title
-                            $q->whereRaw(
-                                "? LIKE CONCAT('%', medication_name, '%')",
-                                [$medicationName]
-                            );
-                        });
-                })
-                ->first();
-
-            if (!$matchingPrescription) {
+            if (!$prescription) {
                 $this->info(
-                    "User {$user->id} has no matching active prescription for {$productTitle}. Cancelling subscription {$subscriptionId}."
+                    "Subscription {$subscriptionId} has no associated prescription. Cancelling subscription."
                 );
 
                 // Cancel the subscription
                 $cancelled = $rechargeService->cancelSubscription(
                     $subscriptionId,
-                    "No active matching prescription",
-                    "System automatically cancelled subscription due to no active prescription found for {$productTitle}."
+                    "No associated prescription",
+                    "System automatically cancelled subscription due to no prescription found."
                 );
 
                 if ($cancelled) {
                     $cancelCount++;
                     Log::info(
-                        "Cancelled subscription due to no matching active prescription",
+                        "Cancelled subscription due to no associated prescription",
                         [
-                            "user_id" => $user->id,
                             "subscription_id" => $subscriptionId,
                             "product_title" => $productTitle,
+                        ]
+                    );
+                } else {
+                    $this->error(
+                        "Failed to cancel subscription {$subscriptionId}"
+                    );
+                }
+
+                continue;
+            }
+
+            // Check if the prescription is active and not expired
+            if (
+                $prescription->status !== "active" ||
+                Carbon::parse($prescription->end_date)->isPast() ||
+                $prescription->refills <= 0
+            ) {
+                $reason = "Unknown issue";
+                if ($prescription->status !== "active") {
+                    $reason = "Prescription is not active";
+                } elseif (Carbon::parse($prescription->end_date)->isPast()) {
+                    $reason = "Prescription has expired";
+                } elseif ($prescription->refills <= 0) {
+                    $reason = "No refills remaining";
+                }
+
+                $this->info(
+                    "Subscription {$subscriptionId} has an invalid prescription: {$reason}. Cancelling subscription."
+                );
+
+                Cancel the subscription
+                $cancelled = $rechargeService->cancelSubscription(
+                    $subscriptionId,
+                    $reason,
+                    "System automatically cancelled subscription due to {$reason}."
+                );
+
+                if ($cancelled) {
+                    $cancelCount++;
+                    Log::info(
+                        "Cancelled subscription due to invalid prescription",
+                        [
+                            "subscription_id" => $subscriptionId,
+                            "prescription_id" => $prescription->id,
+                            "reason" => $reason,
                         ]
                     );
                 } else {
@@ -133,7 +148,7 @@ class ValidateSubscriptionRenewals extends Command
             } else {
                 $validCount++;
                 $this->info(
-                    "User {$user->id} has an active prescription for {$productTitle}. Subscription valid."
+                    "Subscription {$subscriptionId} has a valid prescription with {$prescription->refills} refills remaining. Subscription valid."
                 );
             }
         }
