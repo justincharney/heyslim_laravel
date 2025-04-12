@@ -59,6 +59,7 @@ class RechargeWebhookController extends Controller
 
         // Extract subscription information
         $order = $data["order"] ?? null;
+        $orderType = $order["type"] ?? null;
         $shopifyCustomerId = $order["shopify_customer_id"] ?? null;
         $rechargeCustomerId = $order["customer_id"] ?? null;
         $email = $order["email"] ?? null;
@@ -89,7 +90,95 @@ class RechargeWebhookController extends Controller
             }
         }
 
-        if ($questionnaireSubId) {
+        // Find the subscription record
+        $subscription = Subscription::where(
+            "recharge_subscription_id",
+            $rechargeSubId
+        )->first();
+
+        // SCENARIO 1: RECURRING order (decrement refills)
+        if ($subscription && $orderType === "RECURRING") {
+            // This is a renewal order
+            try {
+                // Find associated prescription
+                $prescription = $subscription->prescription;
+
+                if ($prescription) {
+                    // Only decrement if we have refills remaining
+                    if ($prescription->refills > 0) {
+                        // Log::info(
+                        //     "Decrementing prescription refills for renewal order",
+                        //     [
+                        //         "order_id" => $originalShopifyOrderId,
+                        //         "subscription_id" => $rechargeSubId,
+                        //         "prescription_id" => $prescription->id,
+                        //         "current_refills" => $prescription->refills,
+                        //         "new_refills" => $prescription->refills - 1,
+                        //     ]
+                        // );
+
+                        // Decrement and save
+                        $prescription->refills -= 1;
+                        $prescription->save();
+
+                        return response()->json(
+                            [
+                                "message" =>
+                                    "Renewal order processed, prescription refills decremented",
+                            ],
+                            200
+                        );
+                    } else {
+                        Log::warning(
+                            "Renewal order received but prescription has no refills remaining",
+                            [
+                                "order_id" => $originalShopifyOrderId,
+                                "subscription_id" => $rechargeSubId,
+                                "prescription_id" => $prescription->id,
+                            ]
+                        );
+
+                        return response()->json(
+                            [
+                                "message" =>
+                                    "Warning: Prescription has no refills remaining",
+                            ],
+                            200
+                        );
+                    }
+                } else {
+                    Log::error("Subscription has no associated prescription", [
+                        "subscription_id" => $subscription->id,
+                        "order_id" => $originalShopifyOrderId,
+                    ]);
+
+                    return response()->json(
+                        [
+                            "error" =>
+                                "Subscription has no associated prescription",
+                        ],
+                        404
+                    );
+                }
+            } catch (\Exception $e) {
+                Log::error("Error processing renewal order", [
+                    "order_id" => $originalShopifyOrderId,
+                    "error" => $e->getMessage(),
+                ]);
+
+                return response()->json(
+                    [
+                        "error" =>
+                            "Error processing renewal order: " .
+                            $e->getMessage(),
+                    ],
+                    500
+                );
+            }
+        }
+
+        // SCENARIO 2: CHECKOUT order (create or update subscription)
+        if ($questionnaireSubId && $orderType === "CHECKOUT") {
             $submission = QuestionnaireSubmission::find($questionnaireSubId);
             if ($submission) {
                 try {
@@ -139,14 +228,24 @@ class RechargeWebhookController extends Controller
                 Log::error("Submission record not found in database", [
                     "submission_id" => $questionnaireSubId,
                 ]);
+                return response()->json(
+                    ["error" => "Questionnaire submission not found"],
+                    404
+                );
             }
-        } else {
-            // This can happen for subsequent orders after their first order that was made with the questionnaire when they subscribed
-            return response("No matching questionnaire submission found", 200);
         }
 
+        // SCENARIO 3: Unrecognized pattern
+        Log::info(
+            "No matching questionnaire submission or existing subscription found",
+            [
+                "order_id" => $originalShopifyOrderId,
+                "subscription_id" => $rechargeSubId,
+            ]
+        );
+
         return response()->json(
-            ["message" => "Order processed successfully"],
+            ["message" => "Order processed but no action taken"],
             200
         );
     }
