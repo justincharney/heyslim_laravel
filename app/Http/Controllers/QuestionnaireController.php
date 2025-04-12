@@ -60,12 +60,18 @@ class QuestionnaireController extends Controller
             );
         }
 
-        // Only allow cancellation of draft or pending_payment submissions
-        if (!in_array($submission->status, ["draft", "pending_payment"])) {
+        // Only allow cancellation of draft, pending_payment, or rejected submissions
+        if (
+            !in_array($submission->status, [
+                "draft",
+                "pending_payment",
+                "rejected",
+            ])
+        ) {
             return response()->json(
                 [
                     "message" =>
-                        "Only submissions in draft or pending payment status can be cancelled.",
+                        "Only submissions in draft, pending payment, or rejected status can be cancelled.",
                 ],
                 403
             );
