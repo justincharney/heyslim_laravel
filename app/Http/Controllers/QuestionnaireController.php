@@ -284,6 +284,80 @@ class QuestionnaireController extends Controller
             201
         );
     }
+    /**
+     * Process and save questionnaire answers
+     *
+     * @param int $submissionId Questionnaire submission ID
+     * @param array $answers Array of answer data
+     * @param bool $isFinal Whether this is a final submission
+     * @return QuestionnaireSubmission
+     */
+    private function processAnswers($submissionId, $answers, $isFinal = false)
+    {
+        $submission = QuestionnaireSubmission::findOrFail($submissionId);
+
+        if ($submission->user_id !== auth()->id()) {
+            abort(403, "Unauthorized to access submission");
+        }
+
+        // Prepare data for batch insertion
+        $questionsToUpdate = collect($answers)->pluck("question_id")->toArray();
+        $insertData = [];
+        $timestamp = now();
+
+        // Process each answer
+        foreach ($answers as $answer) {
+            $answerText = $answer["answer_text"];
+
+            // Handle array/object values
+            if (is_array($answerText) || is_object($answerText)) {
+                $answerText = !empty($answerText)
+                    ? json_encode($answerText)
+                    : null;
+            }
+
+            $insertData[] = [
+                "submission_id" => $submission->id,
+                "question_id" => $answer["question_id"],
+                "answer_text" => $answerText,
+                "created_at" => $timestamp,
+                "updated_at" => $timestamp,
+            ];
+        }
+
+        // Use a single transaction for efficiency
+        DB::transaction(function () use (
+            $submission,
+            $questionsToUpdate,
+            $insertData,
+            $isFinal
+        ) {
+            // Update timestamp without triggering events
+            $submission->timestamps = false;
+            $submission->touch();
+            $submission->timestamps = true;
+
+            // Efficiently delete existing answers for these questions
+            QuestionAnswer::where("submission_id", $submission->id)
+                ->whereIn("question_id", $questionsToUpdate)
+                ->delete();
+
+            // Batch insert all answers at once
+            if (!empty($insertData)) {
+                QuestionAnswer::insert($insertData);
+            }
+
+            // If this is a final submission, update the status
+            if ($isFinal) {
+                $submission->update([
+                    "submitted_at" => now(),
+                ]);
+            }
+        });
+
+        return $submission;
+    }
+
     public function savePartial(Request $request)
     {
         $validated = $request->validate([
@@ -293,51 +367,10 @@ class QuestionnaireController extends Controller
             "answers.*.answer_text" => "nullable",
         ]);
 
-        DB::beginTransaction();
-
-        $submission = QuestionnaireSubmission::findOrFail(
-            $validated["submission_id"]
+        $submission = $this->processAnswers(
+            $validated["submission_id"],
+            $validated["answers"]
         );
-
-        if ($submission->user_id !== auth()->id()) {
-            return response()->json(
-                [
-                    "message" => "Unauthorized to access submission",
-                ],
-                403
-            );
-        }
-
-        // Keep status as draft for partial submissions
-        $submission->touch(); // Update timestamp
-
-        // Delete existing answers for the given questions.
-        QuestionAnswer::where("submission_id", $submission->id)
-            ->whereIn(
-                "question_id",
-                collect($validated["answers"])->pluck("question_id")
-            )
-            ->delete();
-
-        // Save new answers
-        foreach ($validated["answers"] as $answer) {
-            $answerText = $answer["answer_text"];
-
-            // Handle empty arrays and null values
-            if (is_array($answerText)) {
-                // Convert empty arrays to null
-                $answerText = !empty($answerText)
-                    ? json_encode($answerText)
-                    : null;
-            }
-            QuestionAnswer::create([
-                "submission_id" => $submission->id,
-                "question_id" => $answer["question_id"],
-                "answer_text" => $answerText,
-            ]);
-        }
-
-        DB::commit();
 
         return response()->json(
             [
@@ -347,6 +380,7 @@ class QuestionnaireController extends Controller
             200
         );
     }
+
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -356,8 +390,7 @@ class QuestionnaireController extends Controller
             "answers.*.answer_text" => "nullable",
         ]);
 
-        DB::beginTransaction();
-
+        // Load with questionnaire for required question check
         $submission = QuestionnaireSubmission::with(
             "questionnaire.questions"
         )->findOrFail($validated["submission_id"]);
@@ -371,48 +404,30 @@ class QuestionnaireController extends Controller
             );
         }
 
-        // Save final answers
-        if (!empty($validated["answers"])) {
-            // Delete any existing answers for these questions.
-            QuestionAnswer::where("submission_id", $submission->id)
-                ->whereIn(
-                    "question_id",
-                    collect($validated["answers"])->pluck("question_id")
-                )
-                ->delete();
+        // Process and save the answers
+        $this->processAnswers(
+            $validated["submission_id"],
+            $validated["answers"],
+            true // This is a final submission
+        );
 
-            foreach ($validated["answers"] as $answer) {
-                $answerText = $answer["answer_text"];
-
-                // Handle arrays, objects, and null values
-                if (is_array($answerText) || is_object($answerText)) {
-                    $answerText = !empty($answerText)
-                        ? json_encode($answerText)
-                        : null;
-                }
-
-                QuestionAnswer::create([
-                    "submission_id" => $submission->id,
-                    "question_id" => $answer["question_id"],
-                    "answer_text" => $answerText,
-                ]);
-            }
-        }
-
-        // Check for missing required questions.
-        $answeredQuestions = QuestionAnswer::where(
+        // Efficiently check for missing required questions using a single query
+        $answeredQuestionIds = QuestionAnswer::where(
             "submission_id",
             $submission->id
         )
             ->pluck("question_id")
             ->toArray();
 
-        $requiredQuestions = $submission->questionnaire->questions
+        $requiredQuestionIds = $submission->questionnaire->questions
             ->where("is_required", true)
             ->pluck("id")
             ->toArray();
 
-        $missingRequired = array_diff($requiredQuestions, $answeredQuestions);
+        $missingRequired = array_diff(
+            $requiredQuestionIds,
+            $answeredQuestionIds
+        );
 
         if (!empty($missingRequired)) {
             return response()->json(
@@ -424,7 +439,7 @@ class QuestionnaireController extends Controller
             );
         }
 
-        // Check for treatment (product) selection question (there's only one)
+        // Check for treatment selection question
         $treatmentSelectionQuestion = $submission->questionnaire
             ->questions()
             ->where("label", "Treatment Selection")
@@ -432,48 +447,41 @@ class QuestionnaireController extends Controller
 
         if ($treatmentSelectionQuestion) {
             // Find the answer for this question
-            $treatmentAnswer = null;
-            foreach ($validated["answers"] as $answer) {
-                if ($answer["question_id"] == $treatmentSelectionQuestion->id) {
-                    $treatmentAnswer = $answer["answer_text"];
-                    break;
-                }
-            }
+            $treatmentAnswer =
+                collect($validated["answers"])->firstWhere(
+                    "question_id",
+                    $treatmentSelectionQuestion->id
+                )["answer_text"] ?? null;
 
-            if ($treatmentAnswer) {
-                // Get the product ID from the mapping
-                $productId = ShopifyProductMapping::getProductId(
+            if (
+                $treatmentAnswer &&
+                ($productId = ShopifyProductMapping::getProductId(
                     $treatmentAnswer
+                ))
+            ) {
+                // Create checkout
+                $shopifyService = app(ShopifyService::class);
+                $cart = $shopifyService->createCheckout(
+                    $productId,
+                    $submission->id
                 );
 
-                if ($productId) {
-                    // Create a Shopify checkout
-                    $shopifyService = app(ShopifyService::class);
-                    $cart = $shopifyService->createCheckout(
-                        $productId,
-                        $submission->id
-                    );
+                if ($cart) {
+                    // Update status in a single query
+                    $submission->update([
+                        "status" => "pending_payment",
+                        "submitted_at" => now(),
+                    ]);
 
-                    if ($cart) {
-                        // Set status to pending_payment
-                        $submission->update([
-                            "status" => "pending_payment",
-                            "submitted_at" => now(),
-                        ]);
-
-                        DB::commit();
-
-                        return response()->json([
-                            "message" =>
-                                "Questionnaire requires payment to complete.",
-                            "checkout_url" => $cart["checkoutUrl"],
-                        ]);
-                    }
+                    return response()->json([
+                        "message" =>
+                            "Questionnaire requires payment to complete.",
+                        "checkout_url" => $cart["checkoutUrl"],
+                    ]);
                 }
             }
         }
 
-        // If no product selection or checkout creation fails, throw an exception
         throw new \Exception("Failed to create checkout");
     }
 
