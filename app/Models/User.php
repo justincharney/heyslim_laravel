@@ -29,7 +29,7 @@ class User extends Authenticatable
         "shopify_password",
         "workos_id",
         "avatar",
-        "calendly_url",
+        "calendly_event_type",
         "current_team_id",
     ];
 

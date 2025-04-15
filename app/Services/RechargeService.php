@@ -507,4 +507,95 @@ class RechargeService
             return null;
         }
     }
+
+    /**
+     * Get all active subscriptions from Recharge API
+     *
+     * @param int $limit Maximum number of subscriptions to retrieve
+     * @return array Array of subscription data
+     */
+    public function getAllActiveSubscriptions(int $limit = 100): array
+    {
+        try {
+            // Get all active subscriptions with pagination
+            $response = Http::withHeaders([
+                "X-Recharge-Access-Token" => $this->apiKey,
+                "Accept" => "application/json",
+                "Content-Type" => "application/json",
+            ])->get("{$this->endpoint}/subscriptions", [
+                "status" => "ACTIVE",
+                "limit" => $limit,
+            ]);
+
+            if (!$response->successful()) {
+                Log::error(
+                    "Failed to retrieve active subscriptions from Recharge",
+                    [
+                        "status_code" => $response->status(),
+                        "response" => $response->json(),
+                    ]
+                );
+                return [];
+            }
+
+            return $response->json()["subscriptions"] ?? [];
+        } catch (\Exception $e) {
+            Log::error(
+                "Exception while fetching active subscriptions from Recharge",
+                [
+                    "error" => $e->getMessage(),
+                    "trace" => $e->getTraceAsString(),
+                ]
+            );
+            return [];
+        }
+    }
+
+    /**
+     * Get the first order for a subscription
+     *
+     * @param string $subscriptionId The Recharge subscription ID
+     * @return array|null The first order data or null if not found
+     */
+    public function getFirstOrderForSubscription(string $subscriptionId): ?array
+    {
+        try {
+            // Get first order for this subscription, limit to 1 and sort by created_at
+            $response = Http::withHeaders([
+                "X-Recharge-Access-Token" => $this->apiKey,
+                "Accept" => "application/json",
+                "Content-Type" => "application/json",
+            ])->get("{$this->endpoint}/orders?sort_by=created_at-asc", [
+                "subscription_id" => $subscriptionId,
+                "limit" => 1,
+            ]);
+
+            if (!$response->successful()) {
+                Log::error(
+                    "Failed to retrieve orders for subscription from Recharge",
+                    [
+                        "subscription_id" => $subscriptionId,
+                        "status_code" => $response->status(),
+                        "response" => $response->json(),
+                    ]
+                );
+                return null;
+            }
+
+            $orders = $response->json()["orders"] ?? [];
+
+            // Return the first order if available
+            return !empty($orders) ? $orders[0] : null;
+        } catch (\Exception $e) {
+            Log::error(
+                "Exception while fetching orders for subscription from Recharge",
+                [
+                    "subscription_id" => $subscriptionId,
+                    "error" => $e->getMessage(),
+                    "trace" => $e->getTraceAsString(),
+                ]
+            );
+            return null;
+        }
+    }
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Prescription;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
@@ -125,14 +126,41 @@ class SubscriptionController extends Controller
         if ($subscription && $subscription->recharge_subscription_id) {
             $rechargeSubscriptionId = $subscription->recharge_subscription_id;
 
-            // Cancel using the service
-            $success = $this->rechargeService->cancelSubscription(
-                $rechargeSubscriptionId,
-                $validated["reason"],
-                $validated["notes"]
-            );
+            // Begin DB transaction
+            DB::beginTransaction();
 
-            if (!$success) {
+            try {
+                // Cancel using the service
+                $success = $this->rechargeService->cancelSubscription(
+                    $rechargeSubscriptionId,
+                    $validated["reason"],
+                    $validated["notes"]
+                );
+
+                if (!$success) {
+                    throw new \Exception("Failed to cancel subscription");
+                }
+
+                // Update the subscription status to cancelled
+                $subscription->update(["status" => "cancelled"]);
+
+                // Also cancel the prescription
+                $prescription->update(["status" => "cancelled"]);
+
+                // Commit the transaction
+                DB::commit();
+
+                // Remove the user's subscriptions from the Cache
+                Cache::forget($this->getCacheKey("subscriptions"));
+
+                return response()->json([
+                    "message" => "Subscription cancelled successfully",
+                ]);
+            } catch (\Exception $e) {
+                DB::rollBack();
+                Log::error(
+                    "Error cancelling subscription: " . $e->getMessage()
+                );
                 return response()->json(
                     [
                         "message" => "Failed to cancel subscription",
@@ -140,13 +168,6 @@ class SubscriptionController extends Controller
                     500
                 );
             }
-
-            // Remove the user's subscriptions from the Cache
-            Cache::forget($this->getCacheKey("subscriptions"));
-
-            return response()->json([
-                "message" => "Subscription cancelled successfully",
-            ]);
         } else {
             Cache::forget($this->getCacheKey("subscriptions"));
             return response()->json(

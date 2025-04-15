@@ -12,3 +12,4 @@ Artisan::command("inspire", function () {
 Schedule::command("telescope:prune --hours=48")->daily();
 Schedule::command("app:check-unread-messages")->everyFifteenMinutes();
 Schedule::command("app:validate-subscription-renewals")->twiceDaily();
+Schedule::command("app:sync-recharge-subscriptions")->daily();

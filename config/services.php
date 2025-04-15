@@ -59,4 +59,8 @@ return [
         "secret" => env("WORKOS_API_KEY"),
         "redirect_url" => env("WORKOS_REDIRECT_URL"),
     ],
+
+    "calendly" => [
+        "api_key" => env("CALENDLY_API_KEY"),
+    ],
 ];

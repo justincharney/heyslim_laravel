@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Services\ConsultationService;
 
 class Subscription extends Model
 {
@@ -22,6 +23,31 @@ class Subscription extends Model
     protected $casts = [
         "next_charge_scheduled_at" => "date",
     ];
+
+    protected static function booted(): void
+    {
+        static::created(function ($subscription) {
+            // Get the user who owns the subscription.
+            // Get the submission associated with the subscription.
+            $user = $subscription->user;
+            $submission = $subscription->questionnaireSubmission;
+
+            if ($user && $submission) {
+                // Update submission status to submitted
+                $submission->update(["status" => "submitted"]);
+
+                // Send consultation scheduling link
+                $consultationService = app(ConsultationService::class);
+                $consultationResult = $consultationService->sendConsultationLink(
+                    $submission
+                );
+
+                if (!$consultationResult) {
+                    throw new \Exception("Failed to send consultation link");
+                }
+            }
+        });
+    }
 
     /**
      * Get the user who owns the subscription.

@@ -33,7 +33,7 @@ class ProfileController extends Controller
                 Rule::unique("users")->ignore($user->id),
             ],
             "avatar" => "nullable|string",
-            "calendly_url" => "sometimes|nullable|url|max:255",
+            "calendly_event_type" => "sometimes|nullable|url|max:255",
         ]);
 
         $user->update($validated);

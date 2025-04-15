@@ -181,6 +181,9 @@ class RechargeWebhookController extends Controller
         if ($questionnaireSubId && $orderType === "CHECKOUT") {
             $submission = QuestionnaireSubmission::find($questionnaireSubId);
             if ($submission) {
+                // Start a database transaction
+                DB::beginTransaction();
+
                 try {
                     // Find user by email
                     $user = User::where("email", $email)->first();
@@ -198,9 +201,6 @@ class RechargeWebhookController extends Controller
                         );
                     }
 
-                    // Update submission status to submitted
-                    $submission->update(["status" => "submitted"]);
-
                     // Create or update the subscription
                     $subscription = Subscription::updateOrCreate(
                         ["recharge_subscription_id" => $rechargeSubId],
@@ -214,9 +214,14 @@ class RechargeWebhookController extends Controller
                             "questionnaire_submission_id" => $questionnaireSubId,
                         ]
                     );
+                    // Commit the transaction
+                    DB::commit();
                 } catch (\Exception $e) {
+                    // Rollback the transaction in case of error
+                    DB::rollback();
+
                     Log::error("Error processing Recharge order", [
-                        "order_id" => $orderId,
+                        "order_id" => $originalShopifyOrderId,
                         "error" => $e->getMessage(),
                     ]);
                     return response()->json(
