@@ -6,6 +6,7 @@ use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\QuestionnaireController;
 use App\Http\Controllers\SubscriptionController;
+use App\Http\Controllers\SupabaseController;
 use App\Http\Controllers\TeamController;
 use App\Http\Controllers\PatientController;
 use App\Http\Controllers\PrescriptionController;
@@ -19,6 +20,8 @@ use Illuminate\Support\Facades\Log;
 
 // Routes for any user
 Route::middleware(["web", "auth:sanctum"])->group(function () {
+    Route::get("/supabase/token", [SupabaseController::class, "getToken"]);
+
     Route::get("/user", function (Request $request) {
         $user = auth("web")->user();
         if (!$user) {

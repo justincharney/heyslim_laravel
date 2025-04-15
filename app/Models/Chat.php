@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Services\SupabaseService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -16,31 +15,6 @@ class Chat extends Model
         "title",
         "status",
     ];
-
-    protected static function booted()
-    {
-        static::created(function ($chat) {
-            // Load relationships
-            $chat->load(
-                "prescription",
-                "patient:id,name,avatar",
-                "provider:id,name,avatar"
-            );
-
-            // Broadcast to both users
-            app(SupabaseService::class)->broadcastToChannel(
-                "user-chats:{$chat->patient_id}",
-                "new_chat",
-                $chat->toArray()
-            );
-
-            app(SupabaseService::class)->broadcastToChannel(
-                "user-chats:{$chat->provider_id}",
-                "new_chat",
-                $chat->toArray()
-            );
-        });
-    }
 
     public function prescription(): BelongsTo
     {

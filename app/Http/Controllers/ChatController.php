@@ -99,7 +99,7 @@ class ChatController extends Controller
             })
             ->firstOrFail();
 
-        // Create the message
+        // Just create the message - broadcasting happens via database trigger
         $message = Message::create([
             "chat_id" => $chat->id,
             "user_id" => $user->id,
