@@ -32,6 +32,7 @@ class ProfileController extends Controller
                 "max:255",
                 Rule::unique("users")->ignore($user->id),
             ],
+            "registration_number" => "sometimes|string|max:255",
             "avatar" => "nullable|string",
             "calendly_event_type" => "sometimes|nullable|url|max:255",
         ]);

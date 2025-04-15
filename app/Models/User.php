@@ -31,6 +31,7 @@ class User extends Authenticatable
         "avatar",
         "calendly_event_type",
         "current_team_id",
+        "registration_number",
     ];
 
     /**
