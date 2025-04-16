@@ -58,4 +58,55 @@ class ProfileController extends Controller
             "message" => "Password updated successfully",
         ]);
     }
+
+    public function checkProfileCompletion(Request $request)
+    {
+        $user = auth()->user();
+
+        // Define required fields for a complete profile
+        $requiredFields = ["date_of_birth", "address"];
+
+        // Check if all required fields are filled
+        $isComplete = true;
+        $missingFields = [];
+
+        foreach ($requiredFields as $field) {
+            if (empty($user->{$field})) {
+                $isComplete = false;
+                $missingFields[] = $field;
+            }
+        }
+
+        // Update profile_completed status in case it's out of sync
+        if ($isComplete !== $user->profile_completed) {
+            $user->profile_completed = $isComplete;
+            $user->save();
+        }
+
+        return response()->json([
+            "profile_completed" => $isComplete,
+            "missing_fields" => $missingFields,
+            "user" => $user,
+        ]);
+    }
+
+    public function updatePatientProfile(Request $request)
+    {
+        $user = auth()->user();
+
+        $validated = $request->validate([
+            "date_of_birth" => "required|date|before:today",
+            "address" => "required|string",
+        ]);
+
+        $user->update($validated);
+
+        // Set profile_completed flag
+        $user->profile_completed = true;
+        $user->save();
+
+        return response()->json([
+            "message" => "Profile updated successfully",
+        ]);
+    }
 }

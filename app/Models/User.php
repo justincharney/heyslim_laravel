@@ -32,6 +32,9 @@ class User extends Authenticatable
         "calendly_event_type",
         "current_team_id",
         "registration_number",
+        "address",
+        "date_of_birth",
+        "profile_completed",
     ];
 
     /**
@@ -51,6 +54,8 @@ class User extends Authenticatable
         return [
             "email_verified_at" => "datetime",
             "password" => "hashed",
+            "date_of_birth" => "date",
+            "profile_completed" => "boolean",
         ];
     }
 

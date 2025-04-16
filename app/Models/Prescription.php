@@ -21,12 +21,49 @@ class Prescription extends Model
         "status",
         "start_date",
         "end_date",
+        "yousign_procedure_id",
+        "signed_at",
+        "dose_schedule",
     ];
 
     protected $casts = [
         "start_date" => "date",
         "end_date" => "date",
+        "signed_at" => "datetime",
+        "dose_schedule" => "array",
     ];
+
+    /**
+     * Get the initial dose from the dose schedule
+     */
+    public function getInitialDoseAttribute()
+    {
+        if (
+            empty($this->dose_schedule) ||
+            !isset($this->dose_schedule["doses"][0])
+        ) {
+            return null;
+        }
+
+        return $this->dose_schedule["doses"][0];
+    }
+
+    /**
+     * Get the maintenance/refill doses
+     */
+    public function getRefillDosesAttribute()
+    {
+        if (
+            empty($this->dose_schedule) ||
+            !isset($this->dose_schedule["doses"]) ||
+            count($this->dose_schedule["doses"]) <= 1
+        ) {
+            return [];
+        }
+
+        // Return all doses except the first one
+        return array_slice($this->dose_schedule["doses"], 1);
+    }
 
     /**
      * Get the patient that owns the prescription.

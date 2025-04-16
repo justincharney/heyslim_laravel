@@ -12,6 +12,7 @@ use App\Http\Controllers\PatientController;
 use App\Http\Controllers\PrescriptionController;
 use App\Http\Controllers\ClinicalPlanController;
 use App\Http\Controllers\TemplateController;
+use App\Http\Middleware\ProfileCompletedMiddleware;
 use App\Http\Middleware\SetTeamContextMiddleware;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -59,44 +60,53 @@ Route::middleware(["web", "auth:sanctum"])->group(function () {
 
 // Routes for patients
 Route::middleware(["web", "auth:sanctum", "role:patient"])->group(function () {
+    // Profile routes
+    Route::get("/profile/check", [
+        ProfileController::class,
+        "checkProfileCompletion",
+    ]);
+    Route::put("/profile", [ProfileController::class, "updatePatientProfile"]);
+
     // Questionnaire routes
-    Route::prefix("questionnaires")->group(function () {
-        // List all available questionnaires
-        Route::get("/", [QuestionnaireController::class, "index"]);
+    Route::middleware([ProfileCompletedMiddleware::class])
+        ->prefix("questionnaires")
+        ->group(function () {
+            // List all available questionnaires
+            Route::get("/", [QuestionnaireController::class, "index"]);
 
-        // Get all questionnaires for authenticated user
-        Route::get("/user", [
-            QuestionnaireController::class,
-            "getPatientQuestionnaires",
-        ]);
+            // Get all questionnaires for authenticated user
+            Route::get("/user", [
+                QuestionnaireController::class,
+                "getPatientQuestionnaires",
+            ]);
 
-        // Get detailed questionnaire submission
-        Route::get("/{submission_id}", [
-            QuestionnaireController::class,
-            "getQuestionnaireDetails",
-        ]);
+            // Get detailed questionnaire submission
+            Route::get("/{submission_id}", [
+                QuestionnaireController::class,
+                "getQuestionnaireDetails",
+            ]);
 
-        // Initialize a draft questionnaire
-        Route::post("/draft", [
-            QuestionnaireController::class,
-            "initializeDraft",
-        ]);
+            // Initialize a draft questionnaire
+            Route::post("/draft", [
+                QuestionnaireController::class,
+                "initializeDraft",
+            ]);
 
-        // Save partial answers
-        Route::post("/save-partial", [
-            QuestionnaireController::class,
-            "savePartial",
-        ]);
+            // Save partial answers
+            Route::post("/save-partial", [
+                QuestionnaireController::class,
+                "savePartial",
+            ]);
 
-        // Cancel/delete questionnaire submission
-        Route::delete("/{submission_id}", [
-            QuestionnaireController::class,
-            "cancel",
-        ]);
+            // Cancel/delete questionnaire submission
+            Route::delete("/{submission_id}", [
+                QuestionnaireController::class,
+                "cancel",
+            ]);
 
-        // Submit completed questionnaire
-        Route::post("/submit", [QuestionnaireController::class, "store"]);
-    });
+            // Submit completed questionnaire
+            Route::post("/submit", [QuestionnaireController::class, "store"]);
+        });
 
     // Appointment Routes
     Route::get("/appointments/providers", [

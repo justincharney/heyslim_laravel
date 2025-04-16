@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\ProfileCompletedMiddleware;
 use App\Http\Middleware\SetTeamContextMiddleware;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -26,6 +27,9 @@ return Application::configure(basePath: dirname(__DIR__))
                 \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
         ]);
         $middleware->web(append: [SetTeamContextMiddleware::class]);
+        // $middleware->alias([
+        //     "profile.complete" => ProfileCompletedMiddleware::class,
+        // ]);
         $middleware->trustProxies(at: "*");
 
         //
