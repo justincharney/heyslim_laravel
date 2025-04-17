@@ -11,12 +11,17 @@ class PrescriptionTemplate extends Model
         "description",
         "medication_name",
         "dose",
+        "dose_schedule",
         "schedule",
         "refills",
         "directions",
         "created_by",
         "is_global",
         "team_id",
+    ];
+
+    protected $casts = [
+        "dose_schedule" => "array",
     ];
 
     /**

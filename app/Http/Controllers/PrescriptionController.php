@@ -15,7 +15,8 @@ use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use App\Enums\Permission;
 use App\Models\Subscription;
 use App\Models\QuestionnaireSubmission;
-use Spatie\LaravelPdf\Facades\Pdf;
+use App\Services\ShopifyService;
+use App\Services\PrescriptionLabelService;
 
 class PrescriptionController extends Controller
 {
@@ -270,6 +271,30 @@ class PrescriptionController extends Controller
                 $subscription->update([
                     "prescription_id" => $prescription->id,
                 ]);
+                // Generate and attach prescription label to Shopify order
+                if ($subscription->original_shopify_order_id) {
+                    $labelService = app(PrescriptionLabelService::class);
+                    $shopifyService = app(ShopifyService::class);
+
+                    // Generate and attach the label
+                    $labelSuccess = $shopifyService->attachPrescriptionLabelToOrder(
+                        $prescription
+                    );
+
+                    if (!$labelSuccess) {
+                        Log::warning(
+                            "Failed to attach prescription label to Shopify order",
+                            [
+                                "prescription_id" => $prescription->id,
+                                "order_id" =>
+                                    $subscription->original_shopify_order_id,
+                            ]
+                        );
+                        throw new \Exception(
+                            "Failed to attach prescription label to Shopify order"
+                        );
+                    }
+                }
             } else {
                 throw new \Exception(
                     "No active subscription found for the patient"

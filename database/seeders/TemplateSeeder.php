@@ -147,59 +147,108 @@ class TemplateSeeder extends Seeder
     {
         $templates = [
             [
-                "name" => "Wegovy (Semaglutide) Complete Protocol",
+                "name" => "Wegovy (Semaglutide) Protocol",
                 "description" =>
-                    "Full dose escalation protocol for Wegovy (semaglutide) for weight management",
+                    "Standard protocol for Wegovy (semaglutide) for weight management",
                 "medication_name" => "Semaglutide (Wegovy)",
-                "dose" => "0.25mg, 0.5mg, 1.0mg, 1.7mg, 2.4mg pen injectors",
-                "schedule" => "Once weekly injection with dose escalation",
-                "refills" => 11,
+                "dose" => "Based on dose schedule",
+                "schedule" => "Once weekly subcutaneous injection",
+                "refills" => 5,
                 "directions" =>
-                    "Week 1-4: Inject 0.25mg subcutaneously once weekly\n" .
-                    "Week 5-8: Inject 0.5mg subcutaneously once weekly\n" .
-                    "Week 9-12: Inject 1.0mg subcutaneously once weekly\n" .
-                    "Week 13-16: Inject 1.7mg subcutaneously once weekly\n" .
-                    "Week 17 onwards: Inject 2.4mg subcutaneously once weekly (maintenance dose)\n\n" .
-                    "Adjust dose as needed for tolerability. Store in refrigerator (2°C to 8°C). Do not freeze. May be kept at room temperature (below 30°C) for up to 28 days.",
+                    "Inject subcutaneously once weekly as directed. Store in refrigerator. May be kept at room temperature for up to 28 days. Do not freeze.",
+                "dose_schedule" => json_encode([
+                    [
+                        "refill_number" => 0,
+                        "dose" => "0.25mg weekly for 4 weeks",
+                    ],
+                    [
+                        "refill_number" => 1,
+                        "dose" => "0.5mg weekly for 4 weeks",
+                    ],
+                    [
+                        "refill_number" => 2,
+                        "dose" => "1.0mg weekly for 4 weeks",
+                    ],
+                    [
+                        "refill_number" => 3,
+                        "dose" => "1.7mg weekly for 4 weeks",
+                    ],
+                    [
+                        "refill_number" => 4,
+                        "dose" => "2.4mg weekly for maintenance",
+                    ],
+                ]),
                 "is_global" => true,
                 "created_by" => $adminId,
             ],
             [
-                "name" => "Mounjaro/Zepbound (Tirzepatide) Complete Protocol",
+                "name" => "Mounjaro/Zepbound (Tirzepatide) Protocol",
                 "description" =>
-                    "Full dose escalation protocol for Tirzepatide for weight management",
+                    "Standard protocol for Tirzepatide for weight management",
                 "medication_name" => "Tirzepatide (Mounjaro/Zepbound)",
-                "dose" =>
-                    "2.5mg, 5.0mg, 7.5mg, 10mg, 12.5mg, 15mg pen injectors",
-                "schedule" => "Once weekly injection with dose escalation",
-                "refills" => 11,
+                "dose" => "Based on dose schedule",
+                "schedule" => "Once weekly subcutaneous injection",
+                "refills" => 5,
                 "directions" =>
-                    "Week 1-4: Inject 2.5mg subcutaneously once weekly\n" .
-                    "Week 5-8: Inject 5.0mg subcutaneously once weekly\n" .
-                    "Week 9-12: Inject 7.5mg subcutaneously once weekly\n" .
-                    "Week 13-16: Inject 10.0mg subcutaneously once weekly\n" .
-                    "Week 17-20: Inject 12.5mg subcutaneously once weekly (if needed)\n" .
-                    "Week 21 onwards: Inject 15.0mg subcutaneously once weekly (if needed for maximum efficacy)\n\n" .
-                    "Adjust dose or pause dose escalation as needed for tolerability. Store in refrigerator (2°C to 8°C). Do not freeze. May be kept at room temperature (below 30°C) for up to 28 days.",
+                    "Inject subcutaneously once weekly as directed. Store in refrigerator. May be kept at room temperature for up to 28 days. Do not freeze.",
+                "dose_schedule" => json_encode([
+                    [
+                        "refill_number" => 0,
+                        "dose" => "2.5mg weekly for 4 weeks",
+                    ],
+                    [
+                        "refill_number" => 1,
+                        "dose" => "5.0mg weekly for 4 weeks",
+                    ],
+                    [
+                        "refill_number" => 2,
+                        "dose" => "7.5mg weekly for 4 weeks",
+                    ],
+                    [
+                        "refill_number" => 3,
+                        "dose" => "10mg weekly for 4 weeks",
+                    ],
+                    [
+                        "refill_number" => 4,
+                        "dose" => "12.5mg weekly for 4 weeks",
+                    ],
+                ]),
                 "is_global" => true,
                 "created_by" => $adminId,
             ],
             [
-                "name" => "Saxenda (Liraglutide) Complete Protocol",
+                "name" => "Saxenda (Liraglutide) Protocol",
                 "description" =>
-                    "Full dose escalation protocol for Saxenda (liraglutide) for weight management",
+                    "Standard protocol for Saxenda (liraglutide) for weight management",
                 "medication_name" => "Liraglutide (Saxenda)",
-                "dose" =>
-                    "6mg/mL multi-dose pen (provides doses of 0.6mg, 1.2mg, 1.8mg, 2.4mg, and 3.0mg)",
-                "schedule" => "Once daily injection with dose escalation",
-                "refills" => 11,
+                "dose" => "Based on dose schedule",
+                "schedule" => "Once daily subcutaneous injection",
+                "refills" => 5,
                 "directions" =>
-                    "Week 1: Inject 0.6mg subcutaneously once daily\n" .
-                    "Week 2: Inject 1.2mg subcutaneously once daily\n" .
-                    "Week 3: Inject 1.8mg subcutaneously once daily\n" .
-                    "Week 4: Inject 2.4mg subcutaneously once daily\n" .
-                    "Week 5 onwards: Inject 3.0mg subcutaneously once daily (maintenance dose)\n\n" .
-                    "Adjust dose as needed for tolerability. Delay dose escalation if unable to tolerate. Store in refrigerator (2°C to 8°C). After first use, can be stored at room temperature (below 30°C) or refrigerated for up to 30 days.",
+                    "Inject subcutaneously once daily as directed. Store in refrigerator. After first use, may be kept at room temperature for up to 30 days.",
+                "dose_schedule" => json_encode([
+                    [
+                        "refill_number" => 0,
+                        "dose" =>
+                            "0.6mg daily for week 1, 1.2mg daily for week 2, 1.8mg daily for week 3, 2.4mg daily for week 4",
+                    ],
+                    [
+                        "refill_number" => 1,
+                        "dose" => "3.0mg daily",
+                    ],
+                    [
+                        "refill_number" => 2,
+                        "dose" => "3.0mg daily",
+                    ],
+                    [
+                        "refill_number" => 3,
+                        "dose" => "3.0mg daily",
+                    ],
+                    [
+                        "refill_number" => 4,
+                        "dose" => "3.0mg daily",
+                    ],
+                ]),
                 "is_global" => true,
                 "created_by" => $adminId,
             ],
