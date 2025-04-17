@@ -8,12 +8,14 @@ use App\Models\Prescription;
 use App\Models\PrescriptionTemplate;
 use App\Models\User;
 use App\Models\ClinicalPlan;
+use App\Services\YousignService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use App\Enums\Permission;
 use App\Models\Subscription;
 use App\Models\QuestionnaireSubmission;
+use Spatie\LaravelPdf\Facades\Pdf;
 
 class PrescriptionController extends Controller
 {
@@ -114,10 +116,11 @@ class PrescriptionController extends Controller
             "clinical_plan_id" => "required|exists:clinical_plans,id",
             "medication_name" => "required|string|max:255",
             "dose" => "required|string",
+            "dose_schedule" => "required|json",
             "schedule" => "required|string",
             "refills" => "required|integer|between:0,11",
             "directions" => "nullable|string",
-            "status" => "required|in:active,completed,cancelled",
+            // "status" => "required|in:active,completed,cancelled",
             "start_date" => "required|date",
             "end_date" => "nullable|date|after_or_equal:start_date",
         ];
@@ -132,6 +135,12 @@ class PrescriptionController extends Controller
         // }
 
         $validated = $request->validate($validationRules);
+
+        // Decode JSON dose schedule
+        $validated["dose_schedule"] = json_decode(
+            $validated["dose_schedule"],
+            true
+        );
 
         // If no end date, set it to 13 months after start date
         if (empty($validated["end_date"])) {
@@ -210,6 +219,9 @@ class PrescriptionController extends Controller
             }
         }
 
+        // Set initial status to pending_signature
+        $validated["status"] = "pending_signature";
+
         // Add the authenticated user as the prescriber
         $validated["prescriber_id"] = auth()->id();
 
@@ -279,6 +291,16 @@ class PrescriptionController extends Controller
                 "message" => "Hello! I've prescribed {$validated["medication_name"]} for you. Feel free to ask any questions about this medication or its usage.",
                 "read" => false,
             ]);
+
+            // Create Yousign request and link it to the prescription
+            $yousignProcedureId = app(YousignService::class)->sendForSignature(
+                $prescription
+            );
+            if (!$yousignProcedureId) {
+                throw new \Exception("Failed to create Yousign procedure");
+            }
+            $prescription->yousign_procedure_id = $yousignProcedureId;
+            $prescription->save();
 
             DB::commit();
 

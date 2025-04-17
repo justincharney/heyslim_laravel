@@ -63,4 +63,9 @@ return [
     "calendly" => [
         "api_key" => env("CALENDLY_API_KEY"),
     ],
+
+    "yousign" => [
+        "api_key" => env("YOUSIGN_API_KEY"),
+        "api_url" => env("YOUSIGN_BASE_URL"),
+    ],
 ];
