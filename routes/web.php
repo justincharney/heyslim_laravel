@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\RechargeWebhookController;
 use App\Http\Controllers\ShopifyWebhookController;
+use App\Http\Controllers\YouSignWebhookController;
 use Illuminate\Support\Facades\Route;
 
 Route::get("/", function () {
@@ -30,6 +31,12 @@ Route::post("/webhooks/recharge/order/created", [
 Route::post("/webhooks/recharge/subscription/created", [
     RechargeWebhookController::class,
     "subscriptionCreated",
+]);
+
+// Yousign webhook
+Route::post("/webhooks/yousign", [
+    YouSignWebhookController::class,
+    "handleWebhook",
 ]);
 
 require __DIR__ . "/auth.php";

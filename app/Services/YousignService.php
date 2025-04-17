@@ -128,7 +128,7 @@ class YousignService
                 "nature" => "signable_document",
             ]);
 
-        Log::info("Document response", $response->json());
+        // Log::info("Document response", $response->json());
 
         unlink($tmp);
 
@@ -165,7 +165,7 @@ class YousignService
         ];
 
         // log the string result - fixing context parameter to be an array
-        Log::info("Signature metrics", $result);
+        // Log::info("Signature metrics", $result);
 
         return $result;
     }
@@ -213,11 +213,11 @@ class YousignService
             ]
         );
 
-        Log::info("YousignService::addSigner", [
-            "srId" => $srId,
-            "prescriber" => $prescriber,
-            "response" => $response->json(),
-        ]);
+        // Log::info("YousignService::addSigner", [
+        //     "srId" => $srId,
+        //     "prescriber" => $prescriber,
+        //     "response" => $response->json(),
+        // ]);
 
         return $response->successful() ? $response->json("id") : null;
     }

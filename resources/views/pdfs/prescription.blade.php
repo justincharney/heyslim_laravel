@@ -142,10 +142,10 @@
             <div class="info-item"><strong>Medication Name:</strong> {{ $prescription->medication_name }}</div>
             <div class="info-item"><strong>Refills:</strong> {{ $remaining }}</div>
 
-            <div class="info-item">
+            <!-- <div class="info-item">
               <strong>Dose:</strong>
               {{ $currentDose }}
-            </div>
+            </div> -->
 
             <div class="info-item"><strong>Start Date:</strong> {{ $prescription->start_date->format('d/m/Y') }}</div>
             <div class="info-item"><strong>Expiry Date:</strong> {{ $prescription->end_date ? $prescription->end_date->format('d/m/Y') : 'N/A' }}</div>
@@ -155,7 +155,7 @@
             <strong>Directions:</strong> {{ $prescription->directions }}
         </div>
 
-        <!-- @if (!empty($prescription->dose_schedule) && isset($prescription->dose_schedule['doses']) && count($prescription->dose_schedule['doses']) > 1)
+        @if (!empty($prescription->dose_schedule))
             <h4 style="margin-top: 20px;">Dose Schedule</h4>
             <table class="dose-table">
                 <thead>
@@ -165,15 +165,15 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach($prescription->dose_schedule['doses'] as $index => $doseInfo)
-                        <tr class="{{ $index == $currentRefill ? 'current-dose' : '' }}">
-                            <td>{{ $index }}</td>
-                            <td>{{ is_array($doseInfo) ? $doseInfo['dose'] : $doseInfo }}</td>
-                        </tr>
+                    @foreach($schedule as $item)
+                      <tr>
+                        <td>{{ $item['refill_number'] }}</td>
+                        <td>{{ $item['dose'] }}</td>
+                      </tr>
                     @endforeach
                 </tbody>
             </table>
-        @endif -->
+        @endif
     </div>
 
     <div class="signature-section">

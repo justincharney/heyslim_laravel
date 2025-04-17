@@ -843,6 +843,225 @@ GRAPHQL;
     }
 
     /**
+     * Attach a prescription document to a Shopify order
+     *
+     * @param string $orderId The Shopify order ID
+     * @param string $filePath Path to the prescription document file
+     * @param string $note Optional note to attach with the file
+     * @return bool Whether the operation was successful
+     */
+    public function attachPrescriptionToOrder(
+        string $orderId,
+        string $filePath,
+        string $note = ""
+    ): bool {
+        if (empty($orderId) || !file_exists($filePath)) {
+            Log::warning(
+                "Invalid parameters for attaching prescription to order",
+                [
+                    "order_id" => $orderId,
+                    "file_exists" => file_exists($filePath),
+                ]
+            );
+            return false;
+        }
+
+        try {
+            $formattedOrderId = $this->formatGid($orderId);
+            $fileContent = file_get_contents($filePath);
+            if ($fileContent === false) {
+                Log::error("Failed to read prescription file", [
+                    "path" => $filePath,
+                ]);
+                return false;
+            }
+
+            //
+            // 1) Stage the upload
+            //
+            $stageMutation = <<<'GRAPHQL'
+mutation stagedUploadsCreate($input: [StagedUploadInput!]!) {
+  stagedUploadsCreate(input: $input) {
+    stagedTargets {
+      url
+      resourceUrl
+    }
+    userErrors { field message }
+  }
+}
+GRAPHQL;
+
+            $stageResp = Http::withHeaders([
+                "Content-Type" => "application/json",
+                "X-Shopify-Access-Token" => $this->accessToken,
+            ])->post($this->endpoint, [
+                "query" => $stageMutation,
+                "variables" => [
+                    "input" => [
+                        [
+                            "filename" => basename($filePath),
+                            "mimeType" => "application/pdf",
+                            "resource" => "FILE",
+                            "httpMethod" => "PUT",
+                        ],
+                    ],
+                ],
+            ]);
+
+            if (!$stageResp->successful()) {
+                Log::error("stage file upload failed", [
+                    "status" => $stageResp->status(),
+                    "response" => $stageResp->json(),
+                ]);
+                return false;
+            }
+
+            $stageData = $stageResp->json("data.stagedUploadsCreate");
+            if (!empty($stageData["userErrors"])) {
+                Log::error("stagedUploadsCreate userErrors", [
+                    "errors" => $stageData["userErrors"],
+                ]);
+                return false;
+            }
+
+            $target = $stageData["stagedTargets"][0] ?? null;
+            $uploadUrl = $target["url"] ?? null;
+            $resourceUrl = $target["resourceUrl"] ?? null;
+            if (!$uploadUrl || !$resourceUrl) {
+                Log::error("No staged target or resourceUrl");
+                return false;
+            }
+
+            //
+            // 2) PUT the raw PDF to the signed URL
+            //
+            $uploadResp = Http::withHeaders([
+                "Content-Type" => "application/pdf",
+            ])
+                ->withBody($fileContent, "application/pdf")
+                ->put($uploadUrl);
+
+            if (!$uploadResp->successful()) {
+                Log::error("Failed to upload PDF via PUT", [
+                    "status" => $uploadResp->status(),
+                    "response" => $uploadResp->body(),
+                ]);
+                return false;
+            }
+
+            //
+            // 3) Create a Shopify File object, so we get back a GID
+            //
+            $fileCreateMutation = <<<'GRAPHQL'
+mutation fileCreate($files: [FileCreateInput!]!) {
+  fileCreate(files: $files) {
+    files { id fileStatus }
+    userErrors { field message }
+  }
+}
+GRAPHQL;
+
+            $fileCreateResp = Http::withHeaders([
+                "Content-Type" => "application/json",
+                "X-Shopify-Access-Token" => $this->accessToken,
+            ])->post($this->endpoint, [
+                "query" => $fileCreateMutation,
+                "variables" => [
+                    "files" => [
+                        [
+                            "filename" => basename($filePath),
+                            "originalSource" => $resourceUrl,
+                            "contentType" => "FILE",
+                            "alt" => $note,
+                        ],
+                    ],
+                ],
+            ]);
+
+            if (!$fileCreateResp->successful()) {
+                Log::error("fileCreate API failed", [
+                    "status" => $fileCreateResp->status(),
+                    "response" => $fileCreateResp->json(),
+                ]);
+                return false;
+            }
+
+            $fileCreateData = $fileCreateResp->json("data.fileCreate");
+            if (!empty($fileCreateData["userErrors"])) {
+                Log::error("fileCreate userErrors", [
+                    "errors" => $fileCreateData["userErrors"],
+                ]);
+                return false;
+            }
+
+            $fileGid = $fileCreateData["files"][0]["id"] ?? null;
+            if (!$fileGid) {
+                Log::error("No file GID returned from fileCreate");
+                return false;
+            }
+
+            //
+            // 4) Finally, attach the File GID as a file_reference metafield
+            //
+            $updateMutation = <<<'GRAPHQL'
+mutation updateOrderMetafields($input: OrderInput!) {
+  orderUpdate(input: $input) {
+    order { id }
+    userErrors { field message }
+  }
+}
+GRAPHQL;
+
+            $metaResp = Http::withHeaders([
+                "Content-Type" => "application/json",
+                "X-Shopify-Access-Token" => $this->accessToken,
+            ])->post($this->endpoint, [
+                "query" => $updateMutation,
+                "variables" => [
+                    "input" => [
+                        "id" => $formattedOrderId,
+                        "metafields" => [
+                            [
+                                "namespace" => "custom",
+                                "key" => "prescription",
+                                "type" => "file_reference",
+                                "value" => $fileGid,
+                            ],
+                        ],
+                    ],
+                ],
+            ]);
+
+            if (
+                !$metaResp->successful() ||
+                !empty($metaResp->json("data.orderUpdate.userErrors"))
+            ) {
+                Log::error(
+                    "Shopify returned errors when updating order metafield",
+                    [
+                        "errors" => $metaResp->json(
+                            "data.orderUpdate.userErrors"
+                        ),
+                    ]
+                );
+                return false;
+            }
+
+            // Log::info("Successfully attached prescription to Shopify order", [
+            //     "order_id" => $orderId,
+            // ]);
+            return true;
+        } catch (\Exception $e) {
+            Log::error("Exception attaching prescription to Shopify order", [
+                "order_id" => $orderId,
+                "error" => $e->getMessage(),
+                "trace" => $e->getTraceAsString(),
+            ]);
+            return false;
+        }
+    }
+
+    /**
      * Format ID to Shopify GraphQL global ID format if needed
      */
     private function formatGid(string $id): string

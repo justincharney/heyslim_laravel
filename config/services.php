@@ -67,5 +67,6 @@ return [
     "yousign" => [
         "api_key" => env("YOUSIGN_API_KEY"),
         "api_url" => env("YOUSIGN_BASE_URL"),
+        "webhook_secret" => env("YOUSIGN_WEBHOOK_SECRET"),
     ],
 ];
