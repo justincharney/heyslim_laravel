@@ -230,6 +230,46 @@ class YousignService
             ->successful();
     }
 
+    /**
+     * Download the signed document from Yousign
+     */
+    public function downloadSignedDocument(
+        string $signatureRequestId,
+        string $documentId
+    ): ?string {
+        try {
+            // Get the Yousign API credentials
+            $apiKey = config("services.yousign.api_key");
+            $apiUrl = config("services.yousign.api_url");
+
+            // Download the document
+            $response = Http::withToken($apiKey)
+                ->acceptJson()
+                ->get(
+                    "{$apiUrl}/signature_requests/{$signatureRequestId}/documents/{$documentId}/download"
+                );
+
+            if (!$response->successful()) {
+                Log::error("Failed to download document", [
+                    "signature_request_id" => $signatureRequestId,
+                    "document_id" => $documentId,
+                    "status" => $response->status(),
+                    "response" => $response->body(),
+                ]);
+                return null;
+            }
+
+            // Return the document content
+            return $response->body();
+        } catch (\Exception $e) {
+            Log::error("Exception downloading signed document", [
+                "signature_request_id" => $signatureRequestId,
+                "error" => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
+
     /** Helper */
     private function yousign()
     {

@@ -322,9 +322,11 @@ class PrescriptionController extends Controller
                 $prescription
             );
             if (!$yousignProcedureId) {
-                throw new \Exception("Failed to create Yousign procedure");
+                throw new \Exception(
+                    "Failed to create Yousign signature request"
+                );
             }
-            $prescription->yousign_procedure_id = $yousignProcedureId;
+            $prescription->yousign_signature_request_id = $yousignProcedureId;
             $prescription->save();
 
             DB::commit();

@@ -10,6 +10,9 @@ use App\Models\Prescription;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use App\Services\ShopifyService;
+use App\Services\YousignService;
+use App\Models\ProcessedRecurringOrder;
 
 class RechargeWebhookController extends Controller
 {
@@ -104,31 +107,37 @@ class RechargeWebhookController extends Controller
                 $prescription = $subscription->prescription;
 
                 if ($prescription) {
-                    // Only decrement if we have refills remaining
-                    if ($prescription->refills > 0) {
-                        // Log::info(
-                        //     "Decrementing prescription refills for renewal order",
-                        //     [
-                        //         "order_id" => $originalShopifyOrderId,
-                        //         "subscription_id" => $rechargeSubId,
-                        //         "prescription_id" => $prescription->id,
-                        //         "current_refills" => $prescription->refills,
-                        //         "new_refills" => $prescription->refills - 1,
-                        //     ]
-                        // );
+                    // Log::info("Order/Prescription info", [
+                    //     "order_id" => $originalShopifyOrderId,
+                    //     "subscription_id" => $rechargeSubId,
+                    //     "prescription_id" => $prescription->id,
+                    //     "current_refills" => $prescription->refills,
+                    //     "new_refills" => $prescription->refills - 1,
+                    // ]);
+                    // Check if we've already processed this prescription
+                    $alreadyProcesssed = ProcessedRecurringOrder::where(
+                        "shopify_order_id",
+                        $originalShopifyOrderId
+                    )
+                        ->where("prescription_id", $prescription->id)
+                        ->exists();
 
-                        // Decrement and save
-                        $prescription->refills -= 1;
-                        $prescription->save();
-
-                        return response()->json(
+                    if ($alreadyProcesssed) {
+                        Log::info(
+                            "Recurring order already processed for refill decrement.",
                             [
-                                "message" =>
-                                    "Renewal order processed, prescription refills decremented",
-                            ],
+                                "shopify_order_id" => $originalShopifyOrderId,
+                                "prescription_id" => $prescription->id,
+                            ]
+                        );
+                        return response()->json(
+                            ["message" => "Order already processed"],
                             200
                         );
-                    } else {
+                    }
+
+                    // Only decrement if we have refills remaining
+                    if ($prescription->refills <= 0) {
                         Log::warning(
                             "Renewal order received but prescription has no refills remaining",
                             [
@@ -144,6 +153,152 @@ class RechargeWebhookController extends Controller
                                     "Warning: Prescription has no refills remaining",
                             ],
                             200
+                        );
+                    }
+
+                    // Start DB transaction - ONLY for database operations
+                    DB::beginTransaction();
+                    try {
+                        // Reload prescription inside transaction with lock
+                        $prescription = Prescription::lockForUpdate()->findOrFail(
+                            $prescription->id
+                        );
+
+                        // Check refills again inside transaction (just to be safe)
+                        if ($prescription->refills > 0) {
+                            // Decrement and save
+                            $prescription->refills -= 1;
+                            $prescription->save();
+
+                            // Record that this order event processed a refill
+                            ProcessedRecurringOrder::create([
+                                "shopify_order_id" => $originalShopifyOrderId,
+                                "prescription_id" => $prescription->id,
+                                "processed_at" => now(),
+                            ]);
+
+                            // COMMIT TRANSACTION BEFORE API CALLS
+                            DB::commit();
+
+                            // NOW PERFORM API CALLS - Outside the transaction
+                            try {
+                                // Attach prescription label to the Order - pass the current order ID
+                                $shopify = app(ShopifyService::class);
+                                if (
+                                    !$shopify->attachPrescriptionLabelToOrder(
+                                        $prescription,
+                                        $originalShopifyOrderId // current order id from webhook
+                                    )
+                                ) {
+                                    Log::error(
+                                        "Failed to attach renewal label",
+                                        [
+                                            "order_id" => $originalShopifyOrderId,
+                                            "prescription_id" =>
+                                                $prescription->id,
+                                        ]
+                                    );
+                                    // Continue processing, we don't want to return an error just for label failure
+                                }
+
+                                // Get the signature request ID and document ID
+                                $signatureRequestId =
+                                    $prescription->yousign_signature_request_id;
+                                $documentId =
+                                    $prescription->yousign_document_id;
+
+                                // Download the signed document
+                                $yousignService = app(YousignService::class);
+                                $bytes = $yousignService->downloadSignedDocument(
+                                    $signatureRequestId,
+                                    $documentId
+                                );
+
+                                if ($bytes) {
+                                    // Create a temporary file for the downloaded document
+                                    $tempFile = tempnam(
+                                        sys_get_temp_dir(),
+                                        "prescription_"
+                                    );
+                                    file_put_contents($tempFile, $bytes);
+
+                                    // Pass the temp file path
+                                    $shopify->attachPrescriptionToOrder(
+                                        $originalShopifyOrderId, // Use the current order ID, not original
+                                        $tempFile,
+                                        "Signed prescription #{$prescription->id}"
+                                    );
+
+                                    // Clean up the temporary file
+                                    @unlink($tempFile);
+                                } else {
+                                    Log::warning(
+                                        "Could not re‑download signed PDF for renewal",
+                                        [
+                                            "prescription_id" =>
+                                                $prescription->id,
+                                        ]
+                                    );
+                                    // Continue processing, don't fail the webhook for this
+                                }
+                            } catch (\Exception $apiError) {
+                                // Log but don't fail the webhook since the DB transaction was successful
+                                Log::error(
+                                    "API error after successful refill decrement",
+                                    [
+                                        "order_id" => $originalShopifyOrderId,
+                                        "error" => $apiError->getMessage(),
+                                    ]
+                                );
+                                // Don't re-throw, just log - the DB part succeeded
+                            }
+
+                            return response()->json(
+                                [
+                                    "message" =>
+                                        "Renewal order processed, prescription refills decremented",
+                                ],
+                                200
+                            );
+                        } else {
+                            // No refills left now (race condition)
+                            DB::rollBack();
+                            Log::warning(
+                                "Renewal order received but prescription has no refills remaining (race condition)",
+                                [
+                                    "order_id" => $originalShopifyOrderId,
+                                    "subscription_id" => $rechargeSubId,
+                                    "prescription_id" => $prescription->id,
+                                ]
+                            );
+
+                            return response()->json(
+                                [
+                                    "message" =>
+                                        "Warning: Prescription has no refills remaining",
+                                ],
+                                200
+                            );
+                        }
+                    } catch (\Exception $dbError) {
+                        DB::rollBack();
+                        Log::error(
+                            "Error decrementing prescription refills for renewal order",
+                            [
+                                "order_id" => $originalShopifyOrderId,
+                                "subscription_id" => $rechargeSubId,
+                                "prescription_id" => $prescription->id,
+                                "current_refills" => $prescription->refills,
+                                "error_message" => $dbError->getMessage(),
+                            ]
+                        );
+                        return response()->json(
+                            [
+                                "message" =>
+                                    "Error decrementing prescription refills: " .
+                                    $dbError->getMessage(),
+                            ],
+                            500
                         );
                     }
                 } else {

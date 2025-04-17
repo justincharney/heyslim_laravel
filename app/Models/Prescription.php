@@ -21,7 +21,8 @@ class Prescription extends Model
         "status",
         "start_date",
         "end_date",
-        "yousign_procedure_id",
+        "yousign_signature_request_id",
+        "yousign_document_id",
         "signed_at",
         "dose_schedule",
     ];

@@ -8,14 +8,19 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use App\Services\ShopifyService;
+use App\Services\YousignService;
 
 class YousignWebhookController extends Controller
 {
     protected $shopifyService;
+    protected $yousignService;
 
-    public function __construct(ShopifyService $shopifyService)
-    {
+    public function __construct(
+        ShopifyService $shopifyService,
+        YousignService $yousignService
+    ) {
         $this->shopifyService = $shopifyService;
+        $this->yousignService = $yousignService;
     }
 
     /**
@@ -74,7 +79,7 @@ class YousignWebhookController extends Controller
 
         // Find the prescription with this signature request ID
         $prescription = Prescription::where(
-            "yousign_procedure_id",
+            "yousign_signature_request_id",
             $signatureRequestId
         )->first();
 
@@ -116,8 +121,12 @@ class YousignWebhookController extends Controller
             return response()->json(["error" => "No document ID found"], 400);
         }
 
+        // Save the document ID to the prescription
+        $prescription->yousign_document_id = $documentId;
+        $prescription->save();
+
         // Download the signed document
-        $signedDocument = $this->downloadSignedDocument(
+        $signedDocument = $this->yousignService->downloadSignedDocument(
             $signatureRequestId,
             $documentId
         );
@@ -189,46 +198,6 @@ class YousignWebhookController extends Controller
 
         // Compare signatures using a constant-time comparison function
         return hash_equals($expectedSignature, $signature);
-    }
-
-    /**
-     * Download the signed document from Yousign
-     */
-    private function downloadSignedDocument(
-        string $signatureRequestId,
-        string $documentId
-    ): ?string {
-        try {
-            // Get the Yousign API credentials
-            $apiKey = config("services.yousign.api_key");
-            $apiUrl = config("services.yousign.api_url");
-
-            // Download the document
-            $response = Http::withToken($apiKey)
-                ->acceptJson()
-                ->get(
-                    "{$apiUrl}/signature_requests/{$signatureRequestId}/documents/{$documentId}/download"
-                );
-
-            if (!$response->successful()) {
-                Log::error("Failed to download document", [
-                    "signature_request_id" => $signatureRequestId,
-                    "document_id" => $documentId,
-                    "status" => $response->status(),
-                    "response" => $response->body(),
-                ]);
-                return null;
-            }
-
-            // Return the document content
-            return $response->body();
-        } catch (\Exception $e) {
-            Log::error("Exception downloading signed document", [
-                "signature_request_id" => $signatureRequestId,
-                "error" => $e->getMessage(),
-            ]);
-            return null;
-        }
     }
 
     /**

@@ -850,11 +850,11 @@ GRAPHQL;
      * @return bool Whether the operation was successful
      */
     public function attachPrescriptionLabelToOrder(
-        Prescription $prescription
+        Prescription $prescription,
+        ?string $currentOrderId = null
     ): bool {
         // Check if this prescription is associated with a subscription that has an order ID
         $subscription = $prescription->subscription;
-
         if (!$subscription || !$subscription->original_shopify_order_id) {
             Log::info(
                 "No Shopify order ID found for prescription #{$prescription->id}, skipping label attachment"
@@ -862,8 +862,8 @@ GRAPHQL;
             return false;
         }
 
-        $orderId = $subscription->original_shopify_order_id;
-
+        // Use the provided current order ID if available
+        $orderId = $currentOrderId ?? $subscription->original_shopify_order_id;
         try {
             // Generate the label
             $labelService = app(PrescriptionLabelService::class);
@@ -889,13 +889,13 @@ GRAPHQL;
             }
 
             if ($success) {
-                Log::info(
-                    "Successfully attached prescription label to Shopify order",
-                    [
-                        "prescription_id" => $prescription->id,
-                        "order_id" => $orderId,
-                    ]
-                );
+                // Log::info(
+                //     "Successfully attached prescription label to Shopify order",
+                //     [
+                //         "prescription_id" => $prescription->id,
+                //         "order_id" => $orderId,
+                //     ]
+                // );
                 return true;
             } else {
                 Log::error(
