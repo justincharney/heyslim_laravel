@@ -318,15 +318,15 @@ class PrescriptionController extends Controller
             ]);
 
             // Create Yousign request and link it to the prescription
-            $yousignProcedureId = app(YousignService::class)->sendForSignature(
+            $yousignSRId = app(YousignService::class)->sendForSignature(
                 $prescription
             );
-            if (!$yousignProcedureId) {
+            if (!$yousignSRId) {
                 throw new \Exception(
                     "Failed to create Yousign signature request"
                 );
             }
-            $prescription->yousign_signature_request_id = $yousignProcedureId;
+            $prescription->yousign_signature_request_id = $yousignSRId;
             $prescription->save();
 
             DB::commit();

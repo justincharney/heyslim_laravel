@@ -32,6 +32,7 @@ class PrescriptionLabelService
                 "prescriber" => $prescription->prescriber,
             ])
                 ->paperSize(70, 35, "mm")
+                ->margins(0, 0, 0, 0)
                 ->save($filePath);
 
             return $filePath;

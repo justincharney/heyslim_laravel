@@ -11,14 +11,13 @@
             font-size: 8px;
             color: #000;
             width: 70mm;
-            height: 35mm;
+            height: 30mm;
             overflow: hidden;
         }
         .prescription-container {
-            border: 1px solid #000;
             padding: 3px;
             width: 100%;
-            height: 100%;
+            height: 95%;
             box-sizing: border-box;
             position: relative;
         }
