@@ -590,4 +590,41 @@ class PrescriptionController extends Controller
             "chat" => $chat,
         ]);
     }
+
+    /**
+     * Get prescriptions created by the authenticated user that are awaiting signature.
+     */
+    public function getNeedingSignature()
+    {
+        $user = auth()->user();
+        $teamId = $user->current_team_id;
+
+        if (!$teamId) {
+            return response()->json(
+                [
+                    "message" =>
+                        "You must be associated with a team to view prescriptions",
+                ],
+                403
+            );
+        }
+
+        setPermissionsTeamId($teamId);
+
+        // Fetch prescriptions where the current user is the prescriber
+        // and the status is pending_signature
+        $prescriptions = Prescription::where("prescriber_id", $user->id)
+            ->where("status", "pending_signature")
+            ->whereHas("patient", function ($query) use ($teamId) {
+                // Ensure the patient is also in the same team
+                $query->where("current_team_id", $teamId);
+            })
+            ->with(["patient:id,name", "clinicalPlan:id,condition_treated"])
+            ->orderBy("created_at", "desc")
+            ->get();
+
+        return response()->json([
+            "prescriptions" => $prescriptions,
+        ]);
+    }
 }

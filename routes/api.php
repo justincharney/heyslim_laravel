@@ -246,6 +246,10 @@ Route::middleware(["web", "auth:sanctum", "role:provider|pharmacist"])->group(
         // Prescriptions
         Route::get("/prescriptions", [PrescriptionController::class, "index"]);
         Route::post("/prescriptions", [PrescriptionController::class, "store"]);
+        Route::get("/prescriptions/needing-signature", [
+            PrescriptionController::class,
+            "getNeedingSignature",
+        ]);
         Route::get("/prescriptions/{prescription}", [
             PrescriptionController::class,
             "show",
