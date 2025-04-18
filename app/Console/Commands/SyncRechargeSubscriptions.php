@@ -85,32 +85,33 @@ class SyncRechargeSubscriptions extends Command
                 )->first();
 
                 if ($existingSubscription) {
-                    $this->info(
-                        "Subscription already exists: {$rechargeSubId}"
-                    );
-                    continue;
-                    // Update the existing subscription
-                    // try {
-                    //     $this->updateExistingSubscription(
-                    //         $existingSubscription,
-                    //         $subscription
-                    //     );
-                    //     $updated++;
-                    //     $this->info("Updated subscription: {$rechargeSubId}");
-                    // } catch (\Exception $e) {
-                    //     $this->error(
-                    //         "Error updating subscription {$rechargeSubId}: " .
-                    //             $e->getMessage()
-                    //     );
-                    //     Log::error(
-                    //         "Error updating subscription from Recharge",
-                    //         [
-                    //             "subscription_id" => $rechargeSubId,
-                    //             "error" => $e->getMessage(),
-                    //         ]
-                    //     );
-                    //     $errors++;
-                    // }
+                    // $this->info(
+                    //     "Subscription already exists: {$rechargeSubId}"
+                    // );
+                    // continue;
+
+                    //Update the existing subscription
+                    try {
+                        $this->updateExistingSubscription(
+                            $existingSubscription,
+                            $subscription
+                        );
+                        $updated++;
+                        $this->info("Updated subscription: {$rechargeSubId}");
+                    } catch (\Exception $e) {
+                        $this->error(
+                            "Error updating subscription {$rechargeSubId}: " .
+                                $e->getMessage()
+                        );
+                        Log::error(
+                            "Error updating subscription from Recharge",
+                            [
+                                "subscription_id" => $rechargeSubId,
+                                "error" => $e->getMessage(),
+                            ]
+                        );
+                        $errors++;
+                    }
                 } else {
                     // Create a new subscription record
                     try {
@@ -227,34 +228,25 @@ class SyncRechargeSubscriptions extends Command
         ]);
     }
 
-    // /**
-    //  * Update an existing subscription with new data
-    //  */
-    // private function updateExistingSubscription(
-    //     Subscription $subscription,
-    //     array $subscriptionData
-    // ): void {
-    //     $nextChargeScheduledAt =
-    //         $subscriptionData["next_charge_scheduled_at"] ?? null;
-    //     $status =
-    //         $subscriptionData["status"] === "ACTIVE"
-    //             ? "active"
-    //             : ($subscriptionData["status"] === "CANCELLED"
-    //                 ? "cancelled"
-    //                 : "paused");
+    /**
+     * Update an existing subscription with new data
+     */
+    private function updateExistingSubscription(
+        Subscription $subscription,
+        array $subscriptionData
+    ): void {
+        $nextChargeScheduledAt =
+            $subscriptionData["next_charge_scheduled_at"] ?? null;
+        $status =
+            $subscriptionData["status"] === "ACTIVE"
+                ? "active"
+                : ($subscriptionData["status"] === "CANCELLED"
+                    ? "cancelled"
+                    : "paused");
 
-    //     $subscription->update([
-    //         "recharge_customer_id" =>
-    //             $subscriptionData["customer_id"] ??
-    //             $subscription->recharge_customer_id,
-    //         "product_name" =>
-    //             $subscriptionData["product_title"] ??
-    //             $subscription->product_name,
-    //         "shopify_product_id" =>
-    //             $subscriptionData["shopify_product_id"] ??
-    //             $subscription->shopify_product_id,
-    //         "status" => $status,
-    //         "next_charge_scheduled_at" => $nextChargeScheduledAt,
-    //     ]);
-    // }
+        $subscription->update([
+            "status" => $status,
+            "next_charge_scheduled_at" => $nextChargeScheduledAt,
+        ]);
+    }
 }

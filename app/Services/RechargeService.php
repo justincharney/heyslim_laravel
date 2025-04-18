@@ -517,28 +517,66 @@ class RechargeService
     public function getAllActiveSubscriptions(int $limit = 100): array
     {
         try {
-            // Get all active subscriptions with pagination
-            $response = Http::withHeaders([
-                "X-Recharge-Access-Token" => $this->apiKey,
-                "Accept" => "application/json",
-                "Content-Type" => "application/json",
-            ])->get("{$this->endpoint}/subscriptions", [
+            $allSubscriptions = [];
+            $url = "{$this->endpoint}/subscriptions";
+            $params = [
                 "status" => "ACTIVE",
-                "limit" => $limit,
-            ]);
+                "limit" => min($limit, 250), // Recharge allows up to 250 per request
+            ];
 
-            if (!$response->successful()) {
-                Log::error(
-                    "Failed to retrieve active subscriptions from Recharge",
-                    [
-                        "status_code" => $response->status(),
-                        "response" => $response->json(),
-                    ]
+            do {
+                // Make the API request
+                $response = Http::withHeaders([
+                    "X-Recharge-Access-Token" => $this->apiKey,
+                    "Accept" => "application/json",
+                    "Content-Type" => "application/json",
+                ])->get($url, $params);
+
+                if (!$response->successful()) {
+                    Log::error(
+                        "Failed to retrieve active subscriptions from Recharge",
+                        [
+                            "status_code" => $response->status(),
+                            "response" => $response->json(),
+                        ]
+                    );
+                    break;
+                }
+
+                // Add the current page of results to our collection
+                $currentSubscriptions =
+                    $response->json()["subscriptions"] ?? [];
+                $allSubscriptions = array_merge(
+                    $allSubscriptions,
+                    $currentSubscriptions
                 );
-                return [];
-            }
 
-            return $response->json()["subscriptions"] ?? [];
+                // Check for Link header which contains the cursor for the next page
+                $linkHeader = $response->header("Link");
+
+                // Reset URL and params for the next iteration
+                $url = null;
+                $params = [];
+
+                // Parse Link header to get the next cursor URL if it exists
+                if ($linkHeader) {
+                    preg_match(
+                        '/<([^>]*)>;\s*rel="next"/',
+                        $linkHeader,
+                        $matches
+                    );
+                    if (isset($matches[1])) {
+                        $url = $matches[1]; // The full URL with cursor is in the Link header
+                    }
+                }
+
+                // If we've reached the requested limit or there's no next cursor, exit the loop
+                if (count($allSubscriptions) >= $limit || $url === null) {
+                    break;
+                }
+            } while ($url !== null);
+
+            return $allSubscriptions;
         } catch (\Exception $e) {
             Log::error(
                 "Exception while fetching active subscriptions from Recharge",
