@@ -51,7 +51,7 @@ class CheckinReminderNotification extends Notification
             ->action("Complete Check-In", $checkInUrl)
             ->line(
                 "If you are experiencing any significant side effects, please contact your healthcare provider immediately."
-            )
+            );
     }
 
     /**
@@ -62,10 +62,10 @@ class CheckinReminderNotification extends Notification
     public function toArray(object $notifiable): array
     {
         return [
-            'check_in_id' => $this->checkIn->id,
-            'prescription_id' => $this->checkIn->prescription_id,
-            'due_date' => $this->checkIn->due_date->format('Y-m-d'),
-            'medication' => $this->checkIn->prescription->medication_name,
+            "check_in_id" => $this->checkIn->id,
+            "prescription_id" => $this->checkIn->prescription_id,
+            "due_date" => $this->checkIn->due_date->format("Y-m-d"),
+            "medication" => $this->checkIn->prescription->medication_name,
         ];
     }
 }

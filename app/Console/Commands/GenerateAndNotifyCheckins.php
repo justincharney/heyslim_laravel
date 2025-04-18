@@ -163,9 +163,9 @@ class GenerateAndNotifyCheckIns extends Command
                 $checkIn = $existingCheckIn;
             }
 
-            // Send notification if the due date is today or tomorrow and notification hasn't been sent
+            // Send notification if the due date is within the week and notification hasn't been sent
             $daysUntilDue = $todayDate->diffInDays($nextChargeDate, false);
-            if ($daysUntilDue <= 1 && !$checkIn->notification_sent) {
+            if ($daysUntilDue <= 7 && !$checkIn->notification_sent) {
                 $patient = $subscription->user;
 
                 // Send notification

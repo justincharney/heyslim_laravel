@@ -57,8 +57,6 @@ class CheckInController extends Controller
             ->with("prescription")
             ->get();
 
-        Log::info("Checkins", [$checkIns]);
-
         return response()->json([
             "check_ins" => $checkIns,
         ]);
@@ -188,8 +186,7 @@ class CheckInController extends Controller
 
         // Update check-in
         $checkIn->update([
-            "questions_and_questions_and_responses" =>
-                $validated["questions_and_responses"],
+            "questions_and_responses" => $validated["questions_and_responses"],
             "status" => "completed",
             "completed_at" => now(),
         ]);

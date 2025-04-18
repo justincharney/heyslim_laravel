@@ -93,11 +93,15 @@ class PatientController extends Controller
             ->orderBy("created_at", "desc")
             ->get();
 
+        // Load checkIns with team context
+        $checkIns = $patient->checkIns()->orderBy("created_at", "desc")->get();
+
         return response()->json([
             "patient" => $patient,
             "questionnaire_submissions" => $submissions,
             "clinical_plans" => $clinicalPlans,
             "prescriptions" => $prescriptions,
+            "checkIns" => $checkIns,
         ]);
     }
 
