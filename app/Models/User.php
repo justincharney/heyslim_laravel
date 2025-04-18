@@ -124,4 +124,12 @@ class User extends Authenticatable
     {
         return $this->hasMany(QuestionnaireSubmission::class, "user_id");
     }
+
+    /**
+     * Get the checkins for the user.
+     */
+    public function checkIns()
+    {
+        return $this->hasMany(Checkin::class);
+    }
 }

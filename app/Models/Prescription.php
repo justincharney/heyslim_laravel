@@ -97,4 +97,12 @@ class Prescription extends Model
     {
         return $this->hasOne(Subscription::class);
     }
+
+    /**
+     * Get the check-ins for this prescription.
+     */
+    public function checkIns()
+    {
+        return $this->hasMany(Checkin::class);
+    }
 }

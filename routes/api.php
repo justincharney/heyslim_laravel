@@ -18,6 +18,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Log;
+use App\Http\Controllers\CheckInController;
 
 // Routes for any user
 Route::middleware(["web", "auth:sanctum"])->group(function () {
@@ -56,6 +57,11 @@ Route::middleware(["web", "auth:sanctum"])->group(function () {
 
     // Read messages
     Route::post("/chats/{id}/read", [ChatController::class, "markAsRead"]);
+
+    // CheckIns
+    Route::get("/check-ins", [CheckInController::class, "index"]);
+    Route::get("/check-ins/{id}", [CheckInController::class, "show"]);
+    Route::put("/check-ins/{id}", [CheckInController::class, "update"]);
 });
 
 // Routes for patients
@@ -294,6 +300,11 @@ Route::middleware(["web", "auth:sanctum", "role:provider|pharmacist"])->group(
         Route::put("/provider/profile/password", [
             ProfileController::class,
             "updatePassword",
+        ]);
+
+        Route::post("/check-ins/{id}/review", [
+            CheckInController::class,
+            "review",
         ]);
     }
 );

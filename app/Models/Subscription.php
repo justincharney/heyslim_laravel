@@ -72,4 +72,12 @@ class Subscription extends Model
     {
         return $this->belongsTo(Prescription::class);
     }
+
+    /**
+     * Get the check-ins for this subscription.
+     */
+    public function checkIns()
+    {
+        return $this->hasMany(Checkin::class);
+    }
 }
