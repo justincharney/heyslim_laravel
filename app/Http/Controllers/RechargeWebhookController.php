@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\ProcessRecurringOrderAttachmentsJob;
 use App\Models\Questionnaire;
 use App\Models\QuestionnaireSubmission;
 use App\Models\Subscription;
@@ -177,86 +178,22 @@ class RechargeWebhookController extends Controller
                                 "processed_at" => now(),
                             ]);
 
-                            // COMMIT TRANSACTION BEFORE API CALLS
+                            // COMMIT TRANSACTION BEFORE dispatching job
                             DB::commit();
 
-                            // NOW PERFORM API CALLS - Outside the transaction
-                            try {
-                                // Attach prescription label to the Order - pass the current order ID
-                                $shopify = app(ShopifyService::class);
-                                if (
-                                    !$shopify->attachPrescriptionLabelToOrder(
-                                        $prescription,
-                                        $originalShopifyOrderId // current order id from webhook
-                                    )
-                                ) {
-                                    Log::error(
-                                        "Failed to attach renewal label",
-                                        [
-                                            "order_id" => $originalShopifyOrderId,
-                                            "prescription_id" =>
-                                                $prescription->id,
-                                        ]
-                                    );
-                                    // Continue processing, we don't want to return an error just for label failure
-                                }
-
-                                // Get the signature request ID and document ID
-                                $signatureRequestId =
-                                    $prescription->yousign_signature_request_id;
-                                $documentId =
-                                    $prescription->yousign_document_id;
-
-                                // Download the signed document
-                                $yousignService = app(YousignService::class);
-                                $bytes = $yousignService->downloadSignedDocument(
-                                    $signatureRequestId,
-                                    $documentId
-                                );
-
-                                if ($bytes) {
-                                    // Create a temporary file for the downloaded document
-                                    $tempFile = tempnam(
-                                        sys_get_temp_dir(),
-                                        "prescription_"
-                                    );
-                                    file_put_contents($tempFile, $bytes);
-
-                                    // Pass the temp file path
-                                    $shopify->attachPrescriptionToOrder(
-                                        $originalShopifyOrderId, // Use the current order ID, not original
-                                        $tempFile,
-                                        "Signed prescription #{$prescription->id}"
-                                    );
-
-                                    // Clean up the temporary file
-                                    @unlink($tempFile);
-                                } else {
-                                    Log::warning(
-                                        "Could not re‑download signed PDF for renewal",
-                                        [
-                                            "prescription_id" =>
-                                                $prescription->id,
-                                        ]
-                                    );
-                                    // Continue processing, don't fail the webhook for this
-                                }
-                            } catch (\Exception $apiError) {
-                                // Log but don't fail the webhook since the DB transaction was successful
-                                Log::error(
-                                    "API error after successful refill decrement",
-                                    [
-                                        "order_id" => $originalShopifyOrderId,
-                                        "error" => $apiError->getMessage(),
-                                    ]
-                                );
-                                // Don't re-throw, just log - the DB part succeeded
-                            }
+                            // Dispatch job to process attachments
+                            ProcessRecurringOrderAttachmentsJob::dispatch(
+                                $prescription->id,
+                                $originalShopifyOrderId // Shopify order ID of the new transaction
+                            );
+                            Log::info(
+                                "Dispatched attachment job for prescription #{$prescription->id} and order {$originalShopifyOrderId}"
+                            );
 
                             return response()->json(
                                 [
                                     "message" =>
-                                        "Renewal order processed, prescription refills decremented",
+                                        "Renewal order processed, attachment job dispatched",
                                 ],
                                 200
                             );
