@@ -158,7 +158,7 @@ class YousignWebhookController extends Controller
 
         return response()->json(
             ["message" => "Webhook received, processing initiated"],
-            400
+            200
         );
     }
 
