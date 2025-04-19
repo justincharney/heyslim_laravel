@@ -86,7 +86,6 @@ class ProcessSignedPrescriptionJob implements ShouldQueue
 
         $orderId = $subscription->original_shopify_order_id;
         $tempPath = null;
-        $allAttachmentsSuccessful = true;
 
         try {
             // Store the document temporarily
@@ -116,40 +115,15 @@ class ProcessSignedPrescriptionJob implements ShouldQueue
 
             if (!$success) {
                 Log::error(
-                    "Failed to attach PRESCRIPTION to Shopify order {$orderId} in job for prescription #{$prescription->id}."
+                    "Failed to attach document to Shopify order {$orderId} in job for prescription #{$prescription->id}."
                 );
-                $allAttachmentsSuccessful = false;
-            } else {
-                Log::info(
-                    "Successfully attached PRESCRIPTION to Shopify order {$orderId} for prescription #{$prescription->id}"
-                );
-            }
-
-            // Attach prescription label
-            $labelAttached = $shopifyService->attachPrescriptionLabelToOrder(
-                $prescription,
-                $orderId
-            );
-
-            if (!$labelAttached) {
-                Log::error(
-                    "Failed to attach LABEL PDF to Shopify order {$orderId} for prescription #{$prescription->id}."
-                );
-                $allAttachmentsSuccessful = false;
-            } else {
-                Log::info(
-                    "Successfully attached LABEL PDF to Shopify order {$orderId} for prescription #{$prescription->id}"
-                );
-            }
-
-            if (!$allAttachmentsSuccessful) {
-                // If either attachment failed, retry the job
-                $this->release(60 * 5); // Retry attachments in 5 mins
+                // Let the queue retry
+                $this->release(60 * 2); // Release back to queue, retry in 2 mins
                 return;
             }
 
             Log::info(
-                "All attachments successful for order {$orderId}, prescription #{$prescription->id}. Job complete."
+                "Successfully attached document to Shopify order {$orderId} for prescription #{$prescription->id}"
             );
         } catch (\Exception $e) {
             Log::error("Exception attaching files to Shopify order in job", [

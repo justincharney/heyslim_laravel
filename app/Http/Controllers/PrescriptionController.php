@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\AttachInitialLabelToShopifyJob;
 use App\Models\Chat;
 use App\Models\Message;
 use App\Models\Prescription;
@@ -17,6 +18,8 @@ use App\Models\Subscription;
 use App\Models\QuestionnaireSubmission;
 use App\Services\ShopifyService;
 use App\Services\PrescriptionLabelService;
+use App\Jobs\InitiateYousignSignatureJob;
+use Illuminate\Support\Facades\Log;
 
 class PrescriptionController extends Controller
 {
@@ -226,12 +229,14 @@ class PrescriptionController extends Controller
         // Add the authenticated user as the prescriber
         $validated["prescriber_id"] = auth()->id();
 
+        $prescription = null;
+        $chat = null;
         DB::beginTransaction();
-
         try {
+            // 1. Create the prescription
             $prescription = Prescription::create($validated);
 
-            // Auto-approve clinical plan if needed
+            // 2. Auto-approve clinical plan if needed
             if ($autoApproved) {
                 $plan->update([
                     "pharmacist_agreed_at" => now(),
@@ -240,7 +245,7 @@ class PrescriptionController extends Controller
                 ]);
             }
 
-            // Approve the questionnaire submission if not already approved
+            // 3. Approve the questionnaire submission if not already approved
             if ($plan->questionnaire_submission_id) {
                 $submission = QuestionnaireSubmission::find(
                     $plan->questionnaire_submission_id
@@ -254,7 +259,7 @@ class PrescriptionController extends Controller
                 }
             }
 
-            // Link to existing subscription through the prescription's associated clinical plan questionnaire submission
+            // 4. Link to existing subscription through the prescription's associated clinical plan questionnaire submission
             $subscription = Subscription::where(
                 "user_id",
                 $validated["patient_id"]
@@ -271,37 +276,13 @@ class PrescriptionController extends Controller
                 $subscription->update([
                     "prescription_id" => $prescription->id,
                 ]);
-                // Generate and attach prescription label to Shopify order
-                if ($subscription->original_shopify_order_id) {
-                    $labelService = app(PrescriptionLabelService::class);
-                    $shopifyService = app(ShopifyService::class);
-
-                    // Generate and attach the label
-                    $labelSuccess = $shopifyService->attachPrescriptionLabelToOrder(
-                        $prescription
-                    );
-
-                    if (!$labelSuccess) {
-                        Log::warning(
-                            "Failed to attach prescription label to Shopify order",
-                            [
-                                "prescription_id" => $prescription->id,
-                                "order_id" =>
-                                    $subscription->original_shopify_order_id,
-                            ]
-                        );
-                        throw new \Exception(
-                            "Failed to attach prescription label to Shopify order"
-                        );
-                    }
-                }
             } else {
                 throw new \Exception(
                     "No active subscription found for the patient"
                 );
             }
 
-            // Create the chat for the prescription
+            // 5. Create the chat for the prescription
             $chat = Chat::create([
                 "prescription_id" => $prescription->id,
                 "patient_id" => $validated["patient_id"],
@@ -309,7 +290,7 @@ class PrescriptionController extends Controller
                 "status" => "active",
             ]);
 
-            // Add an initial message from the provider
+            // 6. Add an initial message from the provider
             Message::create([
                 "chat_id" => $chat->id,
                 "user_id" => $validated["prescriber_id"],
@@ -317,30 +298,14 @@ class PrescriptionController extends Controller
                 "read" => false,
             ]);
 
-            // Create Yousign request and link it to the prescription
-            $yousignSRId = app(YousignService::class)->sendForSignature(
-                $prescription
-            );
-            if (!$yousignSRId) {
-                throw new \Exception(
-                    "Failed to create Yousign signature request"
-                );
-            }
-            $prescription->yousign_signature_request_id = $yousignSRId;
-            $prescription->save();
-
+            // Commit the database transaction
             DB::commit();
-
-            return response()->json(
-                [
-                    "message" => "Prescription created successfully",
-                    "prescription" => $prescription,
-                    "chat" => $chat,
-                ],
-                201
-            );
         } catch (\Exception $e) {
             DB::rollBack();
+            Log::error("Failed transaction during prescription creation", [
+                "error" => $e->getMessage(),
+                "trace" => $e->getTraceAsString(),
+            ]);
             return response()->json(
                 [
                     "message" => "Failed to create prescription",
@@ -349,6 +314,26 @@ class PrescriptionController extends Controller
                 500
             );
         }
+
+        // --- Dispatch jobs AFTER successful commit ---
+        if ($prescription) {
+            // JOB 1: Initiate Yousign signature
+            InitiateYousignSignatureJob::dispatch($prescription->id);
+
+            // JOB 2: Generate and attach prescription label to Shopify order
+            AttachInitialLabelToShopifyJob::dispatch($prescription->id);
+        }
+
+        // Return success response
+        return response()->json(
+            [
+                "message" =>
+                    "Prescription created successfully. Signature and label processing initiated.",
+                "prescription" => $prescription,
+                "chat" => $chat,
+            ],
+            201
+        );
     }
 
     /**

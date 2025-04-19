@@ -8,7 +8,7 @@ use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use App\Models\CheckIn;
 
-class CheckinReminderNotification extends Notification
+class CheckInReminderNotification extends Notification
 {
     use Queueable;
     protected $checkIn;

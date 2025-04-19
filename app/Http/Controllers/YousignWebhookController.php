@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\ProcessSignedPrescriptionJob;
 use App\Models\Prescription;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -104,11 +106,6 @@ class YousignWebhookController extends Controller
             );
         }
 
-        // Update the prescription status and signed_at timestamp
-        $prescription->status = "active";
-        $prescription->signed_at = now();
-        $prescription->save();
-
         // Log::info("Prescription #{$prescription->id} marked as signed");
 
         // Get the document id
@@ -121,45 +118,47 @@ class YousignWebhookController extends Controller
             return response()->json(["error" => "No document ID found"], 400);
         }
 
-        // Save the document ID to the prescription
-        $prescription->yousign_document_id = $documentId;
-        $prescription->save();
-
-        // Download the signed document
-        $signedDocument = $this->yousignService->downloadSignedDocument(
-            $signatureRequestId,
-            $documentId
-        );
-
-        if (!$signedDocument) {
+        // ----- PERFORM DB UPDATE -----
+        try {
+            DB::beginTransaction();
+            $prescription->status = "active";
+            $prescription->signed_at = now();
+            $prescription->yousign_document_id = $documentId; // Save the document ID
+            $prescription->save();
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
             Log::error(
-                "Failed to download signed document for signature request: $signatureRequestId"
+                "Failed to update prescription status for signature request: $signatureRequestId",
+                ["error" => $e->getMessage()]
             );
             return response()->json(
-                ["error" => "Failed to download signed document"],
+                ["error" => "Failed to update prescription status"],
                 500
             );
         }
 
-        // Attach the document to the Shopify order if applicable
-        $attached = $this->attachDocumentToShopifyOrder(
-            $prescription,
-            $signedDocument
-        );
-
-        if (!$attached) {
-            Log::error(
-                "Failed to attach document to Shopify order for prescription: $prescription->id"
+        // Dispatch job
+        $shopifyOrderId =
+            $prescription->subscription?->original_shopify_order_id;
+        if (!$shopifyOrderId) {
+            Log::warning(
+                "Cannot dispatch job for prescription #{$prescription->id}: Missing Shopify Order ID in associated subscription."
             );
-            return response()->json(
-                ["error" => "Failed to attach document to Shopify order"],
-                500
+        } else {
+            ProcessSignedPrescriptionJob::dispatch(
+                $prescription->id,
+                $signatureRequestId,
+                $documentId
+            );
+            Log::info(
+                "Dispatched ProcessSignedPrescriptionJob for prescription #{$prescription->id}."
             );
         }
 
         return response()->json(
-            ["message" => "Prescription updated successfully"],
-            200
+            ["message" => "Webhook received, processing initiated"],
+            400
         );
     }
 
