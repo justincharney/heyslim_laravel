@@ -100,6 +100,12 @@ class RechargeWebhookController extends Controller
             $rechargeSubId
         )->first();
 
+        // Log::info("details", [
+        //     "order_id" => $originalShopifyOrderId,
+        //     "subscription_id" => $rechargeSubId,
+        //     "questionnaire_submission_id" => $questionnaireSubId,
+        // ]);
+
         // SCENARIO 1: RECURRING order (decrement refills)
         if ($subscription && $orderType === "RECURRING") {
             // This is a renewal order
@@ -293,7 +299,7 @@ class RechargeWebhookController extends Controller
                         );
                     }
 
-                    // Create or update the subscription
+                    // Create or update the subscription - related SUBMISSION SHOULD BE UPDATED IN BOOT METHOD
                     $subscription = Subscription::updateOrCreate(
                         ["recharge_subscription_id" => $rechargeSubId],
                         [
@@ -308,6 +314,12 @@ class RechargeWebhookController extends Controller
                     );
                     // Commit the transaction
                     DB::commit();
+
+                    // Return a success response
+                    return response()->json(
+                        ["message" => "Checkout order processed successfully"],
+                        200
+                    );
                 } catch (\Exception $e) {
                     // Rollback the transaction in case of error
                     DB::rollback();
@@ -343,7 +355,7 @@ class RechargeWebhookController extends Controller
 
         return response()->json(
             ["message" => "Order processed but no action taken"],
-            200
+            400
         );
     }
 

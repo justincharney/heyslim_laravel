@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use App\Services\ConsultationService;
+use Illuminate\Support\Facades\Log;
 
 class Subscription extends Model
 {
@@ -27,23 +28,82 @@ class Subscription extends Model
     protected static function booted(): void
     {
         static::created(function ($subscription) {
-            // Get the user who owns the subscription.
-            // Get the submission associated with the subscription.
-            $user = $subscription->user;
-            $submission = $subscription->questionnaireSubmission;
+            // Only process relationships if the required foreign key is set
+            if ($subscription->questionnaire_submission_id) {
+                try {
+                    // Get the submission associated with the subscription
+                    $subscription->load("questionnaireSubmission");
+                    $submission = $subscription->questionnaireSubmission;
 
-            if ($user && $submission) {
-                // Update submission status to submitted
-                $submission->update(["status" => "submitted"]);
+                    if ($submission) {
+                        // Update submission status if not already submitted
+                        if ($submission->status !== "submitted") {
+                            $submission->update(["status" => "submitted"]);
 
-                // Send consultation scheduling link
-                $consultationService = app(ConsultationService::class);
-                $consultationResult = $consultationService->sendConsultationLink(
-                    $submission
-                );
+                            // Send consultation scheduling link
+                            $consultationService = app(
+                                ConsultationService::class
+                            );
+                            $consultationResult = $consultationService->sendConsultationLink(
+                                $submission
+                            );
 
-                if (!$consultationResult) {
-                    throw new \Exception("Failed to send consultation link");
+                            if (!$consultationResult) {
+                                Log::error("Failed to send consultation link", [
+                                    "submission_id" => $submission->id,
+                                ]);
+                            }
+                        }
+                    }
+                } catch (\Exception $e) {
+                    Log::error(
+                        "Error in subscription created event: " .
+                            $e->getMessage(),
+                        [
+                            "subscription_id" => $subscription->id,
+                            "trace" => $e->getTraceAsString(),
+                        ]
+                    );
+                }
+            }
+        });
+
+        static::updated(function ($subscription) {
+            // Only run if these fields were previously null but are now set
+            if (
+                $subscription->user_id &&
+                $subscription->questionnaire_submission_id &&
+                $subscription->isDirty("questionnaire_submission_id")
+            ) {
+                try {
+                    $subscription->load("questionnaireSubmission");
+                    $submission = $subscription->questionnaireSubmission;
+
+                    if ($submission) {
+                        // Update submission status if not already submitted
+                        if ($submission->status !== "submitted") {
+                            $submission->update(["status" => "submitted"]);
+
+                            // Send consultation scheduling link
+                            $consultationService = app(
+                                ConsultationService::class
+                            );
+                            $consultationResult = $consultationService->sendConsultationLink(
+                                $submission
+                            );
+
+                            if (!$consultationResult) {
+                                Log::error("Failed to send consultation link", [
+                                    "submission_id" => $submission->id,
+                                ]);
+                            }
+                        }
+                    }
+                } catch (\Exception $e) {
+                    Log::error(
+                        "Error in subscription updated event: " .
+                            $e->getMessage()
+                    );
                 }
             }
         });
