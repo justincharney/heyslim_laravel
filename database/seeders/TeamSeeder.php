@@ -28,10 +28,10 @@ class TeamSeeder extends Seeder
             "description" => "The main clinic team",
         ]);
 
-        $team2 = Team::create([
-            "name" => "Second Clinic",
-            "description" => "Second clinic team",
-        ]);
+        // $team2 = Team::create([
+        //     "name" => "Second Clinic",
+        //     "description" => "Second clinic team",
+        // ]);
 
         // Set the admin's team and role
         $admin->current_team_id = $team1->id;

@@ -25,6 +25,77 @@ class ShopifyService
         );
     }
 
+    /**
+     * Find a Shopify customer by email using the Admin API
+     *
+     * @param string $email The email address to search for
+     * @return string|null The customer GID if found, null otherwise
+     */
+    public function findCustomerByEmail(string $email): ?string
+    {
+        $query = <<<'GRAPHQL'
+query findCustomerByEmail($emailQuery: String!) {
+  customers(first: 1, query: $emailQuery) {
+    edges {
+      node {
+        id
+        email
+      }
+    }
+  }
+}
+GRAPHQL;
+
+        // Construct the query string for exact email match
+        $emailQueryString = "email:'{$email}'";
+
+        try {
+            $response = Http::withHeaders([
+                "Content-Type" => "application/json",
+                "X-Shopify-Access-Token" => $this->accessToken,
+            ])->post($this->endpoint, [
+                "query" => $query,
+                "variables" => [
+                    "emailQuery" => $emailQueryString,
+                ],
+            ]);
+
+            if (!$response->successful()) {
+                Log::error("Shopify API call failed (find customer by email)", [
+                    "status" => $response->status(),
+                    "response" => $response->body(),
+                    "email" => $email,
+                ]);
+                return null;
+            }
+
+            $data = $response->json();
+            $edges = $data["data"]["customers"]["edges"] ?? [];
+
+            if (!empty($edges)) {
+                $customerId = $edges[0]["node"]["id"] ?? null;
+                if ($customerId) {
+                    Log::info("Found existing Shopify customer by email", [
+                        "email" => $email,
+                        "customer_id" => $customerId,
+                    ]);
+                    return $customerId;
+                }
+            }
+
+            Log::info("No Shopify customer found for email", [
+                "email" => $email,
+            ]);
+            return null;
+        } catch (\Exception $e) {
+            Log::error("Exception finding customer by email", [
+                "email" => $email,
+                "error" => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
+
     public function createCustomer(
         string $firstName,
         string $lastName,

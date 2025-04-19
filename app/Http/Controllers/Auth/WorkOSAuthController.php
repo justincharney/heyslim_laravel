@@ -63,12 +63,15 @@ class WorkOSAuthController extends Controller
 
         // Check if Shopify customer ID exists for the user
         if (!$user->shopify_customer_id) {
-            // Parse name into first and last name components
-            $nameParts = explode(" ", $user->name);
-            $firstName = array_shift($nameParts);
-            $lastName = implode(" ", $nameParts);
+            $shopifyCustomerId = null;
+            $shopifyPassword = Str::random(12);
 
             try {
+                // Try to find the customer by email
+                $shopifyCustomerId = $this->shopifyService->findCustomerByEmail(
+                    $user->email
+                );
+
                 DB::beginTransaction();
 
                 // Handle local user creation first
@@ -85,36 +88,45 @@ class WorkOSAuthController extends Controller
                 $user->current_team_id = $teamId;
                 setPermissionsTeamId($teamId);
                 $user->assignRole("patient");
+                $user->save();
 
-                // Create the shopify password
-                $shopifyPassword = Str::random(12);
+                // No shopify customer found - creating them
+                if (is_null($shopifyCustomerId)) {
+                    // Parse name into first and last name components
+                    $nameParts = explode(" ", $user->name);
+                    $firstName = array_shift($nameParts);
+                    $lastName = implode(" ", $nameParts);
 
-                // Only create the Shopify customer if local operations succeeded
-                $shopifyCustomerId = $this->shopifyService->createCustomer(
-                    $firstName,
-                    $lastName,
-                    $user->email,
-                    $shopifyPassword
-                );
-
-                if (!$shopifyCustomerId) {
-                    throw new \Exception("Failed to create Shopify customer");
-                } else {
-                    // Add "authorized" tag to user
-                    $tagsAdded = $this->shopifyService->addTagsToCustomer(
-                        $shopifyCustomerId,
-                        ["authorized"]
+                    // Only create the Shopify customer if local operations succeeded
+                    $shopifyCustomerId = $this->shopifyService->createCustomer(
+                        $firstName,
+                        $lastName,
+                        $user->email,
+                        $shopifyPassword
                     );
-                    if (!$tagsAdded) {
+
+                    if (!$shopifyCustomerId) {
                         throw new \Exception(
-                            "Failed to add authorized tag to Shopify customer"
+                            "Failed to create Shopify customer"
                         );
+                    } else {
+                        // Add "authorized" tag to user
+                        $tagsAdded = $this->shopifyService->addTagsToCustomer(
+                            $shopifyCustomerId,
+                            ["authorized"]
+                        );
+                        if (!$tagsAdded) {
+                            throw new \Exception(
+                                "Failed to add authorized tag to Shopify customer"
+                            );
+                        }
                     }
-                    // Update the user with the Shopify customer ID and password
-                    $user->shopify_customer_id = $shopifyCustomerId;
-                    $user->shopify_password = encrypt($shopifyPassword);
-                    $user->save();
                 }
+
+                // Update the user with the Shopify customer ID and password
+                $user->shopify_customer_id = $shopifyCustomerId;
+                $user->shopify_password = encrypt($shopifyPassword);
+                $user->save();
 
                 DB::commit();
             } catch (\Exception $e) {
