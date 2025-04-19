@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use App\Models\ClinicalPlan;
 use App\Models\Prescription;
+use App\Jobs\ProcessRejectedQuestionnaireJob;
 
 class QuestionnaireController extends Controller
 {
@@ -487,14 +488,35 @@ class QuestionnaireController extends Controller
 
     public function reject(Request $request, $id)
     {
-        $submission = QuestionnaireSubmission::findOrFail($id);
+        $submission = QuestionnaireSubmission::with("user")->find($id);
+
+        if (!$submission) {
+            return response()->json(["message" => "Submission not found"], 404);
+        }
+
+        // Get the provider who reviewed the submission
+        $provider = auth()->user();
+        $patient = $submission->user;
+        // Check that the provider is in the same team as the patient
+        if (
+            !$patient ||
+            $patient->current_team_id !== $provider->current_team_id
+        ) {
+            return response()->json(
+                ["message" => "You can only reject submissions from your team"],
+                403
+            );
+        }
 
         $validated = $request->validate([
             "review_notes" => "required|string",
         ]);
 
-        DB::beginTransaction();
+        // Store provider ID before potential commit/dispatch
+        $providerId = $provider->id;
+        $reviewNotes = $validated["review_notes"];
 
+        DB::beginTransaction();
         try {
             $submission->update([
                 "status" => "rejected",
@@ -502,52 +524,8 @@ class QuestionnaireController extends Controller
                 "reviewed_by" => auth()->id(),
                 "reviewed_at" => now(),
             ]);
-
-            // Get the provider who reviewed the submission
-            $provider = auth()->user();
-
-            // Cancel related subscription
-            $rechargeService = app(RechargeService::class);
-            $cancellationSuccess = $rechargeService->cancelSubscriptionForRejectedQuestionnaire(
-                $submission,
-                "Questionnaire rejected by healthcare provider"
-            );
-
-            // If subscription cancellation failed, roll back and return error
-            if (!$cancellationSuccess) {
-                DB::rollBack();
-                Log::error(
-                    "Failed to cancel subscription for rejected questionnaire",
-                    [
-                        "submission_id" => $id,
-                    ]
-                );
-
-                return response()->json(
-                    [
-                        "message" =>
-                            "Failed to cancel subscription for rejected questionnaire",
-                    ],
-                    500
-                );
-            }
-
-            // Send email notification to user
-            $patient = $submission->user;
-            $patient->notify(
-                new QuestionnaireRejectedNotification(
-                    $submission,
-                    $provider,
-                    $validated["review_notes"]
-                )
-            );
-
+            // Commit change
             DB::commit();
-
-            return response()->json([
-                "message" =>
-                    "Questionnaire submission rejected and related subscription cancelled",
-            ]);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Failed to reject questionnaire submission", [
@@ -562,5 +540,21 @@ class QuestionnaireController extends Controller
                 500
             );
         }
+
+        // --- Dispatch Job AFTER successful local commit ---
+        ProcessRejectedQuestionnaireJob::dispatch(
+            $submission->id,
+            $providerId,
+            $reviewNotes
+        );
+        Log::info(
+            "Dispatched ProcessRejectedQuestionnaireJob for submission #{$submission->id}"
+        );
+
+        // --- Return Success Response to User ---
+        return response()->json([
+            "message" =>
+                "Questionnaire submission rejected. Background processing initiated.",
+        ]);
     }
 }

@@ -195,7 +195,7 @@ class YousignService
                 "info" => [
                     "first_name" => $firstName,
                     "last_name" => $lastName,
-                    "email" => "justin@call-acs.com", //$prescriber->email,
+                    "email" => $prescriber->email,
                     "locale" => "en",
                 ],
                 "signature_level" => "electronic_signature",

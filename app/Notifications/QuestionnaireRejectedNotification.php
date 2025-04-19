@@ -14,6 +14,10 @@ class QuestionnaireRejectedNotification extends Notification implements
 {
     use Queueable;
 
+    protected $submission;
+    protected $provider;
+    protected $reviewNotes;
+
     /**
      * Create a new notification instance.
      */
