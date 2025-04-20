@@ -52,14 +52,23 @@ class ChatController extends Controller
         $user = auth()->user();
 
         // Get the chat and make sure the user is part of it
-        $chat = Chat::where("id", $id)
-            ->where(function ($query) use ($user) {
-                $query
-                    ->where("patient_id", $user->id)
-                    ->orWhere("provider_id", $user->id);
-            })
-            ->with(["prescription", "provider", "patient"])
-            ->firstOrFail();
+        try {
+            $chat = Chat::where("id", $id)
+                ->where(function ($query) use ($user) {
+                    $query
+                        ->where("patient_id", $user->id)
+                        ->orWhere("provider_id", $user->id);
+                })
+                ->with(["prescription", "provider", "patient"])
+                ->firstOrFail();
+        } catch (\Exception $e) {
+            return response()->json(
+                [
+                    "error" => "Chat not found",
+                ],
+                404
+            );
+        }
 
         // Get messages for this chat
         $messages = Message::where("chat_id", $chat->id)

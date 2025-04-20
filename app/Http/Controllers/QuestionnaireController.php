@@ -134,14 +134,23 @@ class QuestionnaireController extends Controller
 
     public function getQuestionnaireDetails($submission_id)
     {
-        $submission = QuestionnaireSubmission::with([
-            "questionnaire",
-            "questionnaire.questions",
-            "questionnaire.questions.options",
-            "answers",
-        ])
-            ->where("user_id", auth()->id())
-            ->findOrFail($submission_id);
+        try {
+            $submission = QuestionnaireSubmission::with([
+                "questionnaire",
+                "questionnaire.questions",
+                "questionnaire.questions.options",
+                "answers",
+            ])
+                ->where("user_id", auth()->id())
+                ->findOrFail($submission_id);
+        } catch (\Exception $e) {
+            return response()->json(
+                [
+                    "error" => "Submission not found",
+                ],
+                404
+            );
+        }
 
         return response()->json([
             "submission" => [

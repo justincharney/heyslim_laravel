@@ -19,31 +19,20 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Log;
 use App\Http\Controllers\CheckInController;
+use App\Http\Controllers\AuthController;
 
 // Routes for any user
-Route::middleware(["web", "auth:sanctum"])->group(function () {
+Route::middleware(["auth:sanctum"])->group(function () {
     Route::get("/supabase/token", [SupabaseController::class, "getToken"]);
 
-    Route::get("/user", function (Request $request) {
-        $user = auth("web")->user();
-        if (!$user) {
-            return response()->json(["error" => "Unauthenticated"], 401);
-        }
-        $userData = $user->toArray();
-        // Add roles to the userData
-        $userData["roles"] = $user->getRoleNames();
-        return response()->json($userData);
-    });
-
-    Route::post("/login", [
-        AuthenticatedSessionController::class,
-        "store",
-    ])->name("login");
-
-    Route::post("/logout", [
-        AuthenticatedSessionController::class,
-        "destroy",
-    ])->name("logout");
+    // Authentication routes
+    Route::get("/user", [AuthController::class, "user"]);
+    Route::post("/login", [AuthController::class, "login"]);
+    Route::post("/logout", [AuthController::class, "logout"]);
+    Route::post("/auth/exchange-token", [
+        AuthController::class,
+        "exchangeToken",
+    ]);
 
     // Chat routes
     // Get all chats for the authenticated user
@@ -65,7 +54,7 @@ Route::middleware(["web", "auth:sanctum"])->group(function () {
 });
 
 // Routes for patients
-Route::middleware(["web", "auth:sanctum", "role:patient"])->group(function () {
+Route::middleware(["auth:sanctum", "role:patient"])->group(function () {
     // Profile routes
     Route::get("/profile/check", [
         ProfileController::class,
@@ -155,7 +144,7 @@ Route::middleware(["web", "auth:sanctum", "role:patient"])->group(function () {
 });
 
 // Routes for admins
-Route::middleware(["web", "auth:sanctum", "role:admin"])
+Route::middleware(["auth:sanctum", "role:admin"])
     ->prefix("admin")
     ->group(function () {
         Route::apiResource("teams", TeamController::class);
@@ -190,7 +179,7 @@ Route::middleware(["web", "auth:sanctum", "role:admin"])
     });
 
 // Routes for providers
-Route::middleware(["web", "auth:sanctum", "role:provider"])
+Route::middleware(["auth:sanctum", "role:provider"])
     ->prefix("provider")
     ->group(function () {
         // Clinical plans (writing)
@@ -217,7 +206,7 @@ Route::middleware(["web", "auth:sanctum", "role:provider"])
     });
 
 // Routes for pharmacists
-Route::middleware(["web", "auth:sanctum", "role:pharmacist|admin"])
+Route::middleware(["auth:sanctum", "role:pharmacist|admin"])
     ->prefix("pharmacist")
     ->group(function () {
         // Pharmacist-specific clinical plan actions
@@ -233,7 +222,7 @@ Route::middleware(["web", "auth:sanctum", "role:pharmacist|admin"])
     });
 
 // Routes shared between providers and pharmacists
-Route::middleware(["web", "auth:sanctum", "role:provider|pharmacist"])->group(
+Route::middleware(["auth:sanctum", "role:provider|pharmacist"])->group(
     function () {
         // Patient management (view functionality)
         Route::get("/patients", [PatientController::class, "index"]);

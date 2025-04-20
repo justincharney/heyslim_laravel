@@ -17,7 +17,6 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(
             except: ["webhooks/*", "authenticate", "login"]
         );
-        $middleware->statefulApi();
         $middleware->alias([
             "verified" => \App\Http\Middleware\EnsureEmailIsVerified::class,
             "role" => \Spatie\Permission\Middleware\RoleMiddleware::class,
@@ -26,7 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
             "role_or_permission" =>
                 \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
         ]);
-        $middleware->web(append: [SetTeamContextMiddleware::class]);
+        $middleware->api(append: [SetTeamContextMiddleware::class]);
         // $middleware->alias([
         //     "profile.complete" => ProfileCompletedMiddleware::class,
         // ]);

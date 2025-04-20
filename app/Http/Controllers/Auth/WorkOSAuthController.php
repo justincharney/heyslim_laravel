@@ -13,6 +13,7 @@ use Laravel\WorkOS\Http\Requests\AuthKitAuthenticationRequest;
 use Laravel\WorkOS\Http\Requests\AuthKitLoginRequest;
 use Laravel\WorkOS\Http\Requests\AuthKitLogoutRequest;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Cache;
 
 class WorkOSAuthController extends Controller
 {
@@ -155,11 +156,19 @@ class WorkOSAuthController extends Controller
             }
         }
 
-        return redirect(config("app.front_end_url") . "/post-login");
-    }
+        // Issue a Sanctum token for API access
+        $token = $user->createToken("user-token", expiresAt: now()->addHours(2))
+            ->plainTextToken;
 
-    public function logout(AuthKitLogoutRequest $request)
-    {
-        return $request->logout();
+        // Generate a short-lived random state parameter for additional security
+        $state = hash("sha256", uniqid(mt_rand(), true));
+
+        // Store state in Cache
+        Cache::put("token_state:{$state}", $token, now()->addMinutes(5));
+
+        // Return both the redirect and the state for token exchange
+        return redirect(
+            config("app.front_end_url") . "/post-login?state=" . $state
+        );
     }
 }
