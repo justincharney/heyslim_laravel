@@ -171,4 +171,10 @@ class WorkOSAuthController extends Controller
             config("app.front_end_url") . "/post-login?state=" . $state
         );
     }
+
+    public function logout(AuthKitLogoutRequest $request)
+    {
+        $request->user()->tokens()->delete();
+        return $request->logout();
+    }
 }
