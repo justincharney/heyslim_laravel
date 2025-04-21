@@ -103,6 +103,6 @@ class Prescription extends Model
      */
     public function checkIns()
     {
-        return $this->hasMany(Checkin::class);
+        return $this->hasMany(CheckIn::class);
     }
 }
