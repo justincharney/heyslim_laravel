@@ -14,6 +14,7 @@ use Laravel\WorkOS\Http\Requests\AuthKitLoginRequest;
 use Laravel\WorkOS\Http\Requests\AuthKitLogoutRequest;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Cache;
+use Laravel\WorkOS\WorkOS;
 
 class WorkOSAuthController extends Controller
 {
@@ -61,6 +62,20 @@ class WorkOSAuthController extends Controller
     public function authenticate(AuthKitAuthenticationRequest $request)
     {
         $user = $request->authenticate();
+
+        // Get and store the WorkOS session ID from the access token
+        $accessToken = $request->session()->get("workos_access_token");
+        if ($accessToken) {
+            $workOsSession = WorkOS::decodeAccessToken($accessToken);
+            if (isset($workOsSession["sid"])) {
+                // Store the sid in the Cache
+                Cache::put(
+                    "workos_sid_" . $user->id,
+                    $workOsSession["sid"],
+                    now()->addDays(7)
+                );
+            }
+        }
 
         // Check if Shopify customer ID exists for the user
         if (!$user->shopify_customer_id) {
@@ -170,11 +185,5 @@ class WorkOSAuthController extends Controller
         return redirect(
             config("app.front_end_url") . "/post-login?state=" . $state
         );
-    }
-
-    public function logout(AuthKitLogoutRequest $request)
-    {
-        $request->user()->tokens()->delete();
-        return $request->logout();
     }
 }

@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Cache;
+use Laravel\WorkOS\WorkOS;
+use WorkOS\UserManagement;
 
 class AuthController extends Controller
 {
@@ -60,20 +62,45 @@ class AuthController extends Controller
         ]);
     }
 
-    /**
-     * Logout user (revoke token)
-     *
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
-     */
+    // /**
+    //  * Logout user (revoke token)
+    //  *
+    //  * @param Request $request
+    //  * @return \Illuminate\Http\JsonResponse
+    //  */
+    // public function logout(Request $request)
+    // {
+    //     // Revoke all tokens...
+    //     $request->user()->tokens()->delete();
+
+    //     return response()->json([
+    //         "message" => "Logged out successfully",
+    //     ]);
+    // }
+
     public function logout(Request $request)
     {
-        // Revoke all tokens...
+        $userId = $request->user()->id;
+
+        // Get the workos workos_sid
+        $workos_sid = Cache::get("workos_sid_" . $userId);
+
+        // Remove the user's tokens
         $request->user()->tokens()->delete();
 
-        return response()->json([
+        // Prepare response
+        $response = [
             "message" => "Logged out successfully",
-        ]);
+        ];
+
+        // If we have a WorkOS session ID, add logout URL to response and remove from cache
+        if ($workos_sid) {
+            $logoutUrl = (new UserManagement())->getLogoutUrl($workos_sid);
+            $response["workos_logout_url"] = $logoutUrl;
+            Cache::forget("workos_sid_" . $userId);
+        }
+
+        return response()->json($response);
     }
 
     /**
