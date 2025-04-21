@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\HorizonBasicAuthMiddleware;
 use Illuminate\Support\Str;
 
 return [
@@ -74,7 +75,7 @@ return [
     |
     */
 
-    "middleware" => ["web", "horizonBasicAuth"],
+    "middleware" => ["web", HorizonBasicAuthMiddleware::class],
 
     /*
     |--------------------------------------------------------------------------

@@ -31,11 +31,6 @@ return Application::configure(basePath: dirname(__DIR__))
         //     "profile.complete" => ProfileCompletedMiddleware::class,
         // ]);
         $middleware->trustProxies(at: "*");
-        $middleware->alias([
-            "horizonBasicAuth" => HorizonBasicAuthMiddleware::class,
-        ]);
-
-        //
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //
