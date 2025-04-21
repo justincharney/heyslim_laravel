@@ -5,6 +5,7 @@ use App\Http\Middleware\SetTeamContextMiddleware;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use App\Http\Middleware\HorizonBasicAuthMiddleware;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -30,6 +31,9 @@ return Application::configure(basePath: dirname(__DIR__))
         //     "profile.complete" => ProfileCompletedMiddleware::class,
         // ]);
         $middleware->trustProxies(at: "*");
+        $middleware->alias([
+            "horizonBasicAuth" => HorizonBasicAuthMiddleware::class,
+        ]);
 
         //
     })

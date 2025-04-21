@@ -29,9 +29,18 @@ class HorizonServiceProvider extends HorizonApplicationServiceProvider
     {
         Gate::define("viewHorizon", function ($user) {
             return in_array($user->email, [
-                "justin.charney@gmail.com",
-                "admin@email.com",
+                //
             ]);
+        });
+    }
+
+    /*
+     * Overloaded method from Laravel\Horizon\HorizonApplicationServiceProvider;
+     */
+    protected function authorize(): void
+    {
+        Horizon::auth(function ($request) {
+            return true;
         });
     }
 }
