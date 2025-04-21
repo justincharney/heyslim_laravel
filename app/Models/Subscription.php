@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use App\Services\ConsultationService;
 use Illuminate\Support\Facades\Log;
+use App\Models\CheckIn;
 
 class Subscription extends Model
 {
@@ -138,6 +139,6 @@ class Subscription extends Model
      */
     public function checkIns()
     {
-        return $this->hasMany(Checkin::class);
+        return $this->hasMany(CheckIn::class);
     }
 }

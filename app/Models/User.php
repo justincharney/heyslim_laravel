@@ -8,6 +8,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
+use App\Models\CheckIn;
 
 class User extends Authenticatable
 {
@@ -130,6 +131,6 @@ class User extends Authenticatable
      */
     public function checkIns()
     {
-        return $this->hasMany(Checkin::class);
+        return $this->hasMany(CheckIn::class);
     }
 }
