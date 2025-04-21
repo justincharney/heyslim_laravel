@@ -21,6 +21,8 @@ use Illuminate\Support\Facades\Log;
 use App\Http\Controllers\CheckInController;
 use App\Http\Controllers\AuthController;
 
+Route::post("/auth/exchange-token", [AuthController::class, "exchangeToken"]);
+
 // Routes for any user
 Route::middleware(["auth:sanctum"])->group(function () {
     Route::get("/supabase/token", [SupabaseController::class, "getToken"]);
@@ -29,11 +31,6 @@ Route::middleware(["auth:sanctum"])->group(function () {
     Route::get("/user", [AuthController::class, "user"]);
     Route::post("/login", [AuthController::class, "login"]);
     Route::post("/logout", [AuthController::class, "logout"]);
-    Route::post("/auth/exchange-token", [
-        AuthController::class,
-        "exchangeToken",
-    ]);
-
     // Chat routes
     // Get all chats for the authenticated user
     Route::get("/chats", [ChatController::class, "index"]);
