@@ -22,3 +22,7 @@ yarn-error.log
 /.vscode
 /.zed
 /.repo-to-text-settings.yaml
+
+**/caddy
+frankenphp
+frankenphp-worker.php
