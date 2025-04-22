@@ -180,8 +180,16 @@ class YousignService
         string $documentId,
         array $signatureMetrics
     ): ?string {
-        // Extract first and last name from the name property
-        $nameParts = explode(" ", $prescriber->name, 2);
+        // Full name for the prescriber
+        $fullName = $prescriber->name;
+
+        // Remove any word that ends with a dot (like Dr.)
+        $fullName = preg_replace("/\b\w+\.\s*/i", "", $fullName);
+
+        $fullName = trim($fullName);
+
+        //Split the cleaned name
+        $nameParts = explode(" ", $fullName, 2);
         $firstName = $nameParts[0] ?? "Unknown";
         $lastName = $nameParts[1] ?? "User";
 
