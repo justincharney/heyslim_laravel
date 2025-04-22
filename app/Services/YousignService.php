@@ -138,6 +138,7 @@ class YousignService
     protected function getSignatureBoxMetrics(string $html): array
     {
         $x = Browsershot::html($html)
+            ->noSandbox()
             ->format("a4")
             ->showBackground()
             ->evaluate(
@@ -145,6 +146,7 @@ class YousignService
             );
 
         $y = Browsershot::html($html)
+            ->noSandbox()
             ->format("a4")
             ->showBackground()
             ->evaluate(
@@ -152,6 +154,7 @@ class YousignService
             );
 
         $width = Browsershot::html($html)
+            ->noSandbox()
             ->format("a4")
             ->showBackground()
             ->evaluate(
