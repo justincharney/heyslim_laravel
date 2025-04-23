@@ -183,6 +183,8 @@ class YousignWebhookController extends Controller
             return false;
         }
 
+        Log::debug("Received signature header: " . $signatureHeader);
+
         // Remove the 'sha256=' prefix from the received signature
         $signature = str_replace("sha256=", "", $signatureHeader);
 
@@ -192,8 +194,8 @@ class YousignWebhookController extends Controller
         // Calculate expected signature
         $expectedSignature = hash_hmac("sha256", $payload, $secretKey);
 
-        // Log::debug("Received signature (cleaned): " . $signature);
-        // Log::debug("Calculated signature: " . $expectedSignature);
+        Log::debug("Received signature (cleaned): " . $signature);
+        Log::debug("Calculated signature: " . $expectedSignature);
 
         // Compare signatures using a constant-time comparison function
         return hash_equals($expectedSignature, $signature);
