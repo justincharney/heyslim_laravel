@@ -3,9 +3,13 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
+use OwenIt\Auditing\Auditable as AuditableTrait;
 
-class CheckIn extends Model
+class CheckIn extends Model implements AuditableContract
 {
+    use AuditableTrait;
+
     protected $fillable = [
         "subscription_id",
         "prescription_id",
