@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\Prescription;
+use App\Notifications\PrescriptionSignedNotification;
 use App\Services\ShopifyService;
 use App\Services\YousignService;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -139,5 +140,48 @@ class ProcessSignedPrescriptionJob implements ShouldQueue
             $this->release(60 * 5); // Release back to queue, retry in 5 mins
             return;
         }
+
+        // 3. Send notification to patient
+        if ($prescription->patient) {
+            try {
+                $notificationCacheKey =
+                    "signed_notification_sent_" . $prescription->id;
+                if (!cache()->has($notificationCacheKey)) {
+                    $prescription->patient->notify(
+                        new PrescriptionSignedNotification($prescription)
+                    );
+                    cache()->put(
+                        $notificationCacheKey,
+                        true,
+                        now()->addHours(24)
+                    ); // Prevent re-sending for 24h
+                    Log::info(
+                        "Dispatched PrescriptionSignedNotification for prescription #{$this->prescriptionId}"
+                    );
+                } else {
+                    Log::info(
+                        "Skipping notification for prescription #{$this->prescriptionId}, already sent."
+                    );
+                }
+            } catch (\Exception $notifyError) {
+                Log::error(
+                    "Failed to dispatch PrescriptionSignedNotification",
+                    [
+                        "prescription_id" => $this->prescriptionId,
+                        "patient_id" => $prescription->patient_id,
+                        "error" => $notifyError->getMessage(),
+                    ]
+                );
+                // Don't fail the job for notification error
+            }
+        } else {
+            Log::warning(
+                "Could not send notification for prescription #{$this->prescriptionId}: Patient data missing."
+            );
+        }
+
+        Log::info(
+            "ProcessSignedPrescriptionJob completed for prescription #{$this->prescriptionId}"
+        );
     }
 }
