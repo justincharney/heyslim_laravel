@@ -75,35 +75,6 @@ class GLP1Seeder extends Seeder
                 ],
             ],
             [
-                "title" => "Consent and Data Handling",
-                "questions" => [
-                    [
-                        "text" =>
-                            "Do you consent to the collection and processing of your personal and medical data for the purpose of prescribing weight loss medication?",
-                        "type" => "yes_no",
-                        "required" => true,
-                    ],
-                    [
-                        "text" =>
-                            "Do you acknowledge that your information will be stored in compliance with GDPR and shared only with healthcare professionals involved in your care?",
-                        "type" => "yes_no",
-                        "required" => true,
-                    ],
-                    [
-                        "text" =>
-                            "Have you read and understood the medication information leaflet for Wegovy/Mounjaro?",
-                        "type" => "yes_no",
-                        "required" => true,
-                    ],
-                    [
-                        "text" =>
-                            "Are you aware that this medication is not a substitute for lifestyle changes?",
-                        "type" => "yes_no",
-                        "required" => true,
-                    ],
-                ],
-            ],
-            [
                 "title" => "Physical Measurements and Verification",
                 "questions" => [
                     [
@@ -145,9 +116,14 @@ class GLP1Seeder extends Seeder
                             "formula" =>
                                 "weight / ((feet*12 + inches)^2) * 703",
                             "inputs" => [
-                                "feet" => 9,
-                                "inches" => 10,
-                                "weight" => 11,
+                                "feet" => 5,
+                                "inches" => 6,
+                                "weight" => 7,
+                            ],
+                            "validation" => [
+                                "min" => 27,
+                                "message" =>
+                                    "Your BMI must be at least 27 to qualify for GLP-1 treatment",
                             ],
                         ],
                     ],
@@ -257,9 +233,21 @@ class GLP1Seeder extends Seeder
                 "questions" => [
                     [
                         "text" =>
-                            "Describe your current diet (e.g., calorie intake, type of meals)",
-                        "type" => "textarea",
+                            "Which of the following best describes your usual eating habits? (Select all that apply)",
+                        "type" => "multi-select",
                         "required" => true,
+                        "options" => [
+                            "I often skip meals",
+                            "I eat 3 regular meals a day",
+                            "I snack frequently between meals",
+                            "I eat out/takeaway more than 2-3 times a week",
+                            "I follow a specific diet (e.g. keto, intermittent fasting, vegetarian)",
+                            "I tend to eat late at night",
+                            "I frequently consume high-sugar or high-fat foods",
+                            "I eat when I'm stressed, bored or emotional",
+                            "I'm tracking calories/macros or using a diet app",
+                            "None of the above",
+                        ],
                     ],
                     [
                         "text" =>
@@ -286,6 +274,21 @@ class GLP1Seeder extends Seeder
                             "Are you willing to make long-term lifestyle changes, including diet and exercise, alongside medication?",
                         "type" => "yes_no",
                         "required" => true,
+                    ],
+                    [
+                        "text" =>
+                            "What are your main reasons for wanting to lose weight?",
+                        "type" => "multi-select",
+                        "required" => true,
+                        "options" => [
+                            "Improving my overall health",
+                            "Avoiding or managing a specific health condition",
+                            "Looking and feeling better",
+                            "Becoming more active",
+                            "Improving my mood or mental wellbeing",
+                            "Improving my sleep or energy levels",
+                            "Other",
+                        ],
                     ],
                 ],
             ],
@@ -362,11 +365,33 @@ class GLP1Seeder extends Seeder
                         "text" => "Please select your preferred medication",
                         "type" => "select",
                         "required" => true,
+                        "options" => ["Mounjaro (£199.00)", "Wegovy (£209.00)"],
+                    ],
+                ],
+            ],
+            [
+                "title" => "Consent and Data Handling",
+                "questions" => [
+                    [
+                        "text" =>
+                            "What are your main reasons for wanting to lose weight?",
+                        "type" => "multi-select",
+                        "required" => true,
                         "options" => [
-                            "Mounjaro (£199.00)",
-                            "Ozempic (£189.00)",
-                            "Wegovy (£209.00)",
+                            "Improving my overall health",
+                            "Avoiding or managing a specific health condition",
+                            "Looking and feeling better",
+                            "Becoming more active",
+                            "Improving my mood or mental wellbeing",
+                            "Improving my sleep or energy levels",
+                            "Other",
                         ],
+                    ],
+                    [
+                        "text" =>
+                            "Do you consent to the collection, processing, and GDPR-compliant storage of your personal and medical data for weight loss medication prescription, with information shared only with relevant healthcare professionals and in accordance with our terms and conditions?",
+                        "type" => "yes_no",
+                        "required" => true,
                     ],
                 ],
             ],

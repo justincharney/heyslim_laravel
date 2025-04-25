@@ -68,8 +68,7 @@ class TemplateSeeder extends Seeder
                 "name" => "Semaglutide (Wegovy) Treatment",
                 "description" =>
                     "Specific treatment plan for Wegovy in weight management",
-                "condition_treated" =>
-                    "Obesity with BMI > 30 and meet the criteria (NICE guidelines [NG246])",
+                "condition_treated" => "BMI >= 30",
                 "medicines_that_may_be_prescribed" => "Semaglutide (Wegovy)",
                 "dose_schedule" =>
                     "Start with 0.25mg subcutaneously once weekly for 4 weeks\n" .
@@ -90,8 +89,7 @@ class TemplateSeeder extends Seeder
                 "name" => "Tirzepatide (Mounjaro/Zepbound) Treatment",
                 "description" =>
                     "Treatment plan for Tirzepatide in weight management and T2DM",
-                "condition_treated" =>
-                    "Type 2 diabetes, obesity with BMI > 35 with weight-related comorbidities",
+                "condition_treated" => "BMI >= 30",
                 "medicines_that_may_be_prescribed" =>
                     "Tirzepatide (Mounjaro/Zepbound)",
                 "dose_schedule" =>
@@ -114,7 +112,7 @@ class TemplateSeeder extends Seeder
                 "name" => "Liraglutide (Saxenda) Treatment",
                 "description" =>
                     "Treatment plan for Liraglutide in weight management",
-                "condition_treated" => "Obesity with BMI > 35",
+                "condition_treated" => "BMI >= 30",
                 "medicines_that_may_be_prescribed" => "Liraglutide (Saxenda)",
                 "dose_schedule" =>
                     "Start with 0.6mg subcutaneously once daily for one week\n" .
