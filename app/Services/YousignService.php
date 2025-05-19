@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Prescription;
 use App\Models\User;
+use App\Utils\StringUtils;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -184,9 +185,7 @@ class YousignService
         $fullName = $prescriber->name;
 
         // Remove any word that ends with a dot (like Dr.)
-        $fullName = preg_replace("/\b\w+\.\s*/i", "", $fullName);
-
-        $fullName = trim($fullName);
+        $fullName = StringUtils::removeTitles($fullName);
 
         //Split the cleaned name
         $nameParts = explode(" ", $fullName, 2);

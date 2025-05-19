@@ -76,20 +76,35 @@ class SetupRechargeWebhooks extends Command
         // Get existing webhooks to avoid duplicates
         $existingWebhooks = $this->getExistingWebhooks();
 
-        $existingTopics = array_map(function ($webhook) {
-            return $webhook["topic"];
-        }, $existingWebhooks);
+        // $existingTopics = array_map(function ($webhook) {
+        //     return $webhook["topic"];
+        // }, $existingWebhooks);
 
         $createdCount = 0;
         $skippedCount = 0;
 
         foreach ($webhooks as $webhook) {
             // Skip if webhook already exists
-            if (in_array($webhook["topic"], $existingTopics) && !$force) {
-                $this->info(
-                    "Webhook for {$webhook["topic"]} already exists. Skipping."
-                );
-                $skippedCount++;
+            $shouldSkip = false;
+            if (!$force) {
+                foreach ($existingWebhooks as $existingWebhook) {
+                    if (
+                        isset($existingWebhook["topic"]) &&
+                        $existingWebhook["topic"] === $webhook["topic"] &&
+                        isset($existingWebhook["address"]) &&
+                        $existingWebhook["address"] === $webhook["address"]
+                    ) {
+                        $this->info(
+                            "Webhook for {$webhook["topic"]} already exists. Skipping."
+                        );
+                        $skippedCount++;
+                        $shouldSkip = true;
+                        break;
+                    }
+                }
+            }
+
+            if ($shouldSkip) {
                 continue;
             }
 

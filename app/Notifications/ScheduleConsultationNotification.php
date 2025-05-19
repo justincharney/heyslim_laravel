@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use App\Models\QuestionnaireSubmission;
 use App\Models\User;
+use App\Utils\StringUtils;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -61,7 +62,7 @@ class ScheduleConsultationNotification extends Notification implements
             )
             ->line(
                 "Dr. " .
-                    $this->provider->name .
+                    StringUtils::removeTitles($this->provider->name) .
                     " is available to discuss your treatment plan."
             )
             ->action("Schedule Your Consultation", $this->bookingUrl)
