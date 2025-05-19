@@ -108,29 +108,29 @@ class TemplateSeeder extends Seeder
                 "is_global" => true,
                 "created_by" => $adminId,
             ],
-            [
-                "name" => "Liraglutide (Saxenda) Treatment",
-                "description" =>
-                    "Treatment plan for Liraglutide in weight management",
-                "condition_treated" => "BMI >= 30",
-                "medicines_that_may_be_prescribed" => "Liraglutide (Saxenda)",
-                "dose_schedule" =>
-                    "Start with 0.6mg subcutaneously once daily for one week\n" .
-                    "Increase by 0.6mg weekly to target dose of 3.0mg daily\n" .
-                    "Week 1: 0.6mg daily\n" .
-                    "Week 2: 1.2mg daily\n" .
-                    "Week 3: 1.8mg daily\n" .
-                    "Week 4: 2.4mg daily\n" .
-                    "Week 5 onwards: 3.0mg daily",
-                "guidelines" =>
-                    "NICE guidance [TA664]. Discontinue treatment if less than 5% weight loss achieved after 12 weeks on 3.0mg daily dose.",
-                "monitoring_frequency" =>
-                    "Weekly during dose escalation, then every 2 months",
-                "process_for_reporting_adrs" =>
-                    "Monitor for gallbladder disease, pancreatitis, and increased heart rate. Report serious adverse reactions via yellow card system. Common side effects include nausea, constipation, headache, and injection site reactions.",
-                "is_global" => true,
-                "created_by" => $adminId,
-            ],
+            // [
+            //     "name" => "Liraglutide (Saxenda) Treatment",
+            //     "description" =>
+            //         "Treatment plan for Liraglutide in weight management",
+            //     "condition_treated" => "BMI >= 30",
+            //     "medicines_that_may_be_prescribed" => "Liraglutide (Saxenda)",
+            //     "dose_schedule" =>
+            //         "Start with 0.6mg subcutaneously once daily for one week\n" .
+            //         "Increase by 0.6mg weekly to target dose of 3.0mg daily\n" .
+            //         "Week 1: 0.6mg daily\n" .
+            //         "Week 2: 1.2mg daily\n" .
+            //         "Week 3: 1.8mg daily\n" .
+            //         "Week 4: 2.4mg daily\n" .
+            //         "Week 5 onwards: 3.0mg daily",
+            //     "guidelines" =>
+            //         "NICE guidance [TA664]. Discontinue treatment if less than 5% weight loss achieved after 12 weeks on 3.0mg daily dose.",
+            //     "monitoring_frequency" =>
+            //         "Weekly during dose escalation, then every 2 months",
+            //     "process_for_reporting_adrs" =>
+            //         "Monitor for gallbladder disease, pancreatitis, and increased heart rate. Report serious adverse reactions via yellow card system. Common side effects include nausea, constipation, headache, and injection site reactions.",
+            //     "is_global" => true,
+            //     "created_by" => $adminId,
+            // ],
         ];
 
         foreach ($templates as $template) {
@@ -214,42 +214,42 @@ class TemplateSeeder extends Seeder
                 "is_global" => true,
                 "created_by" => $adminId,
             ],
-            [
-                "name" => "Saxenda (Liraglutide) Protocol",
-                "description" =>
-                    "Standard protocol for Saxenda (liraglutide) for weight management",
-                "medication_name" => "Liraglutide (Saxenda)",
-                "dose" => "Based on dose schedule",
-                "schedule" => "Once daily subcutaneous injection",
-                "refills" => 5,
-                "directions" =>
-                    "Inject subcutaneously once daily as directed. Store in refrigerator. After first use, may be kept at room temperature for up to 30 days.",
-                "dose_schedule" => json_encode([
-                    [
-                        "refill_number" => 0,
-                        "dose" =>
-                            "0.6mg daily for week 1, 1.2mg daily for week 2, 1.8mg daily for week 3, 2.4mg daily for week 4",
-                    ],
-                    [
-                        "refill_number" => 1,
-                        "dose" => "3.0mg daily",
-                    ],
-                    [
-                        "refill_number" => 2,
-                        "dose" => "3.0mg daily",
-                    ],
-                    [
-                        "refill_number" => 3,
-                        "dose" => "3.0mg daily",
-                    ],
-                    [
-                        "refill_number" => 4,
-                        "dose" => "3.0mg daily",
-                    ],
-                ]),
-                "is_global" => true,
-                "created_by" => $adminId,
-            ],
+            // [
+            //     "name" => "Saxenda (Liraglutide) Protocol",
+            //     "description" =>
+            //         "Standard protocol for Saxenda (liraglutide) for weight management",
+            //     "medication_name" => "Liraglutide (Saxenda)",
+            //     "dose" => "Based on dose schedule",
+            //     "schedule" => "Once daily subcutaneous injection",
+            //     "refills" => 5,
+            //     "directions" =>
+            //         "Inject subcutaneously once daily as directed. Store in refrigerator. After first use, may be kept at room temperature for up to 30 days.",
+            //     "dose_schedule" => json_encode([
+            //         [
+            //             "refill_number" => 0,
+            //             "dose" =>
+            //                 "0.6mg daily for week 1, 1.2mg daily for week 2, 1.8mg daily for week 3, 2.4mg daily for week 4",
+            //         ],
+            //         [
+            //             "refill_number" => 1,
+            //             "dose" => "3.0mg daily",
+            //         ],
+            //         [
+            //             "refill_number" => 2,
+            //             "dose" => "3.0mg daily",
+            //         ],
+            //         [
+            //             "refill_number" => 3,
+            //             "dose" => "3.0mg daily",
+            //         ],
+            //         [
+            //             "refill_number" => 4,
+            //             "dose" => "3.0mg daily",
+            //         ],
+            //     ]),
+            //     "is_global" => true,
+            //     "created_by" => $adminId,
+            // ],
         ];
 
         foreach ($templates as $template) {
