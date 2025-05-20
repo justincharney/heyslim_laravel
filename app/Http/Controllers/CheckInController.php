@@ -180,6 +180,16 @@ class CheckInController extends Controller
             );
         }
 
+        // Prevent updating if check-in is already completed or skipped
+        if (in_array($checkIn->status, ["completed", "skipped"])) {
+            return response()->json(
+                [
+                    "message" => "Check-in is already completed or skipped",
+                ],
+                403
+            );
+        }
+
         $validated = $request->validate([
             "questions_and_responses" => "required|array",
         ]);
