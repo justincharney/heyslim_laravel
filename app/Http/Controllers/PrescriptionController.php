@@ -146,11 +146,11 @@ class PrescriptionController extends Controller
             true
         );
 
-        // If no end date, set it to 13 months after start date
+        // If no end date, set it to 7 months after start date
         if (empty($validated["end_date"])) {
             $startDate = new \DateTime($validated["start_date"]);
             $validated["end_date"] = $startDate
-                ->modify("+13 months")
+                ->modify("+7 months")
                 ->format("Y-m-d");
         }
 

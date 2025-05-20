@@ -197,8 +197,6 @@ class ClinicalPlanController extends Controller
             "patient",
             "provider",
             "pharmacist",
-            "questionnaireSubmission.questionnaire.questions.options",
-            "questionnaireSubmission.answers",
             "prescriptions.prescriber",
         ]);
 
