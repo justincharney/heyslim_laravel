@@ -108,6 +108,18 @@ class ChatController extends Controller
             })
             ->firstOrFail();
 
+        // Check if the associated prescription is not 'active'
+        if ($chat->prescription && $chat->prescription->status !== "active") {
+            return response()->json(
+                [
+                    "message" =>
+                        "Cannot send messages in a chat for an inactive prescription.",
+                    "error" => "prescription_cancelled",
+                ],
+                403
+            );
+        }
+
         // Just create the message - broadcasting happens via database trigger
         $message = Message::create([
             "chat_id" => $chat->id,
