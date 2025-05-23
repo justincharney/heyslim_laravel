@@ -452,50 +452,31 @@ class QuestionnaireController extends Controller
             );
         }
 
-        // Check for treatment selection question
-        $treatmentSelectionQuestion = $submission->questionnaire
-            ->questions()
-            ->where("label", "Treatment Selection")
-            ->first();
+        // Now, create a checkout for the consultation product.
+        $consultationProductId = ShopifyProductMapping::getConsultationProductId();
 
-        if ($treatmentSelectionQuestion) {
-            // Find the answer for this question
-            $treatmentAnswer =
-                collect($validated["answers"])->firstWhere(
-                    "question_id",
-                    $treatmentSelectionQuestion->id
-                )["answer_text"] ?? null;
+        if ($consultationProductId) {
+            // Create checkout for the consultation product
+            $shopifyService = app(ShopifyService::class);
+            $cart = $shopifyService->createCheckout(
+                $consultationProductId,
+                $submission->id
+            );
 
-            if (
-                $treatmentAnswer &&
-                ($productId = ShopifyProductMapping::getProductId(
-                    $treatmentAnswer
-                ))
-            ) {
-                // Create checkout
-                $shopifyService = app(ShopifyService::class);
-                $cart = $shopifyService->createCheckout(
-                    $productId,
-                    $submission->id
-                );
+            if ($cart) {
+                $submission->update([
+                    "status" => "pending_payment",
+                    "submitted_at" => now(),
+                ]);
 
-                if ($cart) {
-                    // Update status in a single query
-                    $submission->update([
-                        "status" => "pending_payment",
-                        "submitted_at" => now(),
-                    ]);
-
-                    return response()->json([
-                        "message" =>
-                            "Questionnaire requires payment to complete.",
-                        "checkout_url" => $cart["checkoutUrl"],
-                    ]);
-                }
+                return response()->json([
+                    "message" => "Questionnaire requires payment to complete.",
+                    "checkout_url" => $cart["checkoutUrl"],
+                ]);
             }
         }
-
-        throw new \Exception("Failed to create checkout");
+        // If we reach here, either consultationProductId was not found or checkout creation failed.
+        throw new \Exception("Failed to create checkout for consultation.");
     }
 
     public function reject(Request $request, $id)

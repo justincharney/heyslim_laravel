@@ -39,41 +39,41 @@ class GLP1Seeder extends Seeder
 
         // Define sections and their questions
         $sections = [
-            [
-                "title" => "Patient Identification and Demographics",
-                "questions" => [
-                    [
-                        "text" => "Full Name",
-                        "type" => "text",
-                        "required" => true,
-                    ],
-                    [
-                        "text" => "Date of Birth",
-                        "type" => "date",
-                        "required" => true,
-                    ],
-                    [
-                        "text" => "Gender",
-                        "type" => "select",
-                        "required" => true,
-                        "options" => ["Male", "Female"],
-                    ],
-                    [
-                        "text" => "Ethnicity (for clinical risk assessment)",
-                        "type" => "select",
-                        "required" => true,
-                        "options" => [
-                            "White/Caucasian",
-                            "Black",
-                            "Asian",
-                            "Hispanic, Latino, or Spanish Origin",
-                            "Native American/American Indian/Alaska Native",
-                            "Pacific Islander/Native Hawaiian",
-                            "Mixed/Multiple ethnic groups",
-                        ],
-                    ],
-                ],
-            ],
+            // [
+            //     "title" => "Patient Identification and Demographics",
+            //     "questions" => [
+            //         [
+            //             "text" => "Full Name",
+            //             "type" => "text",
+            //             "required" => true,
+            //         ],
+            //         [
+            //             "text" => "Date of Birth",
+            //             "type" => "date",
+            //             "required" => true,
+            //         ],
+            //         [
+            //             "text" => "Gender",
+            //             "type" => "select",
+            //             "required" => true,
+            //             "options" => ["Male", "Female"],
+            //         ],
+            //         [
+            //             "text" => "Ethnicity (for clinical risk assessment)",
+            //             "type" => "select",
+            //             "required" => true,
+            //             "options" => [
+            //                 "White/Caucasian",
+            //                 "Black",
+            //                 "Asian",
+            //                 "Hispanic, Latino, or Spanish Origin",
+            //                 "Native American/American Indian/Alaska Native",
+            //                 "Pacific Islander/Native Hawaiian",
+            //                 "Mixed/Multiple ethnic groups",
+            //             ],
+            //         ],
+            //     ],
+            // ],
             [
                 "title" => "Physical Measurements and Verification",
                 "questions" => [
@@ -116,9 +116,9 @@ class GLP1Seeder extends Seeder
                             "formula" =>
                                 "weight / ((feet*12 + inches)^2) * 703",
                             "inputs" => [
-                                "feet" => 5,
-                                "inches" => 6,
-                                "weight" => 7,
+                                "feet" => 1,
+                                "inches" => 2,
+                                "weight" => 3,
                             ],
                             "validation" => [
                                 "min" => 27,

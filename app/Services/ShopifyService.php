@@ -317,12 +317,14 @@ GRAPHQL;
      *
      * @param string $productId The Shopify product ID
      * @param int $quantity Default is 1
+     * @param bool $isSubscription Default is false
      * @return array|null The cart object (id and checkoutUrl) if successful, null otherwise
      */
     public function createCheckout(
         string $productId,
         int $submissionId,
-        int $quantity = 1
+        int $quantity = 1,
+        bool $isSubscription = false
     ): ?array {
         // Get the client's IP
         $clientIp = request()->ip();
@@ -336,69 +338,29 @@ GRAPHQL;
             return null;
         }
 
-        // Get the selling plan ID (subscription) for the product
-        $sellingPlanId = $this->getFirstSellingPlanId($productId);
-        if (!$sellingPlanId) {
-            Log::error("Failed to get selling plan ID for subscription", [
-                "product_id" => $productId,
-            ]);
-            return null;
+        $sellingPlanId = null;
+        if ($isSubscription) {
+            // Only fetch selling plan if it's a subscription
+            $sellingPlanId = $this->getFirstSellingPlanId($productId);
+            if (!$sellingPlanId) {
+                Log::error(
+                    "Failed to get selling plan ID for subscription product",
+                    [
+                        "product_id" => $productId,
+                    ]
+                );
+                return null;
+            }
         }
 
         // Create and return the cart
         return $this->createCart(
             $variantId,
-            $sellingPlanId,
+            $sellingPlanId, // This can now be null
             $submissionId,
             $clientIp,
             $quantity
         );
-
-        // $cartId = $this->createCart(
-        //     $variantId,
-        //     $sellingPlanId,
-        //     $submissionId,
-        //     $clientIp,
-        //     $quantity
-        // );
-
-        // // Get the access token for the customer
-        // $accessToken = $this->getCustomerAccessToken(
-        //     $email,
-        //     $password,
-        //     $clientIp
-        // );
-
-        // Log::info("Customer access token retrieved", [
-        //     "email" => $email,
-        //     "token" => $accessToken,
-        // ]);
-
-        // if ($accessToken) {
-        //     // Update the cart with the customer's access token
-        //     $success = $this->associateCustomerWithCart(
-        //         $cartId,
-        //         $accessToken,
-        //         $email,
-        //         $clientIp
-        //     );
-
-        //     if (!$success) {
-        //         Log::warning("Failed to associate customer with cart", [
-        //             "email" => $email,
-        //             "cart_id" => $cartId,
-        //         ]);
-        //     }
-
-        //     // Get the cart and return it
-        //     return $this->getCart($cartId, $clientIp);
-        // } else {
-        //     Log::warning("Failed to get customer access token", [
-        //         "email" => $email,
-        //     ]);
-        // }
-
-        // return null;
     }
 
     /**
@@ -579,7 +541,7 @@ GRAPHQL;
      */
     private function createCart(
         string $variantId,
-        string $sellingPlanId,
+        ?string $sellingPlanId,
         int $submissionId,
         string $clientIp,
         int $quantity = 1
@@ -599,14 +561,18 @@ mutation cartCreate($input: CartInput!) {
 }
 GRAPHQL;
 
+        $lineItem = [
+            "merchandiseId" => $variantId,
+            "quantity" => $quantity,
+        ];
+
+        if ($sellingPlanId !== null) {
+            // Only add sellingPlanId if it's not null
+            $lineItem["sellingPlanId"] = $sellingPlanId;
+        }
+
         $cartInput = [
-            "lines" => [
-                [
-                    "merchandiseId" => $variantId,
-                    "quantity" => $quantity,
-                    "sellingPlanId" => $sellingPlanId, // Added for subscription checkout
-                ],
-            ],
+            "lines" => [$lineItem],
         ];
 
         // Add custom attributes to identify the source submission
@@ -625,15 +591,11 @@ GRAPHQL;
             "Shopify-Storefront-Buyer-IP" => $clientIp,
         ])->post($this->storefrontEndpoint, [
             "query" => $mutation,
-            "variables" => [
-                "input" => $cartInput,
-            ],
+            "variables" => ["input" => $cartInput],
         ]);
 
         if ($response->successful()) {
             $data = $response->json();
-            // Log::info("Shopify cart response", $data);
-
             if (
                 isset($data["data"]["cartCreate"]["userErrors"]) &&
                 !empty($data["data"]["cartCreate"]["userErrors"])
@@ -644,7 +606,6 @@ GRAPHQL;
                 );
                 return null;
             }
-
             if (
                 isset($data["data"]["cartCreate"]["cart"]["id"]) &&
                 isset($data["data"]["cartCreate"]["cart"]["checkoutUrl"])
@@ -662,7 +623,6 @@ GRAPHQL;
                 $response->json()
             );
         }
-
         return null;
     }
 
