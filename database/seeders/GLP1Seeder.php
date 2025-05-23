@@ -78,34 +78,24 @@ class GLP1Seeder extends Seeder
                 "title" => "Physical Measurements and Verification",
                 "questions" => [
                     [
-                        "text" => "Height (feet)",
+                        "text" => "Height (cm)",
                         "type" => "number",
                         "required" => true,
                         "validation" => [
-                            "min" => 3,
-                            "max" => 8,
-                            "message" => "Height must be between 3 and 8 feet",
-                        ],
-                    ],
-                    [
-                        "text" => "Height (inches)",
-                        "type" => "number",
-                        "required" => true,
-                        "validation" => [
-                            "min" => 0,
-                            "max" => 11,
-                            "message" => "Inches must be between 0 and 11",
-                        ],
-                    ],
-                    [
-                        "text" => "Weight (lbs)",
-                        "type" => "number",
-                        "required" => true,
-                        "validation" => [
-                            "min" => 50,
-                            "max" => 800,
+                            "min" => 100,
+                            "max" => 250,
                             "message" =>
-                                "Weight must be between 50 and 800 lbs",
+                                "Height must be between 100 and 250 cm",
+                        ],
+                    ],
+                    [
+                        "text" => "Weight (kg)",
+                        "type" => "number",
+                        "required" => true,
+                        "validation" => [
+                            "min" => 30,
+                            "max" => 400,
+                            "message" => "Weight must be between 30 and 400 kg",
                         ],
                     ],
                     [
@@ -113,12 +103,10 @@ class GLP1Seeder extends Seeder
                         "type" => "number",
                         "required" => true,
                         "calculated" => [
-                            "formula" =>
-                                "weight / ((feet*12 + inches)^2) * 703",
+                            "formula" => "weight / ((height / 100)^2)",
                             "inputs" => [
-                                "feet" => 1,
-                                "inches" => 2,
-                                "weight" => 3,
+                                "height" => 1,
+                                "weight" => 2,
                             ],
                             "validation" => [
                                 "min" => 27,
