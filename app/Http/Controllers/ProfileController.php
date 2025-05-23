@@ -64,7 +64,7 @@ class ProfileController extends Controller
         $user = auth()->user();
 
         // Define required fields for a complete profile
-        $requiredFields = ["date_of_birth", "address"];
+        $requiredFields = ["date_of_birth", "address", "gender"];
 
         // Check if all required fields are filled
         $isComplete = true;
@@ -95,8 +95,10 @@ class ProfileController extends Controller
         $user = auth()->user();
 
         $validated = $request->validate([
+            "name" => "required|string|max:255",
             "date_of_birth" => "required|date|before:today",
             "address" => "required|string",
+            "gender" => "required|string|max:255",
         ]);
 
         $user->update($validated);

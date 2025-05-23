@@ -36,6 +36,7 @@ class User extends Authenticatable
         "address",
         "date_of_birth",
         "profile_completed",
+        "gender",
     ];
 
     /**
