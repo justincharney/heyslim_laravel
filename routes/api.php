@@ -25,6 +25,11 @@ Route::post("/auth/exchange-token", [AuthController::class, "exchangeToken"]);
 
 // Routes for any user
 Route::middleware(["auth:sanctum"])->group(function () {
+    Route::get("/questionnaires/template/{template_id}", [
+        QuestionnaireController::class,
+        "getTemplate",
+    ]);
+
     Route::get("/supabase/token", [SupabaseController::class, "getToken"]);
 
     // Authentication routes

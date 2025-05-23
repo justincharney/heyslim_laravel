@@ -217,7 +217,10 @@ class QuestionnaireController extends Controller
         // If there's an existing submission, handle based on its status
         if ($existingSubmission) {
             // If it's a draft, return it
-            if ($existingSubmission->status === "draft") {
+            if (
+                $existingSubmission->status === "draft" ||
+                $existingSubmission->status === "pending_payment"
+            ) {
                 return response()->json([
                     "message" => "Existing draft found",
                     "submission_id" => $existingSubmission->id,
@@ -564,6 +567,59 @@ class QuestionnaireController extends Controller
         return response()->json([
             "message" =>
                 "Questionnaire submission rejected. Background processing initiated.",
+        ]);
+    }
+
+    public function getTemplate(Request $request, $template_id)
+    {
+        try {
+            // Fetch the questionnaire by its ID, along with its questions and their options
+            $questionnaire = Questionnaire::with([
+                "questions",
+                "questions.options",
+            ])->findOrFail($template_id);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            // If the questionnaire template is not found, return a 404 error
+            return response()->json(
+                [
+                    "error" => "Questionnaire template not found",
+                ],
+                404
+            );
+        }
+
+        // Return the questionnaire structure in a JSON response
+        return response()->json([
+            "questionnaire" => [
+                "id" => $questionnaire->id,
+                "title" => $questionnaire->title,
+                "description" => $questionnaire->description,
+                "questions" => $questionnaire->questions->map(function (
+                    $question
+                ) {
+                    // Note: No answers are included here as this is just the template structure
+                    return [
+                        "id" => $question->id,
+                        "number" => $question->question_number,
+                        "text" => $question->question_text,
+                        "type" => $question->question_type,
+                        "label" => $question->label,
+                        "description" => $question->description,
+                        "is_required" => $question->is_required,
+                        "required_answer" => $question->required_answer,
+                        "calculated" => $question->calculated,
+                        "validation" => $question->validation,
+                        "options" => $question->options->map(function (
+                            $option
+                        ) {
+                            return [
+                                "number" => $option->option_number,
+                                "text" => $option->option_text,
+                            ];
+                        }),
+                    ];
+                }),
+            ],
         ]);
     }
 }
