@@ -9,10 +9,11 @@ Route::get("/", function () {
     return ["Laravel" => app()->version()];
 });
 
-// Route::post("/webhooks/shopify/orders/paid", [
-//     ShopifyWebhookController::class,
-//     "orderPaid",
-// ]);
+// For the consultation checkout order
+Route::post("/webhooks/shopify/orders/paid", [
+    ShopifyWebhookController::class,
+    "orderPaid",
+]);
 
 Route::post("/webhooks/shopify/orders/fulfilled", [
     ShopifyWebhookController::class,
