@@ -109,7 +109,13 @@ class ChatController extends Controller
             ->firstOrFail();
 
         // Check if the associated prescription is not 'active'
-        if ($chat->prescription && $chat->prescription->status !== "active") {
+        if (
+            $chat->prescription &&
+            !in_array($chat->prescription->status, [
+                "active",
+                "pending_signature",
+            ])
+        ) {
             return response()->json(
                 [
                     "message" =>

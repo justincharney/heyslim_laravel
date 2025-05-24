@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Config\ShopifyProductMapping;
 use App\Enums\Permission;
 use App\Models\ClinicalPlanTemplate;
 use App\Models\PrescriptionTemplate;
@@ -43,6 +44,44 @@ class TemplateController extends Controller
 
         return response()->json([
             "templates" => $templates,
+        ]);
+    }
+
+    public function listMedicationProducts(Request $request)
+    {
+        $medicationOptions = [];
+        foreach (
+            ShopifyProductMapping::$medicationProducts
+            as $nameKey => $gid
+        ) {
+            $medicationOptions[] = [
+                "name" => $nameKey,
+                "gid" => $gid,
+            ];
+        }
+
+        return response()->json([
+            "medication_products" => $medicationOptions,
+        ]);
+    }
+
+    public function getMedicationProductVariants(Request $request, $productGid)
+    {
+        $details = ShopifyProductMapping::getProductDetailsByGid($productGid);
+
+        if (!$details || !isset($details["variants"])) {
+            return response()->json(
+                [
+                    "message" =>
+                        "Medication product or variants not found for GID: " .
+                        $productGid,
+                ],
+                404
+            );
+        }
+
+        return response()->json([
+            "variants" => $details["variants"],
         ]);
     }
 

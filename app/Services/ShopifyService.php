@@ -313,53 +313,67 @@ GRAPHQL;
     }
 
     /**
-     * Create a Shopify checkout for a specific product using the Cart API
+     * Create a Shopify checkout using the Cart API.
+     * Can be for a single product or a subscription.
      *
-     * @param string $productId The Shopify product ID
-     * @param int $quantity Default is 1
-     * @param bool $isSubscription Default is false
-     * @return array|null The cart object (id and checkoutUrl) if successful, null otherwise
+     * @param string $merchandiseId The Shopify product GID (for one-time) or product variant GID (for subscriptions/specific variants).
+     * @param int|null $submissionId Optional questionnaire submission ID for note attributes.
+     * @param int $quantity Default is 1.
+     * @param bool $isSubscription Default is false. If true, $explicitSellingPlanId should be provided for subscriptions.
+     * @param string|null $explicitSellingPlanId The specific selling plan GID for the subscription.
+     * @param string|null $discountCode The discount code to apply to the checkout.
+     * @param int|null $prescriptionId Optional prescription ID for cart attributes.
+     * @return array|null The cart object (id and checkoutUrl) if successful, null otherwise.
      */
     public function createCheckout(
-        string $productId,
-        int $submissionId,
+        string $merchandiseId, // Product GID for consultation, Variant GID for subscription's first dose
+        ?int $submissionId,
         int $quantity = 1,
-        bool $isSubscription = false
+        bool $isSubscription = false,
+        ?string $explicitSellingPlanId = null, // Will be used if $isSubscription is true
+        ?string $discountCode = null,
+        ?int $prescriptionId = null
     ): ?array {
-        // Get the client's IP
         $clientIp = request()->ip();
+        $finalVariantId = $merchandiseId; // By default, merchandiseId is the variant for subscriptions or a product GID for one-time
 
-        // Get the first variant ID for the product
-        $variantId = $this->getFirstProductVariantId($productId);
-        if (!$variantId) {
-            Log::error("Failed to get variant ID for product", [
-                "product_id" => $productId,
-            ]);
-            return null;
-        }
-
-        $sellingPlanId = null;
-        if ($isSubscription) {
-            // Only fetch selling plan if it's a subscription
-            $sellingPlanId = $this->getFirstSellingPlanId($productId);
-            if (!$sellingPlanId) {
+        if (!$isSubscription) {
+            // One-time purchase (e.g., consultation)
+            // For one-time product (not variant) GID, get its first variant
+            $variantCheck = $this->getFirstProductVariantId($merchandiseId);
+            if (!$variantCheck) {
                 Log::error(
-                    "Failed to get selling plan ID for subscription product",
+                    "Failed to get variant ID for product (one-time purchase)",
                     [
-                        "product_id" => $productId,
+                        "product_id" => $merchandiseId,
                     ]
                 );
                 return null;
             }
+            $finalVariantId = $variantCheck;
+            // sellingPlanId remains null for one-time purchases
+            $sellingPlanIdToUse = null;
+        } else {
+            // Subscription purchase
+            // For subscriptions, $merchandiseId should already be the specific Product Variant GID.
+
+            // A selling plan ID is required for subscriptions.
+            if ($explicitSellingPlanId) {
+                $sellingPlanIdToUse = $explicitSellingPlanId;
+            } else {
+                // error -> return null
+                return null;
+            }
         }
 
-        // Create and return the cart
         return $this->createCart(
-            $variantId,
-            $sellingPlanId, // This can now be null
+            $finalVariantId,
+            $sellingPlanIdToUse,
             $submissionId,
             $clientIp,
-            $quantity
+            $quantity,
+            $discountCode,
+            $prescriptionId
         );
     }
 
@@ -542,9 +556,11 @@ GRAPHQL;
     private function createCart(
         string $variantId,
         ?string $sellingPlanId,
-        int $submissionId,
+        ?int $submissionId,
         string $clientIp,
-        int $quantity = 1
+        int $quantity = 1,
+        ?string $discountCode = null,
+        ?int $prescriptionId = nul
     ): ?array {
         $mutation = <<<'GRAPHQL'
 mutation cartCreate($input: CartInput!) {
@@ -552,6 +568,9 @@ mutation cartCreate($input: CartInput!) {
     cart {
       id
       checkoutUrl
+      discountCodes {
+        code
+      }
     }
     userErrors {
       field
@@ -583,6 +602,19 @@ GRAPHQL;
                     "value" => (string) $submissionId,
                 ],
             ];
+        }
+        if ($prescriptionId) {
+            $cartInput["attributes"] = [
+                [
+                    "key" => "prescription_id",
+                    "value" => (string) $prescriptionId,
+                ],
+            ];
+        }
+
+        // Add discount code if available
+        if ($discountCode) {
+            $cartInput["discountCodes"] = [$discountCode];
         }
 
         $response = Http::withHeaders([

@@ -17,37 +17,37 @@ class ShopifyProductMapping
             "name" => "Mounjaro",
             "variants" => [
                 [
-                    "dose_description" => "2.5mg",
+                    "dose" => "2.5mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41902912897120",
                     "selling_plan_id" => "gid://shopify/SellingPlan/1215725664",
                 ],
                 [
-                    "dose_description" => "5mg",
+                    "dose" => "5mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41902912929888",
                     "selling_plan_id" => "gid://shopify/SellingPlan/1215725664",
                 ],
                 [
-                    "dose_description" => "7.5mg",
+                    "dose" => "7.5mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41902912962656",
                     "selling_plan_id" => "gid://shopify/SellingPlan/1215725664",
                 ],
                 [
-                    "dose_description" => "10mg",
+                    "dose" => "10mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41902912995424",
                     "selling_plan_id" => "gid://shopify/SellingPlan/1215725664",
                 ],
                 [
-                    "dose_description" => "12.5mg",
+                    "dose" => "12.5mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41902913028192",
                     "selling_plan_id" => "gid://shopify/SellingPlan/1215725664",
                 ],
                 [
-                    "dose_description" => "15mg",
+                    "dose" => "15mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41902913060960",
                     "selling_plan_id" => "gid://shopify/SellingPlan/1215725664",
@@ -58,31 +58,31 @@ class ShopifyProductMapping
             "name" => "Wegovy",
             "variants" => [
                 [
-                    "dose_description" => "0.25mg",
+                    "dose" => "0.25mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41891531292768",
                     "selling_plan_id" => "gid://shopify/SellingPlan/1215791200",
                 ],
                 [
-                    "dose_description" => "0.5mg",
+                    "dose" => "0.5mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41891531325536",
                     "selling_plan_id" => "gid://shopify/SellingPlan/1215791200",
                 ],
                 [
-                    "dose_description" => "1.0mg",
+                    "dose" => "1.0mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41891531358304",
                     "selling_plan_id" => "gid://shopify/SellingPlan/1215791200",
                 ],
                 [
-                    "dose_description" => "1.7mg",
+                    "dose" => "1.7mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41891531391072",
                     "selling_plan_id" => "gid://shopify/SellingPlan/1215791200",
                 ],
                 [
-                    "dose_description" => "2.4mg",
+                    "dose" => "2.4mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41891531423840",
                     "selling_plan_id" => "gid://shopify/SellingPlan/1215791200",

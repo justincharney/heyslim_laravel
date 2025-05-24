@@ -166,7 +166,7 @@ class TemplateSeeder extends Seeder
                 "name" => "Wegovy (Semaglutide) Protocol",
                 "description" =>
                     "Standard protocol for Wegovy (semaglutide) for weight management",
-                "medication_name" => "Semaglutide (Wegovy)",
+                "medication_name" => "Wegovy",
                 "dose" => "Based on dose schedule",
                 "schedule" => "Once weekly subcutaneous injection",
                 "refills" => 5,
@@ -175,35 +175,35 @@ class TemplateSeeder extends Seeder
                 "dose_schedule" => json_encode([
                     [
                         "refill_number" => 0,
-                        "dose_description" => "0.25mg weekly for 4 weeks",
+                        "dose" => "0.25mg",
                         "shopify_variant_gid" =>
                             $wegovyVariants[0]["shopify_variant_gid"],
                         "selling_plan_id" => $wegovySellingPlanId,
                     ],
                     [
                         "refill_number" => 1,
-                        "dose_description" => "0.5mg weekly for 4 weeks",
+                        "dose" => "0.5mg",
                         "shopify_variant_gid" =>
                             $wegovyVariants[1]["shopify_variant_gid"],
                         "selling_plan_id" => $wegovySellingPlanId,
                     ],
                     [
                         "refill_number" => 2,
-                        "dose_description" => "1.0mg weekly for 4 weeks",
+                        "dose" => "1.0mg",
                         "shopify_variant_gid" =>
                             $wegovyVariants[2]["shopify_variant_gid"],
                         "selling_plan_id" => $wegovySellingPlanId,
                     ],
                     [
                         "refill_number" => 3,
-                        "dose_description" => "1.7mg weekly for 4 weeks",
+                        "dose" => "1.7mg",
                         "shopify_variant_gid" =>
                             $wegovyVariants[3]["shopify_variant_gid"],
                         "selling_plan_id" => $wegovySellingPlanId,
                     ],
                     [
                         "refill_number" => 4,
-                        "dose_description" => "2.4mg weekly for maintenance",
+                        "dose" => "2.4mg",
                         "shopify_variant_gid" =>
                             $wegovyVariants[4]["shopify_variant_gid"],
                         "selling_plan_id" => $wegovySellingPlanId,
@@ -216,7 +216,7 @@ class TemplateSeeder extends Seeder
                 "name" => "Mounjaro/Zepbound (Tirzepatide) Protocol",
                 "description" =>
                     "Standard protocol for Tirzepatide for weight management",
-                "medication_name" => "Tirzepatide (Mounjaro/Zepbound)",
+                "medication_name" => "Mounjaro",
                 "dose" => "Based on dose schedule",
                 "schedule" => "Once weekly subcutaneous injection",
                 "refills" => 5,
@@ -225,42 +225,42 @@ class TemplateSeeder extends Seeder
                 "dose_schedule" => json_encode([
                     [
                         "refill_number" => 0,
-                        "dose_description" => "2.5mg weekly for 4 weeks",
+                        "dose" => "2.5mg",
                         "shopify_variant_gid" =>
                             $mounjaroVariants[0]["shopify_variant_gid"],
                         "selling_plan_id" => $mounjaroSellingPlanId,
                     ],
                     [
                         "refill_number" => 1,
-                        "dose_description" => "5.0mg weekly for 4 weeks",
+                        "dose" => "5.0mg",
                         "shopify_variant_gid" =>
                             $mounjaroVariants[1]["shopify_variant_gid"],
                         "selling_plan_id" => $mounjaroSellingPlanId,
                     ],
                     [
                         "refill_number" => 2,
-                        "dose_description" => "7.5mg weekly for 4 weeks",
+                        "dose" => "7.5mg",
                         "shopify_variant_gid" =>
                             $mounjaroVariants[2]["shopify_variant_gid"],
                         "selling_plan_id" => $mounjaroSellingPlanId,
                     ],
                     [
                         "refill_number" => 3,
-                        "dose_description" => "10mg weekly for 4 weeks",
+                        "dose" => "10mg",
                         "shopify_variant_gid" =>
                             $mounjaroVariants[3]["shopify_variant_gid"],
                         "selling_plan_id" => $mounjaroSellingPlanId,
                     ],
                     [
                         "refill_number" => 4,
-                        "dose_description" => "12.5mg weekly for 4 weeks",
+                        "dose" => "12.5mg",
                         "shopify_variant_gid" =>
                             $mounjaroVariants[4]["shopify_variant_gid"],
                         "selling_plan_id" => $mounjaroSellingPlanId,
                     ],
                     [
                         "refill_number" => 5,
-                        "dose_description" => "15mg weekly for 4 weeks",
+                        "dose" => "15mg",
                         "shopify_variant_gid" =>
                             $mounjaroVariants[5]["shopify_variant_gid"],
                         "selling_plan_id" => $mounjaroSellingPlanId,

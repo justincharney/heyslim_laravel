@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\AttachInitialLabelToShopifyJob;
+use App\Jobs\InitiateYousignSignatureJob;
 use App\Jobs\ProcessRecurringOrderAttachmentsJob;
 use App\Models\Questionnaire;
 use App\Models\QuestionnaireSubmission;
@@ -57,45 +59,38 @@ class RechargeWebhookController extends Controller
         // }
 
         $data = json_decode($request->getContent(), true);
-        // Log::info("orderCreated webhook", [
-        //     "data" => $data,
-        // ]);
-
-        // Extract subscription information
         $order = $data["order"] ?? null;
-        $orderType = $order["type"] ?? null;
-        $shopifyCustomerId = $order["shopify_customer_id"] ?? null;
-        $rechargeCustomerId = $order["customer_id"] ?? null;
-        $email = $order["email"] ?? null;
-        $originalShopifyOrderId = $order["shopify_order_id"] ?? null;
 
-        // Extract order information
-        $lineItems = $order["line_items"] ?? [];
-        if (empty($lineItems)) {
-            Log::error("Recharge order webhook missing line items", [
-                "order_id" => $originalShopifyOrderId,
-            ]);
-            return response()->json(["error" => "Missing line items"], 400);
+        if (!$order) {
+            Log::error("Recharge orderCreated webhook missing order data.");
+            return response()->json(["error" => "Missing order data"], 400);
         }
 
-        // Get the first line item (assumes one subscription per order)
+        $orderType = $order["type"] ?? null;
+        $originalShopifyOrderId = $order["shopify_order_id"] ?? null;
+        $lineItems = $order["line_items"] ?? [];
+        $email = $order["email"] ?? null;
+        $noteAttributes = $order["note_attributes"] ?? []; // Get note attributes
+
+        if (empty($lineItems) || !$originalShopifyOrderId) {
+            Log::error(
+                "Recharge order webhook missing critical data (line_items or shopify_order_id)",
+                [
+                    "order_id_recharge" => $order["id"] ?? "N/A",
+                    "original_shopify_order_id" => $originalShopifyOrderId,
+                ]
+            );
+            return response()->json(
+                ["error" => "Missing line items or Shopify Order ID"],
+                400
+            );
+        }
+
         $firstItem = $lineItems[0];
         $rechargeSubId = $firstItem["subscription_id"] ?? null;
-        $shopifyProductId = $firstItem["shopify_product_id"] ?? null;
-        $productName = $firstItem["product_title"] ?? null;
-
-        // Extract questionnaire submission ID from note attributes
-        $questionnaireSubId = null;
-        $noteAttributes = $order["note_attributes"] ?? [];
-        foreach ($noteAttributes as $attribute) {
-            if ($attribute["name"] === "questionnaire_submission_id") {
-                $questionnaireSubId = $attribute["value"];
-                break;
-            }
-        }
 
         // Find the subscription record
-        $subscription = Subscription::where(
+        $localSubscription = Subscription::where(
             "recharge_subscription_id",
             $rechargeSubId
         )->first();
@@ -103,15 +98,14 @@ class RechargeWebhookController extends Controller
         // Log::info("details", [
         //     "order_id" => $originalShopifyOrderId,
         //     "subscription_id" => $rechargeSubId,
-        //     "questionnaire_submission_id" => $questionnaireSubId,
         // ]);
 
         // SCENARIO 1: RECURRING order (decrement refills)
-        if ($subscription && $orderType === "RECURRING") {
+        if ($localSubscription && $orderType === "RECURRING") {
             // This is a renewal order
             try {
                 // Find associated prescription
-                $prescription = $subscription->prescription;
+                $prescription = $localSubscription->prescription;
 
                 if ($prescription) {
                     // Log::info("Order/Prescription info", [
@@ -276,70 +270,114 @@ class RechargeWebhookController extends Controller
         }
 
         // SCENARIO 2: CHECKOUT order (create or update subscription)
-        if ($questionnaireSubId && $orderType === "CHECKOUT") {
-            $submission = QuestionnaireSubmission::find($questionnaireSubId);
-            if ($submission) {
-                // Start a database transaction
-                DB::beginTransaction();
+        if ($rechargeSubId && $orderType === "CHECKOUT") {
+            // Get the prescription id associated with the subscription
+            $prescriptionIdFromAttribute = null;
+            foreach ($noteAttributes as $attribute) {
+                if ($attribute["name"] === "prescription_id") {
+                    $prescriptionIdFromAttribute = $attribute["value"];
+                    break;
+                }
+            }
 
-                try {
-                    // Find user by email
-                    $user = User::where("email", $email)->first();
+            if (!$prescriptionIdFromAttribute) {
+                Log::warning(
+                    "CHECKOUT order from Recharge is missing 'prescription_id' note attribute. Cannot reliably link to prescription.",
+                    [
+                        "recharge_subscription_id" => $rechargeSubId,
+                        "shopify_order_id" => $originalShopifyOrderId,
+                    ]
+                );
+                return response()->json(
+                    [
+                        "message" => "Prescription ID not found",
+                    ],
+                    400
+                );
+            }
 
-                    if (!$user) {
+            // Start a database transaction
+            DB::beginTransaction();
+
+            try {
+                // Find user by email
+                $user = User::where("email", $email)->first();
+                if (!$user) {
+                    Log::error("User not found from email in Recharge order", [
+                        "email" => $email,
+                    ]);
+                    DB::rollBack();
+                    return response()->json(["error" => "User not found"], 404);
+                }
+
+                // Create or update the subscription - related SUBMISSION SHOULD BE UPDATED IN BOOT METHOD
+                $subscription = Subscription::updateOrCreate(
+                    ["recharge_subscription_id" => $rechargeSubId],
+                    [
+                        "recharge_customer_id" => $order["customer_id"],
+                        "shopify_product_id" =>
+                            $firstItem["shopify_product_id"],
+                        "original_shopify_order_id" => $originalShopifyOrderId,
+                        "product_name" => $firstItem["product_title"],
+                        "status" => "active",
+                        "user_id" => $user->id,
+                        "prescription_id" => $prescriptionIdFromAttribute,
+                    ]
+                );
+
+                // Send YouSign signature request
+                if ($prescriptionIdFromAttribute) {
+                    $prescription = Prescription::find(
+                        $prescriptionIdFromAttribute
+                    );
+                    if ($prescription) {
+                        $prescription->status = "pending_signature";
+                        $prescription->save();
+
+                        // JOB 1: Initiate Yousign signature
+                        InitiateYousignSignatureJob::dispatch(
+                            $prescription->id
+                        );
+
+                        // JOB 2: Generate and attach prescription label to Shopify order
+                        AttachInitialLabelToShopifyJob::dispatch(
+                            $prescription->id,
+                            $originalShopifyOrderId
+                        );
+                    } else {
                         Log::error(
-                            "User not found from email in Recharge order",
+                            "Prescription not found for ID from attribute.",
                             [
-                                "email" => $email,
+                                "prescription_id_attr" => $prescriptionIdFromAttribute,
                             ]
                         );
+                        DB::rollBack();
                         return response()->json(
-                            ["error" => "User not found"],
+                            ["message" => "Prescription not found"],
                             404
                         );
                     }
-
-                    // Create or update the subscription - related SUBMISSION SHOULD BE UPDATED IN BOOT METHOD
-                    $subscription = Subscription::updateOrCreate(
-                        ["recharge_subscription_id" => $rechargeSubId],
-                        [
-                            "recharge_customer_id" => $rechargeCustomerId,
-                            "shopify_product_id" => $shopifyProductId,
-                            "original_shopify_order_id" => $originalShopifyOrderId,
-                            "product_name" => $productName,
-                            "status" => "active",
-                            "user_id" => $user->id,
-                            "questionnaire_submission_id" => $questionnaireSubId,
-                        ]
-                    );
-                    // Commit the transaction
-                    DB::commit();
-
-                    // Return a success response
-                    return response()->json(
-                        ["message" => "Checkout order processed successfully"],
-                        200
-                    );
-                } catch (\Exception $e) {
-                    // Rollback the transaction in case of error
-                    DB::rollback();
-
-                    Log::error("Error processing Recharge order", [
-                        "order_id" => $originalShopifyOrderId,
-                        "error" => $e->getMessage(),
-                    ]);
-                    return response()->json(
-                        ["error" => "Error processing order"],
-                        500
-                    );
                 }
-            } else {
-                Log::error("Submission record not found in database", [
-                    "submission_id" => $questionnaireSubId,
+
+                // Commit the transaction
+                DB::commit();
+
+                // Return a success response
+                return response()->json(
+                    ["message" => "Checkout order processed successfully"],
+                    200
+                );
+            } catch (\Exception $e) {
+                // Rollback the transaction in case of error
+                DB::rollback();
+
+                Log::error("Error processing Recharge order", [
+                    "order_id" => $originalShopifyOrderId,
+                    "error" => $e->getMessage(),
                 ]);
                 return response()->json(
-                    ["error" => "Questionnaire submission not found"],
-                    404
+                    ["error" => "Error processing order"],
+                    500
                 );
             }
         }

@@ -20,6 +20,7 @@ use App\Services\ShopifyService;
 use App\Services\PrescriptionLabelService;
 use App\Jobs\InitiateYousignSignatureJob;
 use Illuminate\Support\Facades\Log;
+use App\Notifications\PrescriptionCheckoutNotification;
 
 class PrescriptionController extends Controller
 {
@@ -141,10 +142,7 @@ class PrescriptionController extends Controller
         $validated = $request->validate($validationRules);
 
         // Decode JSON dose schedule
-        $validated["dose_schedule"] = json_decode(
-            $validated["dose_schedule"],
-            true
-        );
+        $doseScheduleData = json_decode($validated["dose_schedule"], true);
 
         // If no end date, set it to 7 months after start date
         if (empty($validated["end_date"])) {
@@ -223,14 +221,17 @@ class PrescriptionController extends Controller
             }
         }
 
-        // Set initial status to pending_signature
-        $validated["status"] = "pending_signature";
+        // Set initial status to pending_payment
+        $validated["status"] = "pending_payment";
 
         // Add the authenticated user as the prescriber
         $validated["prescriber_id"] = auth()->id();
 
         $prescription = null;
         $chat = null;
+        $checkoutUrl = null;
+        $discountCode = "CONSULTATION_DISCOUNT";
+
         DB::beginTransaction();
         try {
             // 1. Create the prescription
@@ -259,28 +260,29 @@ class PrescriptionController extends Controller
                 }
             }
 
-            // 4. Link to existing subscription through the prescription's associated clinical plan questionnaire submission
-            $subscription = Subscription::where(
-                "user_id",
-                $validated["patient_id"]
-            )
-                ->where(
-                    "questionnaire_submission_id",
-                    $plan->questionnaire_submission_id
-                )
-                ->where("status", "active")
-                ->where("prescription_id", null)
-                ->first();
+            // 4. Create Shopify Subscription Checkout for the first dose
+            $initialDoseInfo = $doseScheduleData[0];
+            $shopifyVariantGid = $initialDoseInfo["shopify_variant_gid"];
+            $sellingPlanId = $initialDoseInfo["selling_plan_id"];
 
-            if ($subscription) {
-                $subscription->update([
-                    "prescription_id" => $prescription->id,
-                ]);
-            } else {
+            $shopifyService = app(ShopifyService::class);
+
+            $cartData = $shopifyService->createCheckout(
+                $shopifyVariantGid,
+                null,
+                1, // quantity
+                true, // isSubscription flag,
+                $sellingPlanId,
+                $discountCode,
+                $prescription->id // Added to the cart attribute
+            );
+
+            if (!$cartData || !isset($cartData["checkoutUrl"])) {
                 throw new \Exception(
-                    "No active subscription found for the patient"
+                    "Failed to create Shopify subscription checkout for the patient."
                 );
             }
+            $checkoutUrl = $cartData["checkoutUrl"];
 
             // 5. Create the chat for the prescription
             $chat = Chat::create([
@@ -316,12 +318,42 @@ class PrescriptionController extends Controller
         }
 
         // --- Dispatch jobs AFTER successful commit ---
-        if ($prescription) {
+        if ($prescription && $checkoutUrl) {
             // JOB 1: Initiate Yousign signature
-            InitiateYousignSignatureJob::dispatch($prescription->id);
+            // This will now be done AFTER the customer checks out
+            // InitiateYousignSignatureJob::dispatch($prescription->id);
 
-            // JOB 2: Generate and attach prescription label to Shopify order
-            AttachInitialLabelToShopifyJob::dispatch($prescription->id);
+            // Send checkout link notification email to patient
+            try {
+                // Retrieve the patient model (needed for the notify method)
+                $patientUser = User::find($validated["patient_id"]);
+                if ($patientUser) {
+                    $patientUser->notify(
+                        new PrescriptionCheckoutNotification(
+                            $prescription,
+                            $checkoutUrl
+                        )
+                    );
+                } else {
+                    Log::error(
+                        "Patient user not found for notification dispatch",
+                        ["patient_id" => $validated["patient_id"]]
+                    );
+                }
+            } catch (\Exception $notifyError) {
+                Log::error(
+                    "Failed to dispatch PrescriptionCheckoutNotification",
+                    [
+                        "prescription_id" => $prescription->id,
+                        "error" => $notifyError->getMessage(),
+                        "trace" => $notifyError->getTraceAsString(),
+                    ]
+                );
+            }
+
+            // // JOB 2: Generate and attach prescription label to Shopify order
+            //  Now needs to be done after the order is created
+            // AttachInitialLabelToShopifyJob::dispatch($prescription->id);
         }
 
         // Return success response

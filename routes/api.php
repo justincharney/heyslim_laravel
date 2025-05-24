@@ -289,6 +289,16 @@ Route::middleware(["auth:sanctum", "role:provider|pharmacist"])->group(
             "getTemplateData",
         ]);
 
+        // Medication product routes for selection during prescription creation
+        Route::get("/medication-products", [
+            TemplateController::class,
+            "listMedicationProducts",
+        ]);
+        Route::get("/medication-products/{productGid}/variants", [
+            TemplateController::class,
+            "getMedicationProductVariants",
+        ])->where("productGid", ".*");
+
         // Profile Routes
         Route::get("/provider/profile", [ProfileController::class, "show"]);
         Route::put("/provider/profile", [ProfileController::class, "update"]);

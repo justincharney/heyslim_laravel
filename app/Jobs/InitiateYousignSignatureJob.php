@@ -16,8 +16,8 @@ class InitiateYousignSignatureJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public $tries = 5;
-    public $backoff = [60, 300, 600];
+    public $tries = 1;
+    // public $backoff = [60, 300, 600];
 
     protected $prescriptionId;
 

@@ -25,6 +25,28 @@ class YousignService
     public function sendForSignature(Prescription $prescription): ?string
     {
         try {
+            $doseScheduleArray = is_string($prescription->dose_schedule)
+                ? json_decode($prescription->dose_schedule, true)
+                : $prescription->dose_schedule;
+
+            if (!is_array($doseScheduleArray)) {
+                Log::error(
+                    "Prescription dose_schedule is not a valid array after retrieval.",
+                    [
+                        "prescription_id" => $prescription->id,
+                        "dose_schedule_type" => gettype(
+                            $prescription->dose_schedule
+                        ),
+                        "dose_schedule_value" => $prescription->dose_schedule, // Log the raw value
+                    ]
+                );
+                throw new \RuntimeException(
+                    "Invalid dose schedule data on prescription."
+                );
+            }
+
+            $prescription->dose_schedule = $doseScheduleArray;
+
             $pdfHtml = view("pdfs.prescription", [
                 "prescription" => $prescription,
                 "patient" => $prescription->patient,
