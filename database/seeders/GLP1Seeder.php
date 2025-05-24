@@ -353,7 +353,7 @@ class GLP1Seeder extends Seeder
                         "text" => "Please select your preferred medication",
                         "type" => "select",
                         "required" => true,
-                        "options" => ["Mounjaro (£199.00)", "Wegovy (£209.00)"],
+                        "options" => ["Mounjaro", "Wegovy"],
                     ],
                 ],
             ],

@@ -5,9 +5,12 @@ namespace App\Config;
 class ShopifyProductMapping
 {
     public static $medicationProducts = [
-        "Mounjaro (£199.00)" => "gid://shopify/Product/7348307329120",
-        "Wegovy (£209.00)" => "gid://shopify/Product/7348538310752",
+        "Mounjaro" => "gid://shopify/Product/7348307329120",
+        "Wegovy" => "gid://shopify/Product/7348538310752",
     ];
+
+    public static $mounjaroSellingPlanId = "gid://shopify/SellingPlan/1215725664";
+    public static $wegovySellingPlanId = "gid://shopify/SellingPlan/1215791200";
 
     public static $medicationProductDetails = [
         "gid://shopify/Product/7348307329120" => [
@@ -17,31 +20,37 @@ class ShopifyProductMapping
                     "dose_description" => "2.5mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41902912897120",
+                    "selling_plan_id" => "gid://shopify/SellingPlan/1215725664",
                 ],
                 [
                     "dose_description" => "5mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41902912929888",
+                    "selling_plan_id" => "gid://shopify/SellingPlan/1215725664",
                 ],
                 [
                     "dose_description" => "7.5mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41902912962656",
+                    "selling_plan_id" => "gid://shopify/SellingPlan/1215725664",
                 ],
                 [
                     "dose_description" => "10mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41902912995424",
+                    "selling_plan_id" => "gid://shopify/SellingPlan/1215725664",
                 ],
                 [
                     "dose_description" => "12.5mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41902913028192",
+                    "selling_plan_id" => "gid://shopify/SellingPlan/1215725664",
                 ],
                 [
                     "dose_description" => "15mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41902913060960",
+                    "selling_plan_id" => "gid://shopify/SellingPlan/1215725664",
                 ],
             ],
         ],
@@ -52,26 +61,31 @@ class ShopifyProductMapping
                     "dose_description" => "0.25mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41891531292768",
+                    "selling_plan_id" => "gid://shopify/SellingPlan/1215791200",
                 ],
                 [
                     "dose_description" => "0.5mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41891531325536",
+                    "selling_plan_id" => "gid://shopify/SellingPlan/1215791200",
                 ],
                 [
                     "dose_description" => "1.0mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41891531358304",
+                    "selling_plan_id" => "gid://shopify/SellingPlan/1215791200",
                 ],
                 [
                     "dose_description" => "1.7mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41891531391072",
+                    "selling_plan_id" => "gid://shopify/SellingPlan/1215791200",
                 ],
                 [
                     "dose_description" => "2.4mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41891531423840",
+                    "selling_plan_id" => "gid://shopify/SellingPlan/1215791200",
                 ],
             ],
         ],
@@ -112,5 +126,12 @@ class ShopifyProductMapping
     public static function getConsultationProductId()
     {
         return self::$consultationProductId;
+    }
+
+    public static function getSellingPlanId($productGid)
+    {
+        return self::$medicationProductDetails[$productGid]["variants"][0][
+            "selling_plan_id"
+        ] ?? null;
     }
 }

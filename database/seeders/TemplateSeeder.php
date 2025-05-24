@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Config\ShopifyProductMapping;
 use App\Models\ClinicalPlanTemplate;
 use App\Models\PrescriptionTemplate;
 use App\Models\User;
@@ -31,7 +32,7 @@ class TemplateSeeder extends Seeder
         }
 
         // Clinical Plan Templates
-        $this->createClinicalPlanTemplates($admin->id);
+        // $this->createClinicalPlanTemplates($admin->id);
 
         // Prescription Templates
         $this->createPrescriptionTemplates($admin->id);
@@ -143,6 +144,23 @@ class TemplateSeeder extends Seeder
      */
     private function createPrescriptionTemplates(int $adminId): void
     {
+        $wegovyProductGid = ShopifyProductMapping::getProductId("Wegovy");
+        $mounjaroProductGid = ShopifyProductMapping::getProductId("Mounjaro");
+
+        $wegovyVariants = ShopifyProductMapping::getProductVariantsByGid(
+            $wegovyProductGid
+        );
+        $mounjaroVariants = ShopifyProductMapping::getProductVariantsByGid(
+            $mounjaroProductGid
+        );
+
+        $wegovySellingPlanId = ShopifyProductMapping::getSellingPlanId(
+            $wegovyProductGid
+        );
+        $mounjaroSellingPlanId = ShopifyProductMapping::getSellingPlanId(
+            $mounjaroProductGid
+        );
+
         $templates = [
             [
                 "name" => "Wegovy (Semaglutide) Protocol",
@@ -157,23 +175,38 @@ class TemplateSeeder extends Seeder
                 "dose_schedule" => json_encode([
                     [
                         "refill_number" => 0,
-                        "dose" => "0.25mg weekly for 4 weeks",
+                        "dose_description" => "0.25mg weekly for 4 weeks",
+                        "shopify_variant_gid" =>
+                            $wegovyVariants[0]["shopify_variant_gid"],
+                        "selling_plan_id" => $wegovySellingPlanId,
                     ],
                     [
                         "refill_number" => 1,
-                        "dose" => "0.5mg weekly for 4 weeks",
+                        "dose_description" => "0.5mg weekly for 4 weeks",
+                        "shopify_variant_gid" =>
+                            $wegovyVariants[1]["shopify_variant_gid"],
+                        "selling_plan_id" => $wegovySellingPlanId,
                     ],
                     [
                         "refill_number" => 2,
-                        "dose" => "1.0mg weekly for 4 weeks",
+                        "dose_description" => "1.0mg weekly for 4 weeks",
+                        "shopify_variant_gid" =>
+                            $wegovyVariants[2]["shopify_variant_gid"],
+                        "selling_plan_id" => $wegovySellingPlanId,
                     ],
                     [
                         "refill_number" => 3,
-                        "dose" => "1.7mg weekly for 4 weeks",
+                        "dose_description" => "1.7mg weekly for 4 weeks",
+                        "shopify_variant_gid" =>
+                            $wegovyVariants[3]["shopify_variant_gid"],
+                        "selling_plan_id" => $wegovySellingPlanId,
                     ],
                     [
                         "refill_number" => 4,
-                        "dose" => "2.4mg weekly for maintenance",
+                        "dose_description" => "2.4mg weekly for maintenance",
+                        "shopify_variant_gid" =>
+                            $wegovyVariants[4]["shopify_variant_gid"],
+                        "selling_plan_id" => $wegovySellingPlanId,
                     ],
                 ]),
                 "is_global" => true,
@@ -192,23 +225,45 @@ class TemplateSeeder extends Seeder
                 "dose_schedule" => json_encode([
                     [
                         "refill_number" => 0,
-                        "dose" => "2.5mg weekly for 4 weeks",
+                        "dose_description" => "2.5mg weekly for 4 weeks",
+                        "shopify_variant_gid" =>
+                            $mounjaroVariants[0]["shopify_variant_gid"],
+                        "selling_plan_id" => $mounjaroSellingPlanId,
                     ],
                     [
                         "refill_number" => 1,
-                        "dose" => "5.0mg weekly for 4 weeks",
+                        "dose_description" => "5.0mg weekly for 4 weeks",
+                        "shopify_variant_gid" =>
+                            $mounjaroVariants[1]["shopify_variant_gid"],
+                        "selling_plan_id" => $mounjaroSellingPlanId,
                     ],
                     [
                         "refill_number" => 2,
-                        "dose" => "7.5mg weekly for 4 weeks",
+                        "dose_description" => "7.5mg weekly for 4 weeks",
+                        "shopify_variant_gid" =>
+                            $mounjaroVariants[2]["shopify_variant_gid"],
+                        "selling_plan_id" => $mounjaroSellingPlanId,
                     ],
                     [
                         "refill_number" => 3,
-                        "dose" => "10mg weekly for 4 weeks",
+                        "dose_description" => "10mg weekly for 4 weeks",
+                        "shopify_variant_gid" =>
+                            $mounjaroVariants[3]["shopify_variant_gid"],
+                        "selling_plan_id" => $mounjaroSellingPlanId,
                     ],
                     [
                         "refill_number" => 4,
-                        "dose" => "12.5mg weekly for 4 weeks",
+                        "dose_description" => "12.5mg weekly for 4 weeks",
+                        "shopify_variant_gid" =>
+                            $mounjaroVariants[4]["shopify_variant_gid"],
+                        "selling_plan_id" => $mounjaroSellingPlanId,
+                    ],
+                    [
+                        "refill_number" => 5,
+                        "dose_description" => "15mg weekly for 4 weeks",
+                        "shopify_variant_gid" =>
+                            $mounjaroVariants[5]["shopify_variant_gid"],
+                        "selling_plan_id" => $mounjaroSellingPlanId,
                     ],
                 ]),
                 "is_global" => true,
