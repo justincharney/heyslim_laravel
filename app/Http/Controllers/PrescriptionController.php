@@ -144,11 +144,12 @@ class PrescriptionController extends Controller
         // Decode JSON dose schedule
         $doseScheduleData = json_decode($validated["dose_schedule"], true);
 
-        // If no end date, set it to 7 months after start date
+        // If no end date, set it based on dose schedule
         if (empty($validated["end_date"])) {
             $startDate = new \DateTime($validated["start_date"]);
+            $numberOfDoses = count($doseScheduleData);
             $validated["end_date"] = $startDate
-                ->modify("+7 months")
+                ->modify("+" . $numberOfDoses . " months")
                 ->format("Y-m-d");
         }
 
