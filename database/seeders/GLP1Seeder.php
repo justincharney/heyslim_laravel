@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use App\Models\Questionnaire;
 
 class GLP1Seeder extends Seeder
 {
@@ -14,28 +15,66 @@ class GLP1Seeder extends Seeder
      */
     public function run(): void
     {
-        // Check if questionnaire already exists
-        $existingQuestionnaire = DB::table("questionnaires")
-            ->where("title", "GLP-1 Weight Management Treatment Plan")
+        $questionnaireTitle = "GLP-1 Weight Management Treatment Plan";
+        $targetVersion = 2; // Define the version this seeder creates
+
+        // Check if the target version already exists and is current
+        $existingCurrentQuestionnaire = Questionnaire::where(
+            "title",
+            $questionnaireTitle
+        )
+            ->where("version", $targetVersion)
+            ->where("is_current", true)
+            ->first();
+
+        if ($existingCurrentQuestionnaire) {
+            $this->command->info(
+                "Questionnaire '{$questionnaireTitle}' version {$targetVersion} already exists and is current. Skipping."
+            );
+            return; // Exit if the target version is already the current one
+        }
+
+        // Find any existing questionnaire with the same title and mark it as not current
+        $existingQuestionnaire = Questionnaire::where(
+            "title",
+            $questionnaireTitle
+        )
+            ->where("is_current", true)
+            ->orderByDesc("version")
             ->first();
 
         if ($existingQuestionnaire) {
-            $questionnaireId = $existingQuestionnaire->id;
-        } else {
-            // Create the questionnaire
-            $questionnaireId = DB::table("questionnaires")->insertGetId([
-                "title" => "GLP-1 Weight Management Treatment Plan",
-                "description" =>
-                    "Start your assessment for GLP-1 weight management therapy",
-                "created_at" => now(),
-                "updated_at" => now(),
-            ]);
+            // If the existing version is newer, don't downgrade.
+            if ($existingQuestionnaire->version > $targetVersion) {
+                $this->command->warn(
+                    "Existing questionnaire '{$questionnaireTitle}' version {$existingQuestionnaire->version} is newer than target version {$targetVersion}. Skipping."
+                );
+                return;
+            }
+
+            // Mark the old version as not current
+            $existingQuestionnaire->is_current = false;
+            $existingQuestionnaire->save();
+            $this->command->info(
+                "Marked questionnaire '{$questionnaireTitle}' version {$existingQuestionnaire->version} as not current."
+            );
         }
 
-        // Remove existing questions (options will cascade)
-        DB::table("questions")
-            ->where("questionnaire_id", $questionnaireId)
-            ->delete();
+        // Create the new version of the questionnaire
+        $newQuestionnaire = Questionnaire::create([
+            "title" => $questionnaireTitle,
+            "description" =>
+                "Start your assessment for GLP-1 weight management therapy",
+            "version" => $targetVersion,
+            "is_current" => true,
+            "created_at" => now(),
+            "updated_at" => now(),
+        ]);
+
+        $questionnaireId = $newQuestionnaire->id;
+        $this->command->info(
+            "Created new questionnaire '{$questionnaireTitle}' version {$targetVersion} with ID {$questionnaireId}."
+        );
 
         // Define sections and their questions
         $sections = [
@@ -292,10 +331,9 @@ class GLP1Seeder extends Seeder
                     ],
                     [
                         "text" =>
-                            "Do you consume alcohol? If yes, specify weekly units",
-                        "type" => "text",
-                        "required" => true,
-                        "required_answer" => "no",
+                            "Do you drink alcohol more than 3-4 times per week?",
+                        "type" => "yes_no",
+                        "required" => false,
                     ],
                     [
                         "text" => "Do you smoke or use tobacco products?",
@@ -436,28 +474,5 @@ class GLP1Seeder extends Seeder
                 $questionNumber++;
             }
         }
-
-        // Create a draft questionnaire submission for user 1
-        // $user = User::find(1);
-
-        // if ($user) {
-        //     // Delete any existing submissions for theis user and questionnaire
-        //     DB::table("questionnaire_submissions")
-        //         ->where("user_id", $user->id)
-        //         ->where("questionnaire_id", $questionnaireId)
-        //         ->delete();
-
-        //     // Create new draft submission
-        //     DB::table("questionnaire_submissions")->insertGetId([
-        //         "questionnaire_id" => $questionnaireId,
-        //         "user_id" => $user->id,
-        //         "status" => "draft",
-        //         "submitted_at" => now(),
-        //         "created_at" => now(),
-        //         "updated_at" => now(),
-        //     ]);
-        // } else {
-        //     echo "User 1 not found - couldn't create the draft submission\n";
-        // }
     }
 }

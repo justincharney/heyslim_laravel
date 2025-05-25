@@ -22,12 +22,8 @@ class QuestionnaireController extends Controller
     public function index(Request $request)
     {
         // Get all questionnaires
-        $questionnaires = Questionnaire::select(
-            "id",
-            "title",
-            "description",
-            "created_at"
-        )
+        $questionnaires = Questionnaire::where("is_current", true)
+            ->select("id", "title", "description", "created_at")
             ->orderBy("created_at", "desc")
             ->get();
 
@@ -206,9 +202,13 @@ class QuestionnaireController extends Controller
             "questionnaire_id" => "required|exists:questionnaires,id",
         ]);
 
+        $currentQuestionnaire = Questionnaire::where("is_current", true)
+            ->where("id", $validated["questionnaire_id"])
+            ->firstOrFail(); // Ensure it's the current version
+
         // Check if the user already has any submission for this questionnaire
         $existingSubmission = QuestionnaireSubmission::where([
-            "questionnaire_id" => $validated["questionnaire_id"],
+            "questionnaire_id" => $currentQuestionnaire->id,
             "user_id" => auth()->id(),
         ])
             ->orderBy("created_at", "desc")
@@ -284,7 +284,7 @@ class QuestionnaireController extends Controller
 
         // Create new draft if none exists
         $submission = QuestionnaireSubmission::create([
-            "questionnaire_id" => $validated["questionnaire_id"],
+            "questionnaire_id" => $currentQuestionnaire->id,
             "user_id" => auth()->id(),
             "status" => "draft",
         ]);
@@ -558,7 +558,9 @@ class QuestionnaireController extends Controller
             $questionnaire = Questionnaire::with([
                 "questions",
                 "questions.options",
-            ])->findOrFail($template_id);
+            ])
+                ->where("is_current", true)
+                ->findOrFail($template_id);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             // If the questionnaire template is not found, return a 404 error
             return response()->json(
