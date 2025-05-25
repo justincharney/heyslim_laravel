@@ -121,10 +121,20 @@ class YousignWebhookController extends Controller
         // ----- PERFORM DB UPDATE -----
         try {
             DB::beginTransaction();
-            $prescription->status = "active";
-            $prescription->signed_at = now();
-            $prescription->yousign_document_id = $documentId; // Save the document ID
-            $prescription->save();
+            $updateData = [
+                "signed_at" => now(),
+                "yousign_document_id" => $documentId,
+            ];
+
+            // Only set the status to 'active' if there's a linked subscription
+            if ($prescription->subscription) {
+                $updateData["status"] = "active";
+            } else {
+                // Signature is ready, but no subscription so it's pending payment
+                $updateData["status"] = "pending_payment";
+            }
+
+            $prescription->update($updateData);
             DB::commit();
         } catch (\Exception $e) {
             DB::rollBack();

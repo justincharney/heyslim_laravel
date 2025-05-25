@@ -343,9 +343,8 @@ class RechargeWebhookController extends Controller
                             $originalShopifyOrderId
                         );
 
-                        // If prescription is already signed and active, dispatch job to attach signed PDF
+                        // If prescription is already signed, dispatch job to attach signed PDF
                         if (
-                            $prescription->status === "active" &&
                             $prescription->yousign_document_id &&
                             $prescription->signed_at
                         ) {
@@ -355,6 +354,10 @@ class RechargeWebhookController extends Controller
                                 $prescription->yousign_signature_request_id,
                                 $prescription->yousign_document_id
                             );
+
+                            // Update the status to 'active'
+                            $prescription->status = "active";
+                            $prescription->save();
                         }
                     } else {
                         Log::error(
