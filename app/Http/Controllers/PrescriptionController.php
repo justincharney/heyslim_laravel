@@ -320,8 +320,7 @@ class PrescriptionController extends Controller
         // --- Dispatch jobs AFTER successful commit ---
         if ($prescription && $checkoutUrl) {
             // JOB 1: Initiate Yousign signature
-            // This will now be done AFTER the customer checks out
-            // InitiateYousignSignatureJob::dispatch($prescription->id);
+            InitiateYousignSignatureJob::dispatch($prescription->id);
 
             // Send checkout link notification email to patient
             try {

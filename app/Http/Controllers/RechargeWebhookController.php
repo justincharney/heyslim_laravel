@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Jobs\AttachInitialLabelToShopifyJob;
 use App\Jobs\InitiateYousignSignatureJob;
+use App\Jobs\ProcessSignedPrescriptionJob;
 use App\Jobs\ProcessRecurringOrderAttachmentsJob;
 use App\Models\Questionnaire;
 use App\Models\QuestionnaireSubmission;
@@ -325,25 +326,36 @@ class RechargeWebhookController extends Controller
                     ]
                 );
 
-                // Send YouSign signature request
+                // Handle prescription attachment to the order
                 if ($prescriptionIdFromAttribute) {
                     $prescription = Prescription::find(
                         $prescriptionIdFromAttribute
                     );
                     if ($prescription) {
-                        $prescription->status = "pending_signature";
-                        $prescription->save();
+                        if ($prescription->status === "pending_payment") {
+                            $prescription->status = "pending_signature";
+                            $prescription->save();
+                        }
 
-                        // JOB 1: Initiate Yousign signature
-                        InitiateYousignSignatureJob::dispatch(
-                            $prescription->id
-                        );
-
-                        // JOB 2: Generate and attach prescription label to Shopify order
+                        // JOB 1: Generate and attach prescription label to Shopify order
                         AttachInitialLabelToShopifyJob::dispatch(
                             $prescription->id,
                             $originalShopifyOrderId
                         );
+
+                        // If prescription is already signed and active, dispatch job to attach signed PDF
+                        if (
+                            $prescription->status === "active" &&
+                            $prescription->yousign_document_id &&
+                            $prescription->signed_at
+                        ) {
+                            // JOB 2: Process the signed prescription
+                            ProcessSignedPrescriptionJob::dispatch(
+                                $prescription->id,
+                                $prescription->yousign_signature_request_id,
+                                $prescription->yousign_document_id
+                            );
+                        }
                     } else {
                         Log::error(
                             "Prescription not found for ID from attribute.",
