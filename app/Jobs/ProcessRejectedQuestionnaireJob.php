@@ -74,35 +74,36 @@ class ProcessRejectedQuestionnaireJob implements ShouldQueue
             );
         }
 
+        // DEPRECATED: If the clinical plan is not approved then we don't refund
         // --- Task 1: Cancel Subscription & Refund Order ---
-        try {
-            $cancellationSuccess = $rechargeService->cancelSubscriptionForRejectedQuestionnaire(
-                $submission,
-                "Questionnaire rejected by healthcare provider" // Reason for Recharge/Shopify
-            );
+        // try {
+        //     $cancellationSuccess = $rechargeService->cancelSubscriptionForRejectedQuestionnaire(
+        //         $submission,
+        //         "Questionnaire rejected by healthcare provider" // Reason for Recharge/Shopify
+        //     );
 
-            if (!$cancellationSuccess) {
-                Log::error(
-                    "cancelSubscriptionForRejectedQuestionnaire failed for submission #{$this->submissionId}. Releasing job for retry."
-                );
-                $this->release(60 * 2); // Retry cancellation in 2 minutes
-                return; // Stop processing this attempt
-            }
+        //     if (!$cancellationSuccess) {
+        //         Log::error(
+        //             "cancelSubscriptionForRejectedQuestionnaire failed for submission #{$this->submissionId}. Releasing job for retry."
+        //         );
+        //         $this->release(60 * 2); // Retry cancellation in 2 minutes
+        //         return; // Stop processing this attempt
+        //     }
 
-            Log::info(
-                "Successfully processed cancellations (Shopify/Recharge) for rejected submission #{$this->submissionId}."
-            );
-        } catch (\Exception $e) {
-            Log::error(
-                "Exception during subscription cancellation in ProcessRejectedQuestionnaireJob",
-                [
-                    "submission_id" => $this->submissionId,
-                    "error" => $e->getMessage(),
-                ]
-            );
-            $this->release(60 * 5); // Retry on general exception
-            return;
-        }
+        //     Log::info(
+        //         "Successfully processed cancellations (Shopify/Recharge) for rejected submission #{$this->submissionId}."
+        //     );
+        // } catch (\Exception $e) {
+        //     Log::error(
+        //         "Exception during subscription cancellation in ProcessRejectedQuestionnaireJob",
+        //         [
+        //             "submission_id" => $this->submissionId,
+        //             "error" => $e->getMessage(),
+        //         ]
+        //     );
+        //     $this->release(60 * 5); // Retry on general exception
+        //     return;
+        // }
 
         // --- Task 2: Send Notification ---
         // We attempt this even if cancellation had issues, as the user needs to know about the rejection.
