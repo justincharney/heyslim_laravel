@@ -6,6 +6,7 @@ use App\Models\Prescription;
 use App\Notifications\PrescriptionSignedNotification;
 use App\Services\ShopifyService;
 use App\Services\YousignService;
+use App\Services\SupabaseStorageService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Bus\Queueable;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -43,7 +44,8 @@ class ProcessSignedPrescriptionJob implements ShouldQueue
      */
     public function handle(
         YousignService $yousignService,
-        ShopifyService $shopifyService
+        ShopifyService $shopifyService,
+        SupabaseStorageService $supabaseService
     ): void {
         Log::info(
             "Processing signed prescription job for prescription ID: {$this->prescriptionId}"
@@ -75,56 +77,59 @@ class ProcessSignedPrescriptionJob implements ShouldQueue
             "Successfully downloaded signed document for prescription ID: {$this->prescriptionId}"
         );
 
-        // 2. Attach to Shopify order
+        // 2. Upload to Supabase Storage and get URL
+        $supabaseUrl = null;
         $subscription = $prescription->subscription;
-        if (!$subscription || !$subscription->original_shopify_order_id) {
-            Log::warning(
-                "No Shopify order ID found for prescription #{$prescription->id} in job, cannot attach document."
-            );
-            // Don't fail the job if there's no order to attach to
-            return;
-        }
-
         $orderId = $subscription->original_shopify_order_id;
-        $tempPath = null;
+
+        // Define a path for the file in Supabase bucket
+        $supabasePath = "signed_prescriptions/order_{$orderId}/prescription_{$prescription->id}";
 
         try {
-            // Store the document temporarily
-            $tempPath =
-                "prescriptions/" .
-                $prescription->id .
-                "_signed_" .
-                uniqid() .
-                ".pdf";
-            Storage::put($tempPath, $signedDocument);
-            $fullPath = Storage::path($tempPath);
-
-            if (!file_exists($fullPath)) {
-                throw new \Exception(
-                    "Temporary file not created at {$fullPath}"
-                );
-            }
-
-            $success = $shopifyService->attachPrescriptionToOrder(
-                $orderId,
-                $fullPath,
-                "Signed prescription #{$prescription->id}"
+            //Upload with content type for PDF
+            $uploadOptions = [
+                "contentType" => "application/pdf",
+                "upsert" => false,
+            ];
+            $uploadedPath = $supabaseService->uploadFile(
+                $supabasePath,
+                $signedDocument,
+                $uploadOptions
             );
 
-            // Clean up the temporary file regardless of success
-            Storage::delete($tempPath);
-
-            if (!$success) {
+            if (!$uploadedPath) {
                 Log::error(
-                    "Failed to attach document to Shopify order {$orderId} in job for prescription #{$prescription->id}."
+                    "failed to upload signed prescription to Supabase Storage for prescription #{$this->prescriptionId}"
                 );
-                // Let the queue retry
-                $this->release(60 * 2); // Release back to queue, retry in 2 mins
+                $this->release(60 * 2); // Retry in 2 minutes
                 return;
             }
-
             Log::info(
-                "Successfully attached document to Shopify order {$orderId} for prescription #{$prescription->id}"
+                "Successfully uploaded signed prescription to Supabase Storage.",
+                [
+                    "prescription_id" => $this->prescriptionId,
+                    "supabase_path" => $uploadedPath,
+                ]
+            );
+
+            // Get signed URL for temporary access (recommended)
+            $expiresInSeconds = 60 * 60 * 24 * 30; // Example: 30 days
+            $supabaseUrl = $supabaseService->createSignedUrl(
+                $uploadedPath,
+                $expiresInSeconds
+            );
+
+            if (!$supabaseUrl) {
+                Log::error(
+                    "Failed to get Supabase URL for prescription #{$this->prescriptionId}. Releasing job.",
+                    ["path" => $uploadedPath]
+                );
+                $this->release(60 * 2); // Retry in 2 minutes
+                return;
+            }
+            Log::info(
+                "Successfully obtained Supabase URL for prescription #{$this->prescriptionId}.",
+                ["url_preview" => substr($supabaseUrl, 0, 100) . "..."]
             );
         } catch (\Exception $e) {
             Log::error("Exception attaching files to Shopify order in job", [
@@ -132,53 +137,105 @@ class ProcessSignedPrescriptionJob implements ShouldQueue
                 "order_id" => $orderId,
                 "error" => $e->getMessage(),
             ]);
-            // Clean up if temp file exists
-            if ($tempPath && Storage::exists($tempPath)) {
-                Storage::delete($tempPath);
-            }
             // Let the queue retry
             $this->release(60 * 5); // Release back to queue, retry in 5 mins
             return;
         }
 
-        // 3. Send notification to patient
-        if ($prescription->patient) {
-            try {
-                $notificationCacheKey =
-                    "signed_notification_sent_" . $prescription->id;
-                if (!cache()->has($notificationCacheKey)) {
-                    $prescription->patient->notify(
-                        new PrescriptionSignedNotification($prescription)
-                    );
-                    cache()->put(
-                        $notificationCacheKey,
-                        true,
-                        now()->addHours(24)
-                    ); // Prevent re-sending for 24h
-                    Log::info(
-                        "Dispatched PrescriptionSignedNotification for prescription #{$this->prescriptionId}"
-                    );
-                } else {
-                    Log::info(
-                        "Skipping notification for prescription #{$this->prescriptionId}, already sent."
-                    );
-                }
-            } catch (\Exception $notifyError) {
+        // 3. Attach Supabase URL to Shopify order metafield
+        if (
+            $supabaseUrl &&
+            $subscription &&
+            $subscription->original_shopify_order_id
+        ) {
+            $orderGid = $shopifyService->formatGid(
+                $subscription->original_shopify_order_id
+            );
+            if (!$orderGid) {
                 Log::error(
-                    "Failed to dispatch PrescriptionSignedNotification",
-                    [
-                        "prescription_id" => $this->prescriptionId,
-                        "patient_id" => $prescription->patient_id,
-                        "error" => $notifyError->getMessage(),
-                    ]
+                    "Failed to format Order GID from numeric ID: {$subscription->original_shopify_order_id} for prescription #{$this->prescriptionId}. Cannot set metafield."
                 );
-                // Don't fail the job for notification error
+                $this->release(60 * 10);
+                return;
             }
-        } else {
+
+            $metafieldNamespace = "custom";
+            $metafieldKey = "prescription_url";
+            $metafieldType = "url";
+
+            $metafieldsToSet = [
+                [
+                    "namespace" => $metafieldNamespace,
+                    "key" => $metafieldKey,
+                    "type" => $metafieldType,
+                    "value" => $supabaseUrl,
+                ],
+            ];
+
+            $success = $shopifyService->setOrderMetafields(
+                $orderGid,
+                $metafieldsToSet
+            );
+
+            if (!$success) {
+                Log::error(
+                    "Failed to set Supabase document URL metafield on Shopify order {$orderGid} for prescription #{$this->prescriptionId}. Releasing job."
+                );
+                $this->release(60 * 2); // Retry in 2 mins
+                return;
+            }
+            Log::info(
+                "Successfully attached Supabase document URL to Shopify order {$orderGid} for prescription #{$this->prescriptionId}"
+            );
+        } elseif (!$supabaseUrl) {
             Log::warning(
-                "Could not send notification for prescription #{$this->prescriptionId}: Patient data missing."
+                "Supabase URL was not obtained, skipping Shopify metafield update for prescription #{$this->prescriptionId}."
+            );
+        } else {
+            // Implies $subscription or $subscription->original_shopify_order_id was missing
+            Log::warning(
+                "No Shopify order ID found for prescription #{$prescription->id}, cannot attach Supabase URL to Shopify."
             );
         }
+
+        // 3. Send notification to patient
+        // if ($prescription->patient) {
+        //     try {
+        //         $notificationCacheKey =
+        //             "signed_notification_sent_" . $prescription->id;
+        //         if (!cache()->has($notificationCacheKey)) {
+        //             $prescription->patient->notify(
+        //                 new PrescriptionSignedNotification($prescription)
+        //             );
+        //             cache()->put(
+        //                 $notificationCacheKey,
+        //                 true,
+        //                 now()->addHours(24)
+        //             ); // Prevent re-sending for 24h
+        //             Log::info(
+        //                 "Dispatched PrescriptionSignedNotification for prescription #{$this->prescriptionId}"
+        //             );
+        //         } else {
+        //             Log::info(
+        //                 "Skipping notification for prescription #{$this->prescriptionId}, already sent."
+        //             );
+        //         }
+        //     } catch (\Exception $notifyError) {
+        //         Log::error(
+        //             "Failed to dispatch PrescriptionSignedNotification",
+        //             [
+        //                 "prescription_id" => $this->prescriptionId,
+        //                 "patient_id" => $prescription->patient_id,
+        //                 "error" => $notifyError->getMessage(),
+        //             ]
+        //         );
+        //         // Don't fail the job for notification error
+        //     }
+        // } else {
+        //     Log::warning(
+        //         "Could not send notification for prescription #{$this->prescriptionId}: Patient data missing."
+        //     );
+        // }
 
         Log::info(
             "ProcessSignedPrescriptionJob completed for prescription #{$this->prescriptionId}"

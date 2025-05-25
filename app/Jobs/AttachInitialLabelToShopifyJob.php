@@ -19,13 +19,15 @@ class AttachInitialLabelToShopifyJob implements ShouldQueue
     public $backoff = [60, 300, 600];
 
     protected $prescriptionId;
+    protected $shopifyOrderId;
 
     /**
      * Create a new job instance.
      */
-    public function __construct(int $prescriptionId)
+    public function __construct(int $prescriptionId, string $shopifyOrderId)
     {
         $this->prescriptionId = $prescriptionId;
+        $this->shopifyOrderId = $shopifyOrderId;
     }
 
     /**
@@ -46,10 +48,21 @@ class AttachInitialLabelToShopifyJob implements ShouldQueue
             return;
         }
 
+        if (empty($this->shopifyOrderId)) {
+            Log::error(
+                "Shopify order ID missing in call to attach prescription label data."
+            );
+            $this->fail("Shopify order ID not found.");
+            return;
+        }
+
         try {
-            // Call the Shopify service method which handles label generation and attachment
+            $orderGid = $shopifyService->formatGid($this->shopifyOrderId);
+
+            // Call the Shopify service method which handles attaching label metafields to order
             $success = $shopifyService->attachPrescriptionLabelToOrder(
-                $prescription
+                $prescription,
+                $orderGid
             );
 
             if (!$success) {

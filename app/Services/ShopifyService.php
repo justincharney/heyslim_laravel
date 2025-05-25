@@ -25,6 +25,171 @@ class ShopifyService
         );
     }
 
+    // MetafieldsSet mutation
+    private const MUTATION_METAFIELDS_SET = <<<GRAPHQL
+mutation metafieldsSet(\$metafields: [MetafieldsSetInput!]!) {
+  metafieldsSet(metafields: \$metafields) {
+    metafields {
+      id
+      key
+      namespace
+      type
+      value
+    }
+    userErrors {
+      field
+      message
+      code
+    }
+  }
+}
+GRAPHQL;
+
+    /**
+     * Helper function to set multiple metafields on an object (e.g., Order).
+     *
+     * @param string $ownerGid The GID of the owner object (e.g., "gid://shopify/Order/12345").
+     * @param array $metafieldsToSet Array of metafield definitions. Each item should be an array with keys:
+     *                                'namespace', 'key', 'type', 'value'.
+     * @return bool True on success, false on failure.
+     */
+    private function _setMetafields(
+        string $ownerGid,
+        array $metafieldsToSet
+    ): bool {
+        if (empty($metafieldsToSet)) {
+            return true; // Nothing to set
+        }
+
+        $metafieldsInput = [];
+        foreach ($metafieldsToSet as $mf) {
+            if (
+                !isset($mf["key"], $mf["namespace"], $mf["type"], $mf["value"])
+            ) {
+                Log::error("Invalid metafield definition in _setMetafields", [
+                    "metafield" => $mf,
+                ]);
+                return false;
+            }
+            $metafieldsInput[] = [
+                "ownerId" => $ownerGid,
+                "namespace" => $mf["namespace"],
+                "key" => $mf["key"],
+                "type" => $mf["type"],
+                "value" => strval($mf["value"]),
+            ];
+        }
+
+        try {
+            $response = Http::withHeaders([
+                "Content-Type" => "application/json",
+                "X-Shopify-Access-Token" => $this->accessToken,
+            ])->post($this->endpoint, [
+                "query" => self::MUTATION_METAFIELDS_SET,
+                "variables" => ["metafields" => $metafieldsInput],
+            ]);
+
+            $body = $response->json();
+
+            if ($response->clientError() || $response->serverError()) {
+                Log::error("HTTP error during metafieldsSet", [
+                    "owner_gid" => $ownerGid,
+                    "status" => $response->status(),
+                    "response" => $body,
+                    "metafields" => $metafieldsInput,
+                ]);
+                return false;
+            }
+
+            if (!empty($body["errors"])) {
+                Log::error("GraphQL error during metafieldsSet", [
+                    "owner_gid" => $ownerGid,
+                    "errors" => $body["errors"],
+                ]);
+                return false;
+            }
+
+            $userErrors = $body["data"]["metafieldsSet"]["userErrors"] ?? [];
+            if (!empty($userErrors)) {
+                Log::error("User errors during metafieldsSet", [
+                    "owner_gid" => $ownerGid,
+                    "user_errors" => $userErrors,
+                ]);
+                return false;
+            }
+
+            return true;
+        } catch (\Exception $e) {
+            Log::error("Exception during metafieldsSet", [
+                "owner_gid" => $ownerGid,
+                "error" => $e->getMessage(),
+                "trace" => $e->getTraceAsString(),
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Sets multiple metafields for a Shopify Order.
+     *
+     * @param string $orderGid The GID of the Order.
+     * @param array $metafieldsInput Array of metafields to set (each an array with 'namespace', 'key', 'type', 'value').
+     * @return bool True if successful, false otherwise.
+     */
+    public function setOrderMetafields(
+        string $orderGid,
+        array $metafieldsInput
+    ): bool {
+        if (strpos($orderGid, "gid://shopify/Order/") !== 0) {
+            Log::error("Invalid Order GID provided to setOrderMetafields", [
+                "order_gid" => $orderGid,
+            ]);
+            return false;
+        }
+        return $this->_setMetafields($orderGid, $metafieldsInput);
+    }
+
+    /**
+     * Uploads a generic file using stageAndUpload and returns its public resource URL.
+     *
+     * @param string $localFilePath Full path to the local file.
+     * @param string $filenameForUpload The desired filename for the uploaded file.
+     * @return string|null The resource URL of the uploaded file, or null on failure.
+     */
+    public function uploadGenericFileAndGetUrl(
+        string $localFilePath,
+        string $filenameForUpload
+    ): ?string {
+        try {
+            $uploadResult = $this->stageAndUpload(
+                $localFilePath,
+                $filenameForUpload
+            );
+            if (isset($uploadResult["resourceUrl"])) {
+                Log::info("File uploaded successfully to Shopify.", [
+                    "filename" => $filenameForUpload,
+                    "url" => $uploadResult["resourceUrl"],
+                ]);
+                return $uploadResult["resourceUrl"];
+            } else {
+                Log::error(
+                    "Failed to get resourceUrl after staging and uploading file.",
+                    [
+                        "filename" => $filenameForUpload,
+                        "result" => $uploadResult,
+                    ]
+                );
+                return null;
+            }
+        } catch (\Exception $e) {
+            Log::error("Exception during uploadGenericFileAndGetUrl", [
+                "filename" => $filenameForUpload,
+                "error" => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
+
     /**
      * Find a Shopify customer by email using the Admin API
      *
@@ -560,7 +725,7 @@ GRAPHQL;
         string $clientIp,
         int $quantity = 1,
         ?string $discountCode = null,
-        ?int $prescriptionId = nul
+        ?int $prescriptionId = null
     ): ?array {
         $mutation = <<<'GRAPHQL'
 mutation cartCreate($input: CartInput!) {
@@ -907,89 +1072,96 @@ GRAPHQL;
     }
 
     /**
-     * Generate and attach a prescription label to a Shopify order
+     * Attaches prescription label data as a single JSON metafield to a Shopify order.
      *
-     * @param Prescription $prescription The prescription to generate a label for
-     * @return bool Whether the operation was successful
+     * @param Prescription $prescription The prescription object.
+     * @param string $orderGid The GID of the Shopify order.
+     * @return bool True on success, false otherwise.
      */
     public function attachPrescriptionLabelToOrder(
         Prescription $prescription,
-        ?string $currentOrderId = null
+        string $orderGid
     ): bool {
-        // Check if this prescription is associated with a subscription that has an order ID
-        $subscription = $prescription->subscription;
-        if (!$subscription || !$subscription->original_shopify_order_id) {
-            Log::info(
-                "No Shopify order ID found for prescription #{$prescription->id}, skipping label attachment"
-            );
-            return false;
-        }
-
-        // Use the provided current order ID if available
-        $orderId = $currentOrderId ?? $subscription->original_shopify_order_id;
-        try {
-            // Generate the label
-            $labelService = app(PrescriptionLabelService::class);
-            $labelPath = $labelService->saveLabel($prescription);
-
-            if (!$labelPath) {
-                Log::error("Failed to generate prescription label", [
-                    "prescription_id" => $prescription->id,
-                ]);
-                return false;
-            }
-
-            // Attach the document to the Shopify order
-            $success = $this->attachFileToOrder(
-                $orderId,
-                $labelPath,
-                "prescription_label"
-            );
-
-            // Clean up the temporary file
-            if (file_exists($labelPath)) {
-                unlink($labelPath);
-            }
-
-            if ($success) {
-                // Log::info(
-                //     "Successfully attached prescription label to Shopify order",
-                //     [
-                //         "prescription_id" => $prescription->id,
-                //         "order_id" => $orderId,
-                //     ]
-                // );
-                return true;
-            } else {
-                Log::error(
-                    "Failed to attach prescription label to Shopify order",
-                    [
-                        "prescription_id" => $prescription->id,
-                        "order_id" => $orderId,
-                    ]
-                );
-                return false;
-            }
-        } catch (\Exception $e) {
+        if (strpos($orderGid, "gid://shopify/Order/") !== 0) {
             Log::error(
-                "Exception attaching prescription label to Shopify order",
-                [
-                    "prescription_id" => $prescription->id,
-                    "order_id" => $orderId,
-                    "error" => $e->getMessage(),
-                ]
+                "Invalid Order GID provided to attachPrescriptionLabelToOrder",
+                ["order_gid" => $orderGid]
             );
             return false;
         }
+
+        $patient = $prescription->patient;
+        $prescriber = $prescription->prescriber;
+
+        if (!$patient || !$prescriber) {
+            Log::error(
+                "Patient or Prescriber data missing for prescription label.",
+                ["prescription_id" => $prescription->id]
+            );
+            return false;
+        }
+
+        // Calculate current dose
+        $schedule = $prescription->dose_schedule ?? [];
+        $maxRefill = collect($schedule)->max("refill_number") ?? 0;
+        $remaining = $prescription->refills ?? 0; // Here 'refills' means remaining refills
+        $usedSoFar = $maxRefill > 0 ? $maxRefill - $remaining : 0;
+        $entry = collect($schedule)->firstWhere("refill_number", $usedSoFar);
+        $currentDose = $entry["dose"] ?? $prescription->dose;
+
+        // Assemble the label data into a PHP array
+        $labelData = [
+            "prescription_id" => $prescription->id,
+            "patient" => [
+                "name" => $patient->name ?? "",
+                "address" => $patient->address ?? "",
+            ],
+            "medication" => [
+                "name" => $prescription->medication_name ?? "",
+                "dose" => $currentDose ?? "",
+            ],
+            "directions" => $prescription->directions ?? "",
+            "refill_information" => "NO REFILLS", // Placeholder (could remove since the strength per label likely changes)
+            "prescriber" => [
+                "name" => $prescriber->name ?? "",
+                "registration_number" => $prescriber->registration_number ?? "",
+            ],
+        ];
+
+        // Convert the array to a JSON string
+        $jsonData = json_encode($labelData);
+
+        if ($jsonData === false) {
+            Log::error("Failed to encode prescription label data to JSON.", [
+                "prescription_id" => $prescription->id,
+                "data" => $labelData,
+            ]);
+            return false;
+        }
+
+        $metafieldsNamespace = "custom";
+        $metafieldKey = "prescription_label_json";
+
+        $labelMetafield = [
+            [
+                "namespace" => $metafieldsNamespace,
+                "key" => $metafieldKey,
+                "type" => "json",
+                "value" => $jsonData, // The JSON string
+            ],
+        ];
+
+        return $this->_setMetafields($orderGid, $labelMetafield);
     }
 
     /**
-     * Attach a prescription document to a Shopify order
+     * This method is now DEPRECATED for attaching signed prescriptions as direct file references.
+     * The new approach is to upload the file, get its URL, and save the URL as a metafield.
+     * See ProcessSignedPrescriptionJob for the new implementation.
+     * If direct file_reference metafields are needed for other purposes, this method or
+     * attachFileToOrder can be refactored or used carefully.
      *
-     * @param string $orderId The Shopify order ID
-     * @param string $filePath Path to the prescription document file
-     * @param string $note Optional note to attach with the file
-     * @return bool Whether the operation was successful
+     * @deprecated
      */
     public function attachPrescriptionToOrder(
         string $orderId,
@@ -1227,14 +1399,16 @@ GRAPHQL;
     /**
      * Format ID to Shopify GraphQL global ID format if needed
      */
-    private function formatGid(string $id): string
-    {
+    public function formatGid(
+        string $id,
+        string $resourceType = "Order"
+    ): string {
         // If already in gid format, return as is
         if (strpos($id, "gid://") === 0) {
             return $id;
         }
 
         // Otherwise convert to gid format
-        return "gid://shopify/Order/{$id}";
+        return "gid://shopify/{$resourceType}/{$id}";
     }
 }

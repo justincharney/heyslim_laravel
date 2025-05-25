@@ -69,4 +69,10 @@ return [
         "api_url" => env("YOUSIGN_BASE_URL"),
         "webhook_secret" => env("YOUSIGN_WEBHOOK_SECRET"),
     ],
+
+    "supabase" => [
+        "url" => env("SUPABASE_STORAGE_URL"),
+        "service_key" => env("SUPABASE_SERVICE_KEY"),
+        "bucket" => env("SUPABASE_PRESCRIPTION_BUCKET"),
+    ],
 ];
