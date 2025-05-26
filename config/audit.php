@@ -1,8 +1,7 @@
 <?php
 
 return [
-
-    'enabled' => env('AUDITING_ENABLED', true),
+    "enabled" => env("AUDITING_ENABLED", true),
 
     /*
     |--------------------------------------------------------------------------
@@ -13,7 +12,7 @@ return [
     |
     */
 
-    'implementation' => OwenIt\Auditing\Models\Audit::class,
+    "implementation" => OwenIt\Auditing\Models\Audit::class,
 
     /*
     |--------------------------------------------------------------------------
@@ -24,13 +23,10 @@ return [
     |
     */
 
-    'user' => [
-        'morph_prefix' => 'user',
-        'guards' => [
-            'web',
-            'api',
-        ],
-        'resolver' => OwenIt\Auditing\Resolvers\UserResolver::class,
+    "user" => [
+        "morph_prefix" => "user",
+        "guards" => ["web", "sanctum"],
+        "resolver" => OwenIt\Auditing\Resolvers\UserResolver::class,
     ],
 
     /*
@@ -41,10 +37,10 @@ return [
     | Define the IP Address, User Agent and URL resolver implementations.
     |
     */
-    'resolvers' => [
-        'ip_address' => OwenIt\Auditing\Resolvers\IpAddressResolver::class,
-        'user_agent' => OwenIt\Auditing\Resolvers\UserAgentResolver::class,
-        'url' => OwenIt\Auditing\Resolvers\UrlResolver::class,
+    "resolvers" => [
+        "ip_address" => OwenIt\Auditing\Resolvers\IpAddressResolver::class,
+        "user_agent" => OwenIt\Auditing\Resolvers\UserAgentResolver::class,
+        "url" => OwenIt\Auditing\Resolvers\UrlResolver::class,
     ],
 
     /*
@@ -56,12 +52,7 @@ return [
     |
     */
 
-    'events' => [
-        'created',
-        'updated',
-        'deleted',
-        'restored',
-    ],
+    "events" => ["created", "updated", "deleted", "restored"],
 
     /*
     |--------------------------------------------------------------------------
@@ -72,7 +63,7 @@ return [
     |
     */
 
-    'strict' => false,
+    "strict" => false,
 
     /*
     |--------------------------------------------------------------------------
@@ -84,7 +75,7 @@ return [
     |
     */
 
-    'exclude' => [],
+    "exclude" => [],
 
     /*
     |--------------------------------------------------------------------------
@@ -101,10 +92,8 @@ return [
     |
     */
 
-    'empty_values' => true,
-    'allowed_empty_values' => [
-        'retrieved',
-    ],
+    "empty_values" => true,
+    "allowed_empty_values" => ["retrieved"],
 
     /*
     |--------------------------------------------------------------------------
@@ -117,7 +106,7 @@ return [
     | issues when storing large amounts of data. You can override this by
     | setting allow_array_values to true.
     */
-    'allowed_array_values' => false,
+    "allowed_array_values" => false,
 
     /*
     |--------------------------------------------------------------------------
@@ -128,7 +117,7 @@ return [
     |
     */
 
-    'timestamps' => false,
+    "timestamps" => false,
 
     /*
     |--------------------------------------------------------------------------
@@ -140,7 +129,7 @@ return [
     |
     */
 
-    'threshold' => 0,
+    "threshold" => 0,
 
     /*
     |--------------------------------------------------------------------------
@@ -151,7 +140,7 @@ return [
     |
     */
 
-    'driver' => 'database',
+    "driver" => "database",
 
     /*
     |--------------------------------------------------------------------------
@@ -162,10 +151,10 @@ return [
     |
     */
 
-    'drivers' => [
-        'database' => [
-            'table' => 'audits',
-            'connection' => null,
+    "drivers" => [
+        "database" => [
+            "table" => "audits",
+            "connection" => null,
         ],
     ],
 
@@ -178,11 +167,11 @@ return [
     |
     */
 
-    'queue' => [
-        'enable' => false,
-        'connection' => 'sync',
-        'queue' => 'default',
-        'delay' => 0,
+    "queue" => [
+        "enable" => false,
+        "connection" => "sync",
+        "queue" => "default",
+        "delay" => 0,
     ],
 
     /*
@@ -194,5 +183,5 @@ return [
     |
     */
 
-    'console' => false,
+    "console" => false,
 ];
