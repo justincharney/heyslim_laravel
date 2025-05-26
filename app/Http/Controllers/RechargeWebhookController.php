@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\AttachInitialLabelToShopifyJob;
-use App\Jobs\InitiateYousignSignatureJob;
+use App\Jobs\SkuSwapJob;
 use App\Jobs\ProcessSignedPrescriptionJob;
 use App\Jobs\ProcessRecurringOrderAttachmentsJob;
 use App\Services\RechargeService;
@@ -69,17 +69,17 @@ class RechargeWebhookController extends Controller
         }
 
         $orderType = $order["type"] ?? null;
-        $originalShopifyOrderId = $order["shopify_order_id"] ?? null;
+        $currentShopifyOrderId = $order["shopify_order_id"] ?? null;
         $lineItems = $order["line_items"] ?? [];
         $email = $order["email"] ?? null;
         $noteAttributes = $order["note_attributes"] ?? []; // Get note attributes
 
-        if (empty($lineItems) || !$originalShopifyOrderId) {
+        if (empty($lineItems) || !$currentShopifyOrderId) {
             Log::error(
                 "Recharge order webhook missing critical data (line_items or shopify_order_id)",
                 [
                     "order_id_recharge" => $order["id"] ?? "N/A",
-                    "original_shopify_order_id" => $originalShopifyOrderId,
+                    "original_shopify_order_id" => $currentShopifyOrderId,
                 ]
             );
             return response()->json(
@@ -98,7 +98,7 @@ class RechargeWebhookController extends Controller
         )->first();
 
         // Log::info("details", [
-        //     "order_id" => $originalShopifyOrderId,
+        //     "order_id" => $currentShopifyOrderId,
         //     "subscription_id" => $rechargeSubId,
         // ]);
 
@@ -111,7 +111,7 @@ class RechargeWebhookController extends Controller
 
                 if ($prescription) {
                     // Log::info("Order/Prescription info", [
-                    //     "order_id" => $originalShopifyOrderId,
+                    //     "order_id" => $currentShopifyOrderId,
                     //     "subscription_id" => $rechargeSubId,
                     //     "prescription_id" => $prescription->id,
                     //     "current_refills" => $prescription->refills,
@@ -120,7 +120,7 @@ class RechargeWebhookController extends Controller
                     // Check if we've already processed this prescription
                     $alreadyProcesssed = ProcessedRecurringOrder::where(
                         "shopify_order_id",
-                        $originalShopifyOrderId
+                        $currentShopifyOrderId
                     )
                         ->where("prescription_id", $prescription->id)
                         ->exists();
@@ -129,7 +129,7 @@ class RechargeWebhookController extends Controller
                         Log::info(
                             "Recurring order already processed for refill decrement.",
                             [
-                                "shopify_order_id" => $originalShopifyOrderId,
+                                "shopify_order_id" => $currentShopifyOrderId,
                                 "prescription_id" => $prescription->id,
                             ]
                         );
@@ -144,7 +144,7 @@ class RechargeWebhookController extends Controller
                         Log::warning(
                             "Renewal order received but prescription has no refills remaining",
                             [
-                                "order_id" => $originalShopifyOrderId,
+                                "order_id" => $currentShopifyOrderId,
                                 "subscription_id" => $rechargeSubId,
                                 "prescription_id" => $prescription->id,
                             ]
@@ -178,7 +178,7 @@ class RechargeWebhookController extends Controller
 
                             // Record that this order event processed a refill
                             ProcessedRecurringOrder::create([
-                                "shopify_order_id" => $originalShopifyOrderId,
+                                "shopify_order_id" => $currentShopifyOrderId,
                                 "prescription_id" => $prescription->id,
                                 "processed_at" => now(),
                             ]);
@@ -193,7 +193,7 @@ class RechargeWebhookController extends Controller
                             Log::warning(
                                 "Renewal order received but prescription has no refills remaining (race condition)",
                                 [
-                                    "order_id" => $originalShopifyOrderId,
+                                    "order_id" => $currentShopifyOrderId,
                                     "subscription_id" => $rechargeSubId,
                                     "prescription_id" => $prescription->id,
                                 ]
@@ -212,7 +212,7 @@ class RechargeWebhookController extends Controller
                         Log::error(
                             "Error decrementing prescription refills for renewal order",
                             [
-                                "order_id" => $originalShopifyOrderId,
+                                "order_id" => $currentShopifyOrderId,
                                 "subscription_id" => $rechargeSubId,
                                 "prescription_id" => $prescription->id,
                                 "current_refills" => $prescription->refills,
@@ -236,10 +236,10 @@ class RechargeWebhookController extends Controller
                         // Dispatch job to attach the label for the CURRENT recurring order
                         AttachInitialLabelToShopifyJob::dispatch(
                             $updated_prescription_after_decrement->id,
-                            $originalShopifyOrderId
+                            $currentShopifyOrderId
                         );
                         Log::info(
-                            "Dispatched AttachInitialLabelToShopifyJob for RECURRING order prescription #{$updated_prescription_after_decrement->id} and order {$originalShopifyOrderId}"
+                            "Dispatched AttachInitialLabelToShopifyJob for RECURRING order prescription #{$updated_prescription_after_decrement->id} and order {$currentShopifyOrderId}"
                         );
 
                         // Handle SKU swap for the NEXT ORDER
@@ -285,28 +285,16 @@ class RechargeWebhookController extends Controller
                                         "",
                                         $new_variant_gid_full
                                     );
-
                                     Log::info(
                                         "Attempting SKU swap for subscription {$localSubscription->recharge_subscription_id} to variant GID {$new_variant_gid_numeric} (next dose index: {$next_dose_index})"
                                     );
 
-                                    $rechargeService = app(
-                                        RechargeService::class
-                                    );
-                                    $swap_success = $rechargeService->updateSubscriptionVariant(
+                                    // DISPATCH SkuSwapJob
+                                    SkuSwapJob::dispatch(
                                         $localSubscription->recharge_subscription_id,
-                                        $new_variant_gid_numeric
+                                        $new_variant_gid_numeric,
+                                        $updated_prescription_after_decrement->id
                                     );
-
-                                    if ($swap_success) {
-                                        Log::info(
-                                            "Successfully swapped SKU for subscription {$localSubscription->recharge_subscription_id} to variant GID {$new_variant_gid_numeric}"
-                                        );
-                                    } else {
-                                        Log::error(
-                                            "Failed to swap SKU for subscription {$localSubscription->recharge_subscription_id}"
-                                        );
-                                    }
                                 } else {
                                     Log::info(
                                         "Next dose info or GID not found for SKU swap. Prescription #{$updated_prescription_after_decrement->id}, next_dose_index: {$next_dose_index}."
@@ -329,7 +317,7 @@ class RechargeWebhookController extends Controller
                 } else {
                     Log::error("Subscription has no associated prescription", [
                         "subscription_id" => $rechargeSubId,
-                        "order_id" => $originalShopifyOrderId,
+                        "order_id" => $currentShopifyOrderId,
                     ]);
 
                     return response()->json(
@@ -342,7 +330,7 @@ class RechargeWebhookController extends Controller
                 }
             } catch (\Exception $e) {
                 Log::error("Error processing renewal order", [
-                    "order_id" => $originalShopifyOrderId,
+                    "order_id" => $currentShopifyOrderId,
                     "error" => $e->getMessage(),
                 ]);
 
@@ -373,7 +361,7 @@ class RechargeWebhookController extends Controller
                     "CHECKOUT order from Recharge is missing 'prescription_id' note attribute. Cannot reliably link to prescription.",
                     [
                         "recharge_subscription_id" => $rechargeSubId,
-                        "shopify_order_id" => $originalShopifyOrderId,
+                        "shopify_order_id" => $currentShopifyOrderId,
                     ]
                 );
                 return response()->json(
@@ -405,7 +393,7 @@ class RechargeWebhookController extends Controller
                         "recharge_customer_id" => $order["customer_id"],
                         "shopify_product_id" =>
                             $firstItem["shopify_product_id"],
-                        "original_shopify_order_id" => $originalShopifyOrderId,
+                        "original_shopify_order_id" => $currentShopifyOrderId,
                         "product_name" => $firstItem["product_title"],
                         "status" => "active",
                         "user_id" => $user->id,
@@ -426,7 +414,7 @@ class RechargeWebhookController extends Controller
                     // JOB 1: Generate and attach prescription label to Shopify order
                     AttachInitialLabelToShopifyJob::dispatch(
                         $prescription->id,
-                        $originalShopifyOrderId
+                        $currentShopifyOrderId
                     );
 
                     // If prescription is already signed, dispatch job to attach signed PDF
@@ -438,7 +426,8 @@ class RechargeWebhookController extends Controller
                         ProcessSignedPrescriptionJob::dispatch(
                             $prescription->id,
                             $prescription->yousign_signature_request_id,
-                            $prescription->yousign_document_id
+                            $prescription->yousign_document_id,
+                            $currentShopifyOrderId
                         );
 
                         // Update the status to 'active'
@@ -512,7 +501,7 @@ class RechargeWebhookController extends Controller
                 DB::rollback();
 
                 Log::error("Error processing Recharge order", [
-                    "order_id" => $originalShopifyOrderId,
+                    "order_id" => $currentShopifyOrderId,
                     "error" => $e->getMessage(),
                 ]);
                 return response()->json(
@@ -526,7 +515,7 @@ class RechargeWebhookController extends Controller
         Log::info(
             "No matching questionnaire submission or existing subscription found",
             [
-                "order_id" => $originalShopifyOrderId,
+                "order_id" => $currentShopifyOrderId,
                 "subscription_id" => $rechargeSubId,
             ]
         );

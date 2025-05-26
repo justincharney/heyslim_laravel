@@ -159,7 +159,8 @@ class YousignWebhookController extends Controller
             ProcessSignedPrescriptionJob::dispatch(
                 $prescription->id,
                 $signatureRequestId,
-                $documentId
+                $documentId,
+                $shopifyOrderId
             );
             Log::info(
                 "Dispatched ProcessSignedPrescriptionJob for prescription #{$prescription->id}."
