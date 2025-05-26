@@ -2,10 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Jobs\AttachInitialLabelToShopifyJob;
+use App\Jobs\AttachLabelToShopifyJob;
 use App\Jobs\SkuSwapJob;
 use App\Jobs\ProcessSignedPrescriptionJob;
-use App\Jobs\ProcessRecurringOrderAttachmentsJob;
 use App\Services\RechargeService;
 use App\Models\Questionnaire;
 use App\Models\QuestionnaireSubmission;
@@ -234,12 +233,23 @@ class RechargeWebhookController extends Controller
                         $updated_prescription_after_decrement
                     ) {
                         // Dispatch job to attach the label for the CURRENT recurring order
-                        AttachInitialLabelToShopifyJob::dispatch(
+                        AttachLabelToShopifyJob::dispatch(
                             $updated_prescription_after_decrement->id,
                             $currentShopifyOrderId
                         );
                         Log::info(
-                            "Dispatched AttachInitialLabelToShopifyJob for RECURRING order prescription #{$updated_prescription_after_decrement->id} and order {$currentShopifyOrderId}"
+                            "Dispatched AttachLabelToShopifyJob for RECURRING order prescription #{$updated_prescription_after_decrement->id} and order {$currentShopifyOrderId}"
+                        );
+
+                        // Handle Attaching the signed prescription to the recurring order
+                        ProcessSignedPrescriptionJob::dispatch(
+                            $updated_prescription_after_decrement->id,
+                            $updated_prescription_after_decrement->yousign_signature_request_id,
+                            $updated_prescription_after_decrement->yousign_document_id,
+                            $currentShopifyOrderId
+                        );
+                        Log::info(
+                            "Dispatched ProcessSignedPrescriptionJob for RECURRING order prescription #{$updated_prescription_after_decrement->id} and order {$currentShopifyOrderId}"
                         );
 
                         // Handle SKU swap for the NEXT ORDER
@@ -412,7 +422,7 @@ class RechargeWebhookController extends Controller
                     }
 
                     // JOB 1: Generate and attach prescription label to Shopify order
-                    AttachInitialLabelToShopifyJob::dispatch(
+                    AttachLabelToShopifyJob::dispatch(
                         $prescription->id,
                         $currentShopifyOrderId
                     );

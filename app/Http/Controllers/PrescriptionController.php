@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Jobs\AttachInitialLabelToShopifyJob;
 use App\Models\Chat;
 use App\Models\Message;
 use App\Models\Prescription;

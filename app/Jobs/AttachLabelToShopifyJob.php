@@ -11,7 +11,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 
-class AttachInitialLabelToShopifyJob implements ShouldQueue
+class AttachLabelToShopifyJob implements ShouldQueue
 {
     use Queueable, Dispatchable, InteractsWithQueue, SerializesModels;
 
@@ -42,7 +42,7 @@ class AttachInitialLabelToShopifyJob implements ShouldQueue
         $prescription = Prescription::find($this->prescriptionId);
         if (!$prescription) {
             Log::error(
-                "Prescription {$this->prescriptionId} not found in AttachInitialLabelToShopifyJob."
+                "Prescription {$this->prescriptionId} not found in AttachLabelToShopifyJob."
             );
             $this->fail("Prescription not found.");
             return;
@@ -79,7 +79,7 @@ class AttachInitialLabelToShopifyJob implements ShouldQueue
             );
         } catch (\Throwable $e) {
             // Catch any unexpected exception
-            Log::error("Exception during AttachInitialLabelToShopifyJob", [
+            Log::error("Exception during AttachLabelToShopifyJob", [
                 "prescription_id" => $this->prescriptionId,
                 "shopify_order_id" => $this->shopifyOrderId,
                 "error" => $e->getMessage(),
