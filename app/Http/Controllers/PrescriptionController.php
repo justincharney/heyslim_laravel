@@ -488,7 +488,8 @@ class PrescriptionController extends Controller
             "schedule" => "sometimes|string",
             "refills" => "sometimes|integer|between:0,11",
             "directions" => "nullable|string",
-            "status" => "sometimes|in:active,completed,cancelled",
+            "status" =>
+                "sometimes|in:active,completed,cancelled,pending_payment,pending_signature",
             "start_date" => "sometimes|date",
             "end_date" => "nullable|date|after_or_equal:start_date",
         ]);
