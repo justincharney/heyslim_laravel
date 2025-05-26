@@ -6,6 +6,7 @@ use App\Jobs\AttachInitialLabelToShopifyJob;
 use App\Jobs\InitiateYousignSignatureJob;
 use App\Jobs\ProcessSignedPrescriptionJob;
 use App\Jobs\ProcessRecurringOrderAttachmentsJob;
+use App\Services\RechargeService;
 use App\Models\Questionnaire;
 use App\Models\QuestionnaireSubmission;
 use App\Models\Subscription;
@@ -158,6 +159,9 @@ class RechargeWebhookController extends Controller
                         );
                     }
 
+                    $refill_decremented_successfully = false;
+                    $updated_prescription_after_decrement = null;
+
                     // Start DB transaction - ONLY for database operations
                     DB::beginTransaction();
                     try {
@@ -181,23 +185,8 @@ class RechargeWebhookController extends Controller
 
                             // COMMIT TRANSACTION BEFORE dispatching job
                             DB::commit();
-
-                            // Dispatch job to process attachments
-                            ProcessRecurringOrderAttachmentsJob::dispatch(
-                                $prescription->id,
-                                $originalShopifyOrderId // Shopify order ID of the new transaction
-                            );
-                            Log::info(
-                                "Dispatched attachment job for prescription #{$prescription->id} and order {$originalShopifyOrderId}"
-                            );
-
-                            return response()->json(
-                                [
-                                    "message" =>
-                                        "Renewal order processed, attachment job dispatched",
-                                ],
-                                200
-                            );
+                            $refill_decremented_successfully = true;
+                            $updated_prescription_after_decrement = $prescription->fresh();
                         } else {
                             // No refills left now (race condition)
                             DB::rollBack();
@@ -239,9 +228,107 @@ class RechargeWebhookController extends Controller
                             500
                         );
                     }
+
+                    if (
+                        $refill_decremented_successfully &&
+                        $updated_prescription_after_decrement
+                    ) {
+                        // Dispatch job to process attachments
+                        ProcessRecurringOrderAttachmentsJob::dispatch(
+                            $prescription->id,
+                            $originalShopifyOrderId // Shopify order ID of the new transaction
+                        );
+                        Log::info(
+                            "Dispatched attachment job for prescription #{$prescription->id} and order {$originalShopifyOrderId}"
+                        );
+
+                        // Handle SKU swap for the NEXT ORDER
+                        $dose_schedule =
+                            $updated_prescription_after_decrement->dose_schedule;
+                        $current_refills_remaining =
+                            $updated_prescription_after_decrement->refills;
+
+                        if (
+                            !is_array($dose_schedule) ||
+                            $empty($dose_schedule)
+                        ) {
+                            Log::error(
+                                "Dose schedule is empty or an invalid array for prescription #{$updated_prescription_after_decrement->id}. Skipping SKU swap."
+                            );
+                        } else {
+                            $total_doses_in_schedule = count($dose_schedule);
+                            // Ex: 2 refills, 3 items id dose_schedule
+                            // on first recurring order: -> refills remaining = 1
+                            // so next_dose_index = 2, which will be the final dose
+                            $next_dose_index =
+                                $total_doses_in_schedule -
+                                $current_refills_remaining;
+
+                            if (
+                                $next_dose_index >= 0 &&
+                                $next_dose_index < $total_doses_in_schedule
+                            ) {
+                                $next_dose_info =
+                                    $dose_schedule[$next_dose_index] ?? null;
+
+                                if (
+                                    $next_dose_info &&
+                                    isset(
+                                        $next_dose_info["shopify_variant_gid"]
+                                    )
+                                ) {
+                                    // Extract the numeric part from the variant GID
+                                    $new_variant_gid_full =
+                                        $next_dose_info["shopify_variant_gid"];
+                                    $new_variant_gid_numeric = preg_replace(
+                                        "/[^0-9]/",
+                                        "",
+                                        $new_variant_gid_full
+                                    );
+
+                                    Log::info(
+                                        "Attempting SKU swap for subscription {$localSubscription->recharge_subscription_id} to variant GID {$new_variant_gid_numeric} (next dose index: {$next_dose_index})"
+                                    );
+
+                                    $rechargeService = app(
+                                        RechargeService::class
+                                    );
+                                    $swap_success = $rechargeService->updateSubscriptionVariant(
+                                        $localSubscription->recharge_subscription_id,
+                                        $new_variant_gid_numeric
+                                    );
+
+                                    if ($swap_success) {
+                                        Log::info(
+                                            "Successfully swapped SKU for subscription {$localSubscription->recharge_subscription_id} to variant GID {$new_variant_gid_numeric}"
+                                        );
+                                    } else {
+                                        Log::error(
+                                            "Failed to swap SKU for subscription {$localSubscription->recharge_subscription_id}"
+                                        );
+                                    }
+                                } else {
+                                    Log::info(
+                                        "Next dose info or GID not found for SKU swap. Prescription #{$updated_prescription_after_decrement->id}, next_dose_index: {$next_dose_index}."
+                                    );
+                                }
+                            } else {
+                                Log::info(
+                                    "No more doses in schedule for SKU swap or invalid index. Prescription #{$updated_prescription_after_decrement->id}. next_dose_index: {$next_dose_index}"
+                                );
+                            }
+                        }
+                        return response()->json(
+                            [
+                                "message" =>
+                                    "Renewal order processed, attachment job dispatched",
+                            ],
+                            200
+                        );
+                    }
                 } else {
                     Log::error("Subscription has no associated prescription", [
-                        "subscription_id" => $subscription->id,
+                        "subscription_id" => $rechargeSubId,
                         "order_id" => $originalShopifyOrderId,
                     ]);
 
@@ -327,55 +414,93 @@ class RechargeWebhookController extends Controller
                 );
 
                 // Handle prescription attachment to the order
-                if ($prescriptionIdFromAttribute) {
-                    $prescription = Prescription::find(
-                        $prescriptionIdFromAttribute
-                    );
-                    if ($prescription) {
-                        if ($prescription->status === "pending_payment") {
-                            $prescription->status = "pending_signature";
-                            $prescription->save();
-                        }
-
-                        // JOB 1: Generate and attach prescription label to Shopify order
-                        AttachInitialLabelToShopifyJob::dispatch(
-                            $prescription->id,
-                            $originalShopifyOrderId
-                        );
-
-                        // If prescription is already signed, dispatch job to attach signed PDF
-                        if (
-                            $prescription->yousign_document_id &&
-                            $prescription->signed_at
-                        ) {
-                            // JOB 2: Process the signed prescription
-                            ProcessSignedPrescriptionJob::dispatch(
-                                $prescription->id,
-                                $prescription->yousign_signature_request_id,
-                                $prescription->yousign_document_id
-                            );
-
-                            // Update the status to 'active'
-                            $prescription->status = "active";
-                            $prescription->save();
-                        }
-                    } else {
-                        Log::error(
-                            "Prescription not found for ID from attribute.",
-                            [
-                                "prescription_id_attr" => $prescriptionIdFromAttribute,
-                            ]
-                        );
-                        DB::rollBack();
-                        return response()->json(
-                            ["message" => "Prescription not found"],
-                            404
-                        );
+                $prescription = Prescription::find(
+                    $prescriptionIdFromAttribute
+                );
+                if ($prescription) {
+                    if ($prescription->status === "pending_payment") {
+                        $prescription->status = "pending_signature";
+                        $prescription->save();
                     }
+
+                    // JOB 1: Generate and attach prescription label to Shopify order
+                    AttachInitialLabelToShopifyJob::dispatch(
+                        $prescription->id,
+                        $originalShopifyOrderId
+                    );
+
+                    // If prescription is already signed, dispatch job to attach signed PDF
+                    if (
+                        $prescription->yousign_document_id &&
+                        $prescription->signed_at
+                    ) {
+                        // JOB 2: Process the signed prescription
+                        ProcessSignedPrescriptionJob::dispatch(
+                            $prescription->id,
+                            $prescription->yousign_signature_request_id,
+                            $prescription->yousign_document_id
+                        );
+
+                        // Update the status to 'active'
+                        $prescription->status = "active";
+                        $prescription->save();
+                    }
+                } else {
+                    Log::error(
+                        "Prescription not found for ID from attribute.",
+                        [
+                            "prescription_id_attr" => $prescriptionIdFromAttribute,
+                        ]
+                    );
+                    DB::rollBack();
+                    return response()->json(
+                        ["message" => "Prescription not found"],
+                        404
+                    );
                 }
 
                 // Commit the transaction
                 DB::commit();
+
+                // SKU Swap for the NEXT CHARGE after CHECKOUT
+                if ($prescription) {
+                    $dose_schedule = $prescription->dose_schedule;
+                    if (is_array($dose_schedule) && count($dose_schedule) > 1) {
+                        // The next dose is at index 1
+                        $next_dose_info = $dose_schedule[1] ?? null;
+
+                        // Extract the numeric part from the variant GID
+                        $new_variant_gid_full =
+                            $next_dose_info["shopify_variant_gid"];
+                        $new_variant_gid_numeric = preg_replace(
+                            "/[^0-9]/",
+                            "",
+                            $new_variant_gid_full
+                        );
+
+                        if ($new_variant_gid_numeric) {
+                            Log::info(
+                                "Attempting SKU swap after CHECKOUT for subscription {$subscription->recharge_subscription_id} to variant GID {$new_variant_gid_numeric} (dose_schedule index 1)"
+                            );
+                            $rechargeServiceInstance = app(
+                                RechargeService::class
+                            );
+                            $swap_success = $rechargeServiceInstance->updateSubscriptionVariant(
+                                $subscription->recharge_subscription_id,
+                                $new_variant_gid_numeric
+                            );
+                            if ($swap_success) {
+                                Log::info(
+                                    "Successfully swapped SKU after CHECKOUT for subscription {$subscription->recharge_subscription_id}"
+                                );
+                            } else {
+                                Log::error(
+                                    "Failed to swap SKU after CHECKOUT for subscription {$subscription->recharge_subscription_id}"
+                                );
+                            }
+                        }
+                    }
+                }
 
                 // Return a success response
                 return response()->json(

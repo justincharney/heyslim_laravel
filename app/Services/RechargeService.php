@@ -21,6 +21,86 @@ class RechargeService
     }
 
     /**
+     * Update the product variant for a Recharge subscription.
+     *
+     * @param string $rechargeSubscriptionId The ID of the subscription in Recharge.
+     * @param string $newVariantShopifyIdNumeric The numeric Shopify product variant ID for the new dose.
+     * @param string|null $productTitle Optional new product title.
+     * @param string|null $variantTitle Optional new variant title.
+     * @return bool True if the update was successful, false otherwise.
+     */
+    public function updateSubscriptionVariant(
+        string $rechargeSubscriptionId,
+        string $newVariantShopifyIdNumeric,
+        ?string $productTitle = null,
+        ?string $variantTitle = null
+    ): bool {
+        if (empty($this->apiKey)) {
+            Log::error(
+                "Recharge API key is not configured. Cannot update subscription variant."
+            );
+            return false;
+        }
+
+        $payload = [
+            "external_variant_id" => [
+                "ecommerce" => $newVariantShopifyIdNumeric,
+            ],
+            "use_external_variant_defaults" => true, // To pull price & other defaults from Shopify variant
+        ];
+
+        if ($productTitle) {
+            $payload["product_title"] = $productTitle;
+        }
+        if ($variantTitle) {
+            $payload["variant_title"] = $variantTitle;
+        }
+        // If SKU needs to be explicitly set and override Shopify's, add 'sku' and 'sku_override: true'
+        // For now, relying on use_external_variant_defaults to also fetch SKU.
+
+        try {
+            $response = Http::withHeaders([
+                "X-Recharge-Access-Token" => $this->apiKey,
+                "Accept" => "application/json",
+                "Content-Type" => "application/json",
+                "X-Recharge-Version" => "2021-11",
+            ])->put(
+                "{$this->endpoint}/subscriptions/{$rechargeSubscriptionId}",
+                $payload
+            );
+
+            if ($response->successful()) {
+                Log::info(
+                    "Successfully updated Recharge subscription variant.",
+                    [
+                        "recharge_subscription_id" => $rechargeSubscriptionId,
+                        "new_variant_shopify_id" => $newVariantShopifyIdNumeric,
+                        "response_status" => $response->status(),
+                    ]
+                );
+                return true;
+            } else {
+                Log::error("Failed to update Recharge subscription variant.", [
+                    "recharge_subscription_id" => $rechargeSubscriptionId,
+                    "new_variant_shopify_id" => $newVariantShopifyIdNumeric,
+                    "payload_sent" => $payload,
+                    "response_status" => $response->status(),
+                    "response_body" => $response->body(),
+                ]);
+                return false;
+            }
+        } catch (\Exception $e) {
+            Log::error("Exception updating Recharge subscription variant.", [
+                "recharge_subscription_id" => $rechargeSubscriptionId,
+                "new_variant_shopify_id" => $newVariantShopifyIdNumeric,
+                "error" => $e->getMessage(),
+                "trace" => $e->getTraceAsString(),
+            ]);
+            return false;
+        }
+    }
+
+    /**
      * Get customer by Shopify customer ID
      */
     public function getCustomerByShopifyId($shopifyCustomerId)
@@ -283,94 +363,76 @@ class RechargeService
     }
 
     /**
-     * Update the next order date for a customer's active subscriptions
+     * Update the next order date for a specific Recharge subscription.
+     *
+     * @param string $rechargeSubscriptionId The ID of the subscription in Recharge.
+     * @param string $nextOrderDateStr The new next charge date in 'Y-m-d' format.
+     * @return bool True if the update was successful, false otherwise.
      */
     public function updateNextOrderDate(
-        string $shopifyCustomerId,
-        string $nextOrderDate
+        string $rechargeSubscriptionId,
+        string $nextOrderDateStr
     ): bool {
+        if (empty($this->apiKey)) {
+            Log::error(
+                "Recharge API key is not configured. Cannot update next order date."
+            );
+            return false;
+        }
+
+        if (empty($rechargeSubscriptionId)) {
+            Log::error(
+                "Recharge Subscription ID is required to update next order date."
+            );
+            return false;
+        }
+
+        $payload = [
+            "next_charge_scheduled_at" => $nextOrderDateStr,
+        ];
+
         try {
-            // Extract numeric part if needed
-            if (strpos($shopifyCustomerId, "gid://") === 0) {
-                $parts = explode("/", $shopifyCustomerId);
-                $shopifyCustomerId = end($parts);
-            }
-
-            // Get the Recharge customer
-            $customerResponse = Http::withHeaders([
+            $response = Http::withHeaders([
                 "X-Recharge-Access-Token" => $this->apiKey,
                 "Accept" => "application/json",
                 "Content-Type" => "application/json",
-            ])->get("{$this->endpoint}/customers", [
-                "shopify_customer_id" => $shopifyCustomerId,
-            ]);
+                "X-Recharge-Version" => "2021-11",
+            ])->put(
+                "{$this->endpoint}/subscriptions/{$rechargeSubscriptionId}",
+                $payload
+            );
 
-            if (!$customerResponse->successful()) {
-                return false;
-            }
-
-            $customers = $customerResponse->json()["customers"] ?? [];
-            if (empty($customers)) {
-                return false;
-            }
-
-            $customerId = $customers[0]["id"];
-
-            // Get all subscriptions for this customer
-            $subscriptionsResponse = Http::withHeaders([
-                "X-Recharge-Access-Token" => $this->apiKey,
-                "Accept" => "application/json",
-                "Content-Type" => "application/json",
-            ])->get("{$this->endpoint}/subscriptions", [
-                "customer_id" => $customerId,
-            ]);
-
-            if (!$subscriptionsResponse->successful()) {
-                return false;
-            }
-
-            $subscriptions =
-                $subscriptionsResponse->json()["subscriptions"] ?? [];
-
-            // Find active subscriptions
-            $activeSubscriptions = [];
-            foreach ($subscriptions as $subscription) {
-                if ($subscription["status"] === "ACTIVE") {
-                    $activeSubscriptions[] = $subscription;
-                }
-            }
-
-            if (empty($activeSubscriptions)) {
-                return false;
-            }
-
-            // Update each active subscription
-            $allUpdated = true;
-            foreach ($activeSubscriptions as $subscription) {
-                $updateData = [
-                    "next_charge_scheduled_at" => $nextOrderDate,
-                ];
-
-                $updateResponse = Http::withHeaders([
-                    "X-Recharge-Access-Token" => $this->apiKey,
-                    "Accept" => "application/json",
-                    "Content-Type" => "application/json",
-                ])->put(
-                    "{$this->endpoint}/subscriptions/{$subscription["id"]}",
-                    $updateData
+            if ($response->successful()) {
+                Log::info(
+                    "Successfully updated next_charge_scheduled_at for Recharge subscription.",
+                    [
+                        "recharge_subscription_id" => $rechargeSubscriptionId,
+                        "next_charge_scheduled_at" => $nextOrderDateStr,
+                        "response_status" => $response->status(),
+                    ]
                 );
-
-                if (!$updateResponse->successful()) {
-                    $allUpdated = false;
-                }
+                return true;
+            } else {
+                Log::error(
+                    "Failed to update next_charge_scheduled_at for Recharge subscription.",
+                    [
+                        "recharge_subscription_id" => $rechargeSubscriptionId,
+                        "payload_sent" => $payload,
+                        "response_status" => $response->status(),
+                        "response_body" => $response->body(),
+                    ]
+                );
+                return false;
             }
-
-            return $allUpdated;
         } catch (\Exception $e) {
-            Log::error("Exception while updating next order date", [
-                "error" => $e->getMessage(),
-                "shopify_customer_id" => $shopifyCustomerId,
-            ]);
+            Log::error(
+                "Exception updating next_charge_scheduled_at for Recharge subscription.",
+                [
+                    "recharge_subscription_id" => $rechargeSubscriptionId,
+                    "error" => $e->getMessage(),
+                    "trace" => $e->getTraceAsString(),
+                ]
+            );
             return false;
         }
     }

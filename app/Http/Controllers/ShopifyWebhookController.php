@@ -97,93 +97,136 @@ class ShopifyWebhookController extends Controller
      */
     public function orderFulfilled(Request $request)
     {
-        Log::info("Order fulfillment webhook received");
+        Log::info("Shopify Order fulfillment webhook received");
 
-        // Retrieve the raw request body
         $data = $request->getContent();
-
-        // Get the HMAC header from Shopify
         $hmacHeader = $request->header("X-Shopify-Hmac-Sha256");
-
-        // Use Shopify webhook secret stored in configuration
         $secret = config("services.shopify.webhook_secret");
-
-        // Calculate the HMAC
         $calculatedHmac = base64_encode(
             hash_hmac("sha256", $data, $secret, true)
         );
 
-        // Verify the HMAC
-        $hmacMatch = hash_equals($hmacHeader, $calculatedHmac);
-
-        if (!$hmacMatch) {
-            Log::error("Shopify webhook HMAC verification failed");
+        if (!hash_equals($hmacHeader, $calculatedHmac)) {
+            Log::error(
+                "Shopify orderFulfilled webhook HMAC verification failed"
+            );
             return response()->json(
                 ["message" => "Invalid webhook signature"],
                 401
             );
         }
 
-        // Decode the webhook payload
         $payload = json_decode($data, true);
-
-        // Process the fulfillment
-        $orderId = $payload["id"] ?? null;
+        $shopifyOrderId = $payload["id"] ?? null; // This is the Shopify numeric Order ID
         $fulfillmentStatus = $payload["fulfillment_status"] ?? null;
 
-        if (!$orderId || $fulfillmentStatus !== "fulfilled") {
+        if (!$shopifyOrderId || $fulfillmentStatus !== "fulfilled") {
+            Log::info("Not a fulfillment event or order not fulfilled.", [
+                "shopify_order_id" => $shopifyOrderId,
+                "status" => $fulfillmentStatus,
+            ]);
             return response()->json([
                 "message" => "Not a fulfillment event or order not fulfilled",
             ]);
         }
 
-        // Get the Shopify customer ID from the order
-        $shopifyCustomerId = $payload["customer"]["id"] ?? null;
+        $rechargeSubscriptionId = null;
 
-        if (!$shopifyCustomerId) {
-            Log::error("No customer ID found in order payload");
+        // Strategy 1: Check if this Shopify Order ID is an original_shopify_order_id in our Subscription model
+        $subscription = Subscription::where(
+            "original_shopify_order_id",
+            $shopifyOrderId
+        )->first();
+        if ($subscription) {
+            $rechargeSubscriptionId = $subscription->recharge_subscription_id;
+            Log::info(
+                "Found Recharge subscription ID via original_shopify_order_id.",
+                [
+                    "shopify_order_id" => $shopifyOrderId,
+                    "recharge_subscription_id" => $rechargeSubscriptionId,
+                ]
+            );
+        } else {
+            // Strategy 2: Check ProcessedRecurringOrder table (for recurring orders)
+            // The $shopifyOrderId here is the Shopify numeric ID of the *current* transaction.
+            $processedOrder = ProcessedRecurringOrder::where(
+                "shopify_order_id",
+                $shopifyOrderId
+            )->first();
+            if ($processedOrder && $processedOrder->prescription_id) {
+                $relatedSubscription = Subscription::where(
+                    "prescription_id",
+                    $processedOrder->prescription_id
+                )->first();
+                if ($relatedSubscription) {
+                    $rechargeSubscriptionId =
+                        $relatedSubscription->recharge_subscription_id;
+                    Log::info(
+                        "Found Recharge subscription ID via ProcessedRecurringOrder.",
+                        [
+                            "shopify_order_id" => $shopifyOrderId,
+                            "prescription_id" =>
+                                $processedOrder->prescription_id,
+                            "recharge_subscription_id" => $rechargeSubscriptionId,
+                        ]
+                    );
+                }
+            }
+        }
+
+        if (!$rechargeSubscriptionId) {
+            Log::warning(
+                "Could not determine Recharge Subscription ID for fulfilled Shopify Order ID.",
+                ["shopify_order_id" => $shopifyOrderId]
+            );
+            // Decide if this is an error or just an order not linked to a Recharge sub we manage this way.
+            // For now, we'll return success as the webhook was valid, but no action taken on Recharge.
             return response()->json(
                 [
-                    "message" => "No customer ID found in order",
+                    "message" =>
+                        "Fulfilled order processed, but no linked Recharge subscription found to update next charge date.",
                 ],
-                400
+                200
             );
         }
 
-        // Calculate the next order date (30 days from fulfillment)
+        // Calculate the next order date (e.g., 30 days from fulfillment)
         $fulfillmentDate = isset($payload["fulfillments"][0]["created_at"])
             ? new \DateTime($payload["fulfillments"][0]["created_at"])
-            : new \DateTime();
+            : new \DateTime(); // Fallback to now if created_at is missing
 
         $nextOrderDate = clone $fulfillmentDate;
         $nextOrderDate->modify("+30 days");
         $nextOrderDateStr = $nextOrderDate->format("Y-m-d");
 
-        // Update the next order date in Recharge
         $rechargeService = app(RechargeService::class);
         $updated = $rechargeService->updateNextOrderDate(
-            $shopifyCustomerId,
+            $rechargeSubscriptionId,
             $nextOrderDateStr
         );
 
         if (!$updated) {
-            Log::error("Failed to update next order date in Recharge");
+            Log::error(
+                "Failed to update next_charge_scheduled_at in Recharge.",
+                [
+                    "recharge_subscription_id" => $rechargeSubscriptionId,
+                    "next_date_calculated" => $nextOrderDateStr,
+                ]
+            );
             return response()->json(
                 [
                     "message" =>
-                        "Failed to update subscription next order date",
+                        "Failed to update subscription next charge date in Recharge",
                 ],
                 500
             );
         }
 
-        Log::info("Order fulfillment processed successfully", [
-            "next_order_date" => $nextOrderDateStr,
-        ]);
-
         return response()->json([
-            "message" => "Order fulfillment processed successfully",
-            "next_order_date" => $nextOrderDateStr,
+            "message" =>
+                "Order fulfillment processed successfully, Recharge next charge date updated.",
+            "recharge_subscription_id" => $rechargeSubscriptionId,
+            "next_charge_scheduled_at" => $nextOrderDateStr,
         ]);
     }
 }
