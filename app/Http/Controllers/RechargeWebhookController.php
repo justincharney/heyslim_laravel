@@ -233,13 +233,13 @@ class RechargeWebhookController extends Controller
                         $refill_decremented_successfully &&
                         $updated_prescription_after_decrement
                     ) {
-                        // Dispatch job to process attachments
-                        ProcessRecurringOrderAttachmentsJob::dispatch(
-                            $prescription->id,
-                            $originalShopifyOrderId // Shopify order ID of the new transaction
+                        // Dispatch job to attach the label for the CURRENT recurring order
+                        AttachInitialLabelToShopifyJob::dispatch(
+                            $updated_prescription_after_decrement->id,
+                            $originalShopifyOrderId
                         );
                         Log::info(
-                            "Dispatched attachment job for prescription #{$prescription->id} and order {$originalShopifyOrderId}"
+                            "Dispatched AttachInitialLabelToShopifyJob for RECURRING order prescription #{$updated_prescription_after_decrement->id} and order {$originalShopifyOrderId}"
                         );
 
                         // Handle SKU swap for the NEXT ORDER
@@ -250,7 +250,7 @@ class RechargeWebhookController extends Controller
 
                         if (
                             !is_array($dose_schedule) ||
-                            $empty($dose_schedule)
+                            empty($dose_schedule)
                         ) {
                             Log::error(
                                 "Dose schedule is empty or an invalid array for prescription #{$updated_prescription_after_decrement->id}. Skipping SKU swap."

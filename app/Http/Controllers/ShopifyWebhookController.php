@@ -6,6 +6,8 @@ use App\Models\QuestionnaireSubmission;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use App\Services\RechargeService;
+use App\Models\Subscription;
+use App\Models\ProcessedRecurringOrder;
 
 class ShopifyWebhookController extends Controller
 {
