@@ -10,6 +10,8 @@ class ClinicalPlan extends Model implements AuditableContract
 {
     use AuditableTrait;
 
+    protected $with = ["audits.user"];
+
     protected $fillable = [
         "patient_id",
         "provider_id",

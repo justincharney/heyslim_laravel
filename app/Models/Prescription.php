@@ -12,6 +12,8 @@ class Prescription extends Model implements AuditableContract
 {
     use HasFactory, AuditableTrait;
 
+    protected $with = ["audits.user"];
+
     protected $fillable = [
         "patient_id",
         "prescriber_id",

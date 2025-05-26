@@ -12,6 +12,8 @@ class QuestionnaireSubmission extends Model implements AuditableContract
     use HasFactory, AuditableTrait;
     protected $table = "questionnaire_submissions";
 
+    protected $with = ["audits.user"];
+
     protected $fillable = [
         "questionnaire_id",
         "user_id",
