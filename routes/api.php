@@ -24,36 +24,47 @@ use App\Http\Controllers\UserFileController;
 
 Route::post("/auth/exchange-token", [AuthController::class, "exchangeToken"]);
 
-// Routes for any user
+// Routes for no user - just frontend
 Route::middleware(["auth:sanctum"])->group(function () {
     Route::get("/questionnaires/template/{template_id}", [
         QuestionnaireController::class,
         "getTemplate",
     ]);
 
-    Route::get("/supabase/token", [SupabaseController::class, "getToken"]);
-
     // Authentication routes
     Route::get("/user", [AuthController::class, "user"]);
     Route::post("/login", [AuthController::class, "login"]);
     Route::post("/logout", [AuthController::class, "logout"]);
-    // Chat routes
-    // Get all chats for the authenticated user
-    Route::get("/chats", [ChatController::class, "index"]);
+});
 
-    // Get a specific chat with messages
-    Route::get("/chats/{id}", [ChatController::class, "show"]);
+Route::middleware([
+    "auth:sanctum",
+    "role:patient|provider|pharmacist|admin",
+])->group(function () {
+    Route::get("/supabase/token", [SupabaseController::class, "getToken"]);
+    // APPLY ProfileCompletedMiddleware TO THESE Routes
+    Route::middleware([ProfileCompletedMiddleware::class])->group(function () {
+        // Chat routes
+        // Get all chats for the authenticated user
+        Route::get("/chats", [ChatController::class, "index"]);
 
-    // Send a message in a chat
-    Route::post("/chats/{id}/messages", [ChatController::class, "sendMessage"]);
+        // Get a specific chat with messages
+        Route::get("/chats/{id}", [ChatController::class, "show"]);
 
-    // Read messages
-    Route::post("/chats/{id}/read", [ChatController::class, "markAsRead"]);
+        // Send a message in a chat
+        Route::post("/chats/{id}/messages", [
+            ChatController::class,
+            "sendMessage",
+        ]);
 
-    // CheckIns
-    Route::get("/check-ins", [CheckInController::class, "index"]);
-    Route::get("/check-ins/{id}", [CheckInController::class, "show"]);
-    Route::put("/check-ins/{id}", [CheckInController::class, "update"]);
+        // Read messages
+        Route::post("/chats/{id}/read", [ChatController::class, "markAsRead"]);
+
+        // CheckIns
+        Route::get("/check-ins", [CheckInController::class, "index"]);
+        Route::get("/check-ins/{id}", [CheckInController::class, "show"]);
+        Route::put("/check-ins/{id}", [CheckInController::class, "update"]);
+    });
 });
 
 // Routes for patients

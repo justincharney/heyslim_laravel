@@ -5,6 +5,8 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
+use App\Models\UserFile;
+use Illuminate\Support\Facades\Log;
 
 class ProfileCompletedMiddleware
 {
@@ -20,7 +22,23 @@ class ProfileCompletedMiddleware
         // Set team context
         setPermissionsTeamId($user->team_id);
 
-        // Skip if not a patient
+        // Photo upload requirement - only for patients
+        if ($user && $user->hasRole("patient")) {
+            $hasUploadedPhoto = UserFile::where("user_id", $user->id)->exists();
+            if (!$hasUploadedPhoto) {
+                return response()->json(
+                    [
+                        "message" =>
+                            "Please upload your required photo to continue",
+                        "error" => "photo_upload_required",
+                        "photo_uploaded" => false,
+                    ],
+                    403
+                );
+            }
+        }
+
+        // Skip the profile check if not a patient
         if (!$user || !$user->hasRole("patient")) {
             return $next($request);
         }
