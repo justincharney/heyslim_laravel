@@ -663,4 +663,130 @@ class RechargeWebhookController extends Controller
             );
         }
     }
+
+    /**
+     * Handle an incoming subscription updated webhook from Recharge.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function subscriptionUpdated(Request $request)
+    {
+        Log::info("Recharge subscription updated webhook received.");
+
+        // Validate the webhook
+        // if (!$this->validateWebhook($request)) {
+        //     Log::warning(
+        //         "Recharge subscription updated webhook validation failed."
+        //     );
+        //     return response()->json(
+        //         ["status" => "error", "message" => "Webhook validation failed"],
+        //         401
+        //     );
+        // }
+
+        $payload = $request->json()->all();
+        $rechargeSubscriptionData = $payload["subscription"] ?? null;
+
+        if (!$rechargeSubscriptionData) {
+            Log::error(
+                "Recharge subscription updated webhook: Missing subscription data in payload.",
+                $payload
+            );
+            return response()->json(
+                ["status" => "error", "message" => "Missing subscription data"],
+                400
+            );
+        }
+
+        $rechargeSubscriptionId = $rechargeSubscriptionData["id"] ?? null;
+        if (!$rechargeSubscriptionId) {
+            Log::error(
+                "Recharge subscription updated webhook: Missing subscription ID in payload.",
+                $payload
+            );
+            return response()->json(
+                ["status" => "error", "message" => "Missing subscription ID"],
+                400
+            );
+        }
+
+        try {
+            $subscription = Subscription::where(
+                "recharge_subscription_id",
+                $rechargeSubscriptionId
+            )->first();
+
+            if (!$subscription) {
+                Log::warning(
+                    "Recharge subscription updated webhook: Subscription not found in local database.",
+                    [
+                        "recharge_subscription_id" => $rechargeSubscriptionId,
+                    ]
+                );
+                return response()->json(
+                    [
+                        "status" => "error",
+                        "message" => "Subscription not found",
+                    ],
+                    404
+                );
+            }
+
+            // Fields to update
+            $updateData = [];
+            if (isset($rechargeSubscriptionData["status"])) {
+                $updateData["status"] = strtolower(
+                    $rechargeSubscriptionData["status"]
+                );
+            }
+            if (isset($rechargeSubscriptionData["next_charge_scheduled_at"])) {
+                // Ensure the date format is compatible with your model's cast
+                $updateData["next_charge_scheduled_at"] =
+                    $rechargeSubscriptionData["next_charge_scheduled_at"];
+            }
+            if (isset($rechargeSubscriptionData["shopify_product_id"])) {
+                $updateData["shopify_product_id"] =
+                    $rechargeSubscriptionData["shopify_product_id"];
+            }
+
+            if (!empty($updateData)) {
+                $subscription->fill($updateData);
+                $subscription->save();
+                Log::info(
+                    "Subscription updated successfully from Recharge webhook.",
+                    [
+                        "local_subscription_id" => $subscription->id,
+                        "recharge_subscription_id" => $rechargeSubscriptionId,
+                        "updated_fields" => array_keys($updateData),
+                    ]
+                );
+            } else {
+                Log::info(
+                    "Recharge subscription updated webhook: No relevant data to update.",
+                    [
+                        "recharge_subscription_id" => $rechargeSubscriptionId,
+                    ]
+                );
+            }
+
+            return response()->json([
+                "status" => "success",
+                "message" => "Webhook processed successfully",
+            ]);
+        } catch (\Exception $e) {
+            Log::error(
+                "Error processing Recharge subscription updated webhook.",
+                [
+                    "recharge_subscription_id" => $rechargeSubscriptionId,
+                    "error" => $e->getMessage(),
+                    "trace" => $e->getTraceAsString(),
+                ]
+            );
+            return response()->json(
+                ["status" => "error", "message" => "Internal server error"],
+                500
+            );
+        }
+    }
 }

@@ -33,6 +33,10 @@ Route::post("/webhooks/recharge/subscription/created", [
     RechargeWebhookController::class,
     "subscriptionCreated",
 ]);
+Route::post("/webhooks/recharge/subscription/updated", [
+    RechargeWebhookController::class,
+    "subscriptionUpdated",
+]);
 
 // Yousign webhook
 Route::post("/webhooks/yousign", [
