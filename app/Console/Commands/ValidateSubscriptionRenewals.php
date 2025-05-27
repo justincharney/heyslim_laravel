@@ -9,6 +9,8 @@ use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use App\Models\Subscription;
+use App\Notifications\SubscriptionCancelledNotification;
+use Illuminate\Support\Facades\DB;
 
 class ValidateSubscriptionRenewals extends Command
 {
@@ -33,7 +35,6 @@ class ValidateSubscriptionRenewals extends Command
     {
         $this->info("Starting subscription renewal validation...");
 
-        // Get upcoming renewals in the next 24 hours
         $rechargeService = app(RechargeService::class);
         $upcomingRenewals = $rechargeService->getUpcomingRenewals();
 
@@ -50,105 +51,144 @@ class ValidateSubscriptionRenewals extends Command
         $validCount = 0;
 
         foreach ($upcomingRenewals as $renewal) {
-            $subscriptionId = $renewal["id"] ?? null;
+            $rechargeSubscriptionId = $renewal["id"] ?? null; // Renamed for clarity
             $productTitle = $renewal["product_title"] ?? "Unknown Product";
 
-            if (!$subscriptionId) {
-                $this->warn("Missing subscription ID for renewal.");
+            if (!$rechargeSubscriptionId) {
+                $this->warn("Missing Recharge subscription ID for renewal.");
                 continue;
             }
 
-            // Find the internal subscription record that corresponds to this Recharge subscription
             $subscription = Subscription::where(
                 "recharge_subscription_id",
-                $subscriptionId
+                $rechargeSubscriptionId
             )->first();
 
             if (!$subscription) {
                 $this->warn(
-                    "No internal subscription record found for Recharge subscription ID: {$subscriptionId}"
+                    "No internal subscription record found for Recharge subscription ID: {$rechargeSubscriptionId}"
                 );
                 continue;
             }
 
-            // Get the associated prescription using the relationship
             $prescription = $subscription->prescription;
 
             if (!$prescription) {
                 $this->info(
-                    "Subscription {$subscriptionId} has no associated prescription. Cancelling subscription."
+                    "Subscription {$subscription->id} (Recharge ID: {$rechargeSubscriptionId}) has no associated prescription. Cancelling subscription."
                 );
 
-                // Cancel the subscription
-                $cancelled = $rechargeService->cancelSubscription(
-                    $subscriptionId,
+                $cancelledInRecharge = $rechargeService->cancelSubscription(
+                    $rechargeSubscriptionId,
                     "No associated prescription",
                     "System automatically cancelled subscription due to no prescription found."
                 );
 
-                if ($cancelled) {
+                if ($cancelledInRecharge) {
+                    DB::transaction(function () use ($subscription) {
+                        $subscription->status = "cancelled";
+                        $subscription->save();
+                    });
                     $cancelCount++;
                     Log::info(
                         "Cancelled subscription due to no associated prescription",
                         [
-                            "subscription_id" => $subscriptionId,
+                            "recharge_subscription_id" => $rechargeSubscriptionId,
+                            "local_subscription_id" => $subscription->id,
                             "product_title" => $productTitle,
                         ]
                     );
                 } else {
                     $this->error(
-                        "Failed to cancel subscription {$subscriptionId}"
+                        "Failed to cancel Recharge subscription {$rechargeSubscriptionId}"
                     );
                 }
-
                 continue;
             }
 
-            // Check if the prescription is active and not expired
-            if (
-                $prescription->status !== "active" ||
-                Carbon::parse($prescription->end_date)->isPast() ||
-                $prescription->refills <= 0
-            ) {
-                $reason = "Unknown issue";
-                if ($prescription->status !== "active") {
-                    $reason = "Prescription is not active";
-                } elseif (Carbon::parse($prescription->end_date)->isPast()) {
-                    $reason = "Prescription has expired";
-                } elseif ($prescription->refills <= 0) {
-                    $reason = "No refills remaining";
-                }
+            $isInvalid = false;
+            $cancellationReason = "Unknown issue";
 
+            if ($prescription->status !== "active") {
+                $isInvalid = true;
+                $cancellationReason = "Prescription is not active";
+            } elseif (Carbon::parse($prescription->end_date)->isPast()) {
+                $isInvalid = true;
+                $cancellationReason = "Prescription has expired";
+            } elseif ($prescription->refills <= 0) {
+                $isInvalid = true;
+                $cancellationReason = "No refills remaining";
+            }
+
+            if ($isInvalid) {
                 $this->info(
-                    "Subscription {$subscriptionId} has an invalid prescription: {$reason}. Cancelling subscription."
+                    "Subscription {$subscription->id} (Recharge ID: {$rechargeSubscriptionId}) has an invalid prescription: {$cancellationReason}. Cancelling subscription."
                 );
 
-                // Cancel the subscription
-                $cancelled = $rechargeService->cancelSubscription(
-                    $subscriptionId,
-                    $reason,
-                    "System automatically cancelled subscription due to {$reason}."
+                $cancelledInRecharge = $rechargeService->cancelSubscription(
+                    $rechargeSubscriptionId,
+                    $cancellationReason,
+                    "System automatically cancelled subscription due to {$cancellationReason}."
                 );
 
-                if ($cancelled) {
+                if ($cancelledInRecharge) {
+                    DB::transaction(function () use (
+                        $subscription,
+                        $prescription
+                    ) {
+                        $subscription->status = "cancelled";
+                        $subscription->save();
+                        $prescription->status = "cancelled";
+                        $prescription->save();
+                    });
+
                     $cancelCount++;
                     Log::info(
                         "Cancelled subscription due to invalid prescription",
                         [
-                            "subscription_id" => $subscriptionId,
+                            "recharge_subscription_id" => $rechargeSubscriptionId,
+                            "local_subscription_id" => $subscription->id,
                             "prescription_id" => $prescription->id,
-                            "reason" => $reason,
+                            "reason" => $cancellationReason,
                         ]
                     );
+
+                    // Notify patient if cancelled
+                    try {
+                        $patient = $subscription->user;
+                        if ($patient) {
+                            $patient->notify(
+                                new SubscriptionCancelledNotification(
+                                    $subscription,
+                                    $prescription
+                                )
+                            );
+                            Log::info(
+                                "Sent SubscriptionCancelledNotification to user {$patient->id} for subscription {$subscription->id}"
+                            );
+                        } else {
+                            Log::warning(
+                                "Could not find user to notify for subscription {$subscription->id}"
+                            );
+                        }
+                    } catch (\Exception $e) {
+                        Log::error(
+                            "Failed to send SubscriptionCancelledNotification",
+                            [
+                                "subscription_id" => $subscription->id,
+                                "error" => $e->getMessage(),
+                            ]
+                        );
+                    }
                 } else {
                     $this->error(
-                        "Failed to cancel subscription {$subscriptionId}"
+                        "Failed to cancel Recharge subscription {$rechargeSubscriptionId}"
                     );
                 }
             } else {
                 $validCount++;
                 $this->info(
-                    "Subscription {$subscriptionId} has a valid prescription with {$prescription->refills} refills remaining. Subscription valid."
+                    "Subscription {$subscription->id} (Recharge ID: {$rechargeSubscriptionId}) has a valid prescription with {$prescription->refills} refills remaining. Subscription valid."
                 );
             }
         }
