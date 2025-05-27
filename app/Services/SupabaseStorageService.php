@@ -88,6 +88,72 @@ class SupabaseStorageService
     }
 
     /**
+     * Deletes one or more files from Supabase Storage.
+     *
+     * @param array|string $filePaths A single file path (string) or array of file paths to delete.
+     * @return bool True if deletion was successful, false otherwise.
+     */
+    public function deleteFiles(array|string $filePaths): bool
+    {
+        if (!$this->serviceKey) {
+            Log::error(
+                "Supabase service key not configured. Cannot delete files."
+            );
+            return false;
+        }
+
+        // Convert single path to array for consistent handling
+        $paths = is_array($filePaths) ? $filePaths : [$filePaths];
+
+        $deleteUrl = "{$this->baseUrl}/storage/v1/object/{$this->bucketName}";
+
+        try {
+            $response = Http::withHeaders([
+                "Authorization" => "Bearer {$this->serviceKey}",
+                "Content-Type" => "application/json",
+            ])->delete($deleteUrl, [
+                "prefixes" => $paths,
+            ]);
+
+            if ($response->successful()) {
+                Log::info("Files deleted successfully from Supabase Storage.", [
+                    "bucket" => $this->bucketName,
+                    "paths" => $paths,
+                    "response_status" => $response->status(),
+                ]);
+                return true;
+            } else {
+                Log::error("Failed to delete files from Supabase Storage.", [
+                    "url" => $deleteUrl,
+                    "paths" => $paths,
+                    "status" => $response->status(),
+                    "response_body" => $response->body(),
+                ]);
+                return false;
+            }
+        } catch (\Exception $e) {
+            Log::error("Exception during Supabase file deletion.", [
+                "url" => $deleteUrl,
+                "paths" => $paths,
+                "error" => $e->getMessage(),
+                "trace" => $e->getTraceAsString(),
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Deletes a single file from Supabase Storage.
+     *
+     * @param string $filePathInBucket The path of the file to delete in the bucket.
+     * @return bool True if deletion was successful, false otherwise.
+     */
+    public function deleteFile(string $filePathInBucket): bool
+    {
+        return $this->deleteFiles($filePathInBucket);
+    }
+
+    /**
      * Gets the public URL for a file in Supabase Storage.
      * This method constructs the URL and does not check for file existence or permissions.
      * Assumes the bucket has appropriate RLS policies for public access.

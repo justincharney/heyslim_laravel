@@ -9,6 +9,7 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 use App\Models\CheckIn;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class User extends Authenticatable
 {
@@ -133,5 +134,13 @@ class User extends Authenticatable
     public function checkIns()
     {
         return $this->hasMany(CheckIn::class);
+    }
+
+    /**
+     * Get the files uploaded by the user.
+     */
+    public function userFiles(): HasMany
+    {
+        return $this->hasMany(UserFile::class);
     }
 }

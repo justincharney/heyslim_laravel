@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Log;
 use App\Http\Controllers\CheckInController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\UserFileController;
 
 Route::post("/auth/exchange-token", [AuthController::class, "exchangeToken"]);
 
@@ -63,6 +64,12 @@ Route::middleware(["auth:sanctum", "role:patient"])->group(function () {
         "checkProfileCompletion",
     ]);
     Route::put("/profile", [ProfileController::class, "updatePatientProfile"]);
+
+    // User File Uploads
+    Route::post("/user-files", [UserFileController::class, "store"]);
+    Route::get("/user-files", [UserFileController::class, "index"]);
+    Route::get("/user-files/{id}", [UserFileController::class, "show"]);
+    Route::delete("/user-files/{id}", [UserFileController::class, "destroy"]);
 
     // Questionnaire routes
     Route::middleware([ProfileCompletedMiddleware::class])

@@ -8,9 +8,17 @@ use App\Models\QuestionnaireSubmission;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use App\Services\SupabaseStorageService;
 
 class PatientController extends Controller
 {
+    protected $supabaseService;
+
+    public function __construct(SupabaseStorageService $supabaseService)
+    {
+        $this->supabaseService = $supabaseService;
+    }
+
     public function index(Request $request)
     {
         // Get the current provider's team
@@ -51,7 +59,37 @@ class PatientController extends Controller
         // Set team context for permissions
         setPermissionsTeamId($teamId);
 
-        $patient = User::findOrFail($patientId);
+        // Load patient with all relationships in one query
+        $patient = User::with([
+            "questionnaireSubmissions" => function ($query) {
+                $query
+                    ->with("questionnaire")
+                    ->where("status", "!=", "draft")
+                    ->orderBy("created_at", "desc");
+            },
+            "clinicalPlansAsPatient" => function ($query) use ($teamId) {
+                $query
+                    ->with(["provider", "pharmacist", "patient"])
+                    ->whereHas("provider", function ($q) use ($teamId) {
+                        $q->where("current_team_id", $teamId);
+                    })
+                    ->orderBy("created_at", "desc");
+            },
+            "prescriptionsAsPatient" => function ($query) use ($teamId) {
+                $query
+                    ->with(["prescriber", "clinicalPlan", "patient"])
+                    ->whereHas("prescriber", function ($q) use ($teamId) {
+                        $q->where("current_team_id", $teamId);
+                    })
+                    ->orderBy("created_at", "desc");
+            },
+            "checkIns" => function ($query) {
+                $query->orderBy("created_at", "desc");
+            },
+            "userFiles" => function ($query) {
+                $query->orderBy("created_at", "desc");
+            },
+        ])->findOrFail($patientId);
 
         // Check if the user has the patient role and belongs to the same team
         if (
@@ -66,42 +104,22 @@ class PatientController extends Controller
             );
         }
 
-        // Load questionnaire submissions (non-draft)
-        $submissions = QuestionnaireSubmission::with(["questionnaire"])
-            ->where("user_id", $patient->id)
-            ->where("status", "!=", "draft")
-            ->orderBy("created_at", "desc")
-            ->get();
-
-        // Load clinical management plans with team context
-        $clinicalPlans = $patient
-            ->clinicalPlansAsPatient()
-            ->with(["provider", "pharmacist", "patient"])
-            ->whereHas("provider", function ($query) use ($teamId) {
-                $query->where("current_team_id", $teamId);
-            })
-            ->orderBy("created_at", "desc")
-            ->get();
-
-        // Load prescriptions with team context
-        $prescriptions = $patient
-            ->prescriptionsAsPatient()
-            ->with(["prescriber", "clinicalPlan", "patient"])
-            ->whereHas("prescriber", function ($query) use ($teamId) {
-                $query->where("current_team_id", $teamId);
-            })
-            ->orderBy("created_at", "desc")
-            ->get();
-
-        // Load checkIns with team context
-        $checkIns = $patient->checkIns()->orderBy("created_at", "desc")->get();
+        // Load user files and generate signed URLs
+        $userFilesWithUrls = $patient->userFiles->map(function ($file) {
+            $file->url = $this->supabaseService->createSignedUrl(
+                $file->supabase_path,
+                3600
+            );
+            return $file;
+        });
 
         return response()->json([
             "patient" => $patient,
-            "questionnaire_submissions" => $submissions,
-            "clinical_plans" => $clinicalPlans,
-            "prescriptions" => $prescriptions,
-            "checkIns" => $checkIns,
+            "questionnaire_submissions" => $patient->questionnaireSubmissions,
+            "clinical_plans" => $patient->clinicalPlansAsPatient,
+            "prescriptions" => $patient->prescriptionsAsPatient,
+            "checkIns" => $patient->checkIns,
+            "user_files" => $userFilesWithUrls,
         ]);
     }
 
