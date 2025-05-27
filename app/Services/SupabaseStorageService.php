@@ -63,11 +63,11 @@ class SupabaseStorageService
             if ($response->successful()) {
                 // Successful upload typically returns 200 OK with JSON: e.g. {"Key": "bucket/path/file.pdf"}
                 // We can verify $response->json('Key') if needed.
-                Log::info("File uploaded successfully to Supabase Storage.", [
-                    "bucket" => $this->bucketName,
-                    "path" => $filePathInBucket,
-                    "response_status" => $response->status(),
-                ]);
+                // Log::info("File uploaded successfully to Supabase Storage.", [
+                //     "bucket" => $this->bucketName,
+                //     "path" => $filePathInBucket,
+                //     "response_status" => $response->status(),
+                // ]);
                 return $filePathInBucket; // Return the path used for upload
             } else {
                 Log::error("Failed to upload file to Supabase Storage.", [
@@ -105,7 +105,7 @@ class SupabaseStorageService
         // Convert single path to array for consistent handling
         $paths = is_array($filePaths) ? $filePaths : [$filePaths];
 
-        $deleteUrl = "{$this->baseUrl}/storage/v1/object/{$this->bucketName}";
+        $deleteUrl = "{$this->baseUrl}/object/{$this->bucketName}";
 
         try {
             $response = Http::withHeaders([
@@ -116,11 +116,11 @@ class SupabaseStorageService
             ]);
 
             if ($response->successful()) {
-                Log::info("Files deleted successfully from Supabase Storage.", [
-                    "bucket" => $this->bucketName,
-                    "paths" => $paths,
-                    "response_status" => $response->status(),
-                ]);
+                // Log::info("Files deleted successfully from Supabase Storage.", [
+                //     "bucket" => $this->bucketName,
+                //     "paths" => $paths,
+                //     "response_status" => $response->status(),
+                // ]);
                 return true;
             } else {
                 Log::error("Failed to delete files from Supabase Storage.", [
@@ -196,12 +196,12 @@ class SupabaseStorageService
                 $signedPath = $response->json("signedURL");
                 if ($signedPath) {
                     $fullSignedUrl = $this->baseUrl . $signedPath;
-                    Log::info("Successfully created Supabase signed URL.", [
-                        "path" => $filePathInBucket,
-                        "expires_in" => $expiresIn,
-                        "signed_url_preview" =>
-                            substr($fullSignedUrl, 0, 100) . "...",
-                    ]);
+                    // Log::info("Successfully created Supabase signed URL.", [
+                    //     "path" => $filePathInBucket,
+                    //     "expires_in" => $expiresIn,
+                    //     "signed_url_preview" =>
+                    //         substr($fullSignedUrl, 0, 100) . "...",
+                    // ]);
                     return $fullSignedUrl;
                 } else {
                     Log::error(
