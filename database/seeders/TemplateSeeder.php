@@ -167,12 +167,10 @@ class TemplateSeeder extends Seeder
                 "description" =>
                     "Standard protocol for Wegovy (semaglutide) for weight management",
                 "medication_name" => "Wegovy",
-                "dose" => "Based on dose schedule",
-                "schedule" => "Once weekly subcutaneous injection",
                 "refills" => 5,
                 "directions" =>
                     "Inject subcutaneously once weekly as directed. Store in refrigerator. May be kept at room temperature for up to 28 days. Do not freeze.",
-                "dose_schedule" => json_encode([
+                "dose_schedule" => [
                     [
                         "refill_number" => 0,
                         "dose" => "0.25mg",
@@ -208,7 +206,7 @@ class TemplateSeeder extends Seeder
                             $wegovyVariants[4]["shopify_variant_gid"],
                         "selling_plan_id" => $wegovySellingPlanId,
                     ],
-                ]),
+                ],
                 "is_global" => true,
                 "created_by" => $adminId,
             ],
@@ -217,12 +215,10 @@ class TemplateSeeder extends Seeder
                 "description" =>
                     "Standard protocol for Tirzepatide for weight management",
                 "medication_name" => "Mounjaro",
-                "dose" => "Based on dose schedule",
-                "schedule" => "Once weekly subcutaneous injection",
                 "refills" => 5,
                 "directions" =>
                     "Inject subcutaneously once weekly as directed. Store in refrigerator. May be kept at room temperature for up to 28 days. Do not freeze.",
-                "dose_schedule" => json_encode([
+                "dose_schedule" => [
                     [
                         "refill_number" => 0,
                         "dose" => "2.5mg",
@@ -265,7 +261,7 @@ class TemplateSeeder extends Seeder
                             $mounjaroVariants[5]["shopify_variant_gid"],
                         "selling_plan_id" => $mounjaroSellingPlanId,
                     ],
-                ]),
+                ],
                 "is_global" => true,
                 "created_by" => $adminId,
             ],

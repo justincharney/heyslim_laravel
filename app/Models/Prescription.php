@@ -20,8 +20,6 @@ class Prescription extends Model implements AuditableContract
         "prescriber_id",
         "clinical_plan_id",
         "medication_name",
-        "dose",
-        "schedule",
         "refills",
         "directions",
         "status",

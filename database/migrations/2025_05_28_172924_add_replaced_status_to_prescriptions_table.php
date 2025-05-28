@@ -17,6 +17,7 @@ return new class extends Migration {
             $table
                 ->enum("status", [
                     "pending_signature",
+                    "pending_payment",
                     "active",
                     "completed",
                     "cancelled",
@@ -37,6 +38,7 @@ return new class extends Migration {
             $table
                 ->enum("status", [
                     "pending_signature",
+                    "pending_payment",
                     "active",
                     "completed",
                     "cancelled",

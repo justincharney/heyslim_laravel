@@ -120,9 +120,7 @@ class PrescriptionController extends Controller
             "patient_id" => "required|exists:users,id",
             "clinical_plan_id" => "required|exists:clinical_plans,id",
             "medication_name" => "required|string|max:255",
-            "dose" => "required|string",
             "dose_schedule" => "required|json",
-            "schedule" => "required|string",
             "refills" => "required|integer|between:0,11",
             "directions" => "nullable|string",
             // "status" => "required|in:active,completed,cancelled",
@@ -143,6 +141,7 @@ class PrescriptionController extends Controller
 
         // Decode JSON dose schedule
         $doseScheduleData = json_decode($validated["dose_schedule"], true);
+        $validated["dose_schedule"] = $doseScheduleData;
 
         // If no end date, set it based on dose schedule
         if (empty($validated["end_date"])) {
@@ -484,8 +483,6 @@ class PrescriptionController extends Controller
 
         $validated = $request->validate([
             "medication_name" => "sometimes|string|max:255",
-            "dose" => "sometimes|string",
-            "schedule" => "sometimes|string",
             "refills" => "sometimes|integer|between:0,11",
             "directions" => "nullable|string",
             "status" =>
@@ -703,9 +700,7 @@ class PrescriptionController extends Controller
             "patient_id" => "required|exists:users,id",
             "clinical_plan_id" => "required|exists:clinical_plans,id",
             "medication_name" => "required|string|max:255",
-            "dose" => "required|string",
             "dose_schedule" => "required|json",
-            "schedule" => "required|string",
             "refills" => "required|integer|between:0,11",
             "directions" => "nullable|string",
             "start_date" => "required|date",

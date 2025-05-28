@@ -10,9 +10,9 @@ class PrescriptionTemplate extends Model
         "name",
         "description",
         "medication_name",
-        "dose",
+
         "dose_schedule",
-        "schedule",
+
         "refills",
         "directions",
         "created_by",
