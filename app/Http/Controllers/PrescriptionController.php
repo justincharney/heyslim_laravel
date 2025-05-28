@@ -8,6 +8,7 @@ use App\Models\Prescription;
 use App\Models\PrescriptionTemplate;
 use App\Models\User;
 use App\Models\ClinicalPlan;
+use App\Services\RechargeService;
 use App\Services\YousignService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -643,5 +644,253 @@ class PrescriptionController extends Controller
         return response()->json([
             "prescriptions" => $prescriptions,
         ]);
+    }
+
+    /**
+     * Issues a new prescription, replacing an old one, typically triggered from a check-in review.
+     * Also handles subscription SKU swap, and initiates YouSign.
+     */
+    public function issueReplacementPrescription(
+        Request $request,
+        Prescription $prescription,
+        RechargeService $rechargeService
+    ) {
+        $user = auth()->user(); // This is the provider performing the action
+        $teamId = $user->current_team_id;
+
+        if (!$teamId) {
+            return response()->json(
+                ["message" => "You must be associated with a team."],
+                403
+            );
+        }
+        setPermissionsTeamId($teamId);
+
+        // Authorization (ensure user is provider/pharmacist)
+        $this->authorize(Permission::WRITE_PRESCRIPTIONS);
+
+        // Get the current prescription that's being replaced
+        $oldPrescription = $prescription->load([
+            "patient",
+            "clinicalPlan",
+            "subscription",
+        ]);
+
+        // Validate the new prescription data
+        $validated = $request->validate([
+            "patient_id" => "required|exists:users,id",
+            "clinical_plan_id" => "required|exists:clinical_plans,id",
+            "medication_name" => "required|string|max:255",
+            "dose" => "required|string",
+            "dose_schedule" => "required|json",
+            "schedule" => "required|string",
+            "refills" => "required|integer|between:0,11",
+            "directions" => "nullable|string",
+            "start_date" => "required|date",
+            "end_date" => "nullable|date|after_or_equal:start_date",
+        ]);
+
+        // Authorization checks
+        if ($oldPrescription->patient->current_team_id !== $teamId) {
+            return response()->json(
+                [
+                    "message" =>
+                        "Cannot manage prescriptions for patients outside your team.",
+                ],
+                403
+            );
+        }
+
+        // --- Data Consistency Checks ---
+        if ((int) $validated["patient_id"] !== $oldPrescription->patient_id) {
+            return response()->json(
+                [
+                    "message" =>
+                        "Patient ID mismatch with original prescription.",
+                ],
+                422
+            );
+        }
+
+        if (
+            (int) $validated["clinical_plan_id"] !==
+            $oldPrescription->clinical_plan_id
+        ) {
+            return response()->json(
+                [
+                    "message" =>
+                        "Clinical Plan ID should match the original prescription.",
+                ],
+                422
+            );
+        }
+
+        $newPrescription = null;
+        $subscription = $oldPrescription->subscription;
+
+        DB::beginTransaction();
+        try {
+            // 1. Create the New Prescription (it needs an ID first)
+            $newPrescriptionData = array_merge($validated, [
+                "prescriber_id" => $user->id, // The authenticated provider
+                "status" => "pending_signature",
+                // 'replaces_prescription_id' will be set after oldPrescription is confirmed
+            ]);
+            // ... (calculate end_date for newPrescriptionData as before) ...
+            if (empty($newPrescriptionData["end_date"])) {
+                $doseScheduleArray = json_decode(
+                    $newPrescriptionData["dose_schedule"],
+                    true
+                );
+                if (
+                    is_array($doseScheduleArray) &&
+                    !empty($doseScheduleArray)
+                ) {
+                    $startDate = new \DateTime(
+                        $newPrescriptionData["start_date"]
+                    );
+                    $numberOfDoses = count($doseScheduleArray);
+                    $newPrescriptionData["end_date"] = $startDate
+                        ->modify("+" . $numberOfDoses . " months") // Adjust period as needed
+                        ->format("Y-m-d");
+                } else {
+                    DB::rollBack();
+                    return response()->json(
+                        [
+                            "message" =>
+                                "Invalid dose schedule format for new prescription.",
+                        ],
+                        422
+                    );
+                }
+            }
+            $newPrescription = new Prescription($newPrescriptionData);
+            // We will set replaces_prescription_id after confirming oldPrescription exists
+            // and before saving newPrescription if oldPrescription is valid.
+
+            // 2. Link New Rx to Old Rx and Save New Rx
+            $newPrescription->replaces_prescription_id = $oldPrescription->id;
+            $newPrescription->save(); // Save new prescription to get its ID
+
+            // 3. Update and Cancel the Old Prescription, linking it to the new one
+            $oldPrescription->status = "cancelled";
+            $oldPrescription->end_date = now();
+            $oldPrescription->replaced_by_prescription_id =
+                $newPrescription->id; // Link to the newly created prescription
+            $oldPrescription->save();
+
+            // 4. Update the Subscription
+            $subscription->prescription_id = $newPrescription->id;
+            $subscription->product_name = $newPrescription->medication_name;
+            $subscription->save();
+
+            // 5. Handle Chats (Update existing)
+            $chat = Chat::where(
+                "prescription_id",
+                $oldPrescription->id
+            )->first();
+
+            // Update the chat to the new prescription
+            $chat->prescription_id = $newPrescription->id;
+            $chat->status = "active";
+            $chat->save();
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error(
+                "Error issuing replacement prescription: " . $e->getMessage(),
+                [
+                    "old_prescription_id" => $oldPrescription->id,
+                    "trace" => $e->getTraceAsString(),
+                ]
+            );
+            return response()->json(
+                [
+                    "message" =>
+                        "Failed to issue replacement prescription. " .
+                        $e->getMessage(),
+                ],
+                500
+            );
+        }
+
+        // --- Post-Commit Actions ---
+        // 6. Update Recharge Subscription Variant (SKU Swap)
+        try {
+            $doseScheduleArray = json_decode(
+                $newPrescription->dose_schedule,
+                true
+            );
+            if (
+                is_array($doseScheduleArray) &&
+                !empty($doseScheduleArray) &&
+                isset($doseScheduleArray[0]["shopify_variant_gid"])
+            ) {
+                $firstDoseInfo = $doseScheduleArray[0];
+                $newShopifyVariantGid = $firstDoseInfo["shopify_variant_gid"];
+                $newShopifyVariantIdNumeric = preg_replace(
+                    "/[^0-9]/",
+                    "",
+                    $newShopifyVariantGid
+                );
+
+                if (
+                    $subscription->recharge_subscription_id &&
+                    $newShopifyVariantIdNumeric
+                ) {
+                    $rechargeService->updateSubscriptionVariant(
+                        $subscription->recharge_subscription_id,
+                        $newShopifyVariantIdNumeric
+                    );
+                    Log::info(
+                        "SKU Swap initiated for subscription {$subscription->recharge_subscription_id} to variant {$newShopifyVariantIdNumeric}"
+                    );
+                } else {
+                    Log::warning(
+                        "Could not perform SKU swap: Missing Recharge subscription ID or new variant GID for replacement.",
+                        [
+                            "recharge_sub_id" =>
+                                $subscription->recharge_subscription_id,
+                            "new_variant_gid_numeric" =>
+                                $newShopifyVariantIdNumeric ?? null,
+                        ]
+                    );
+                }
+            } else {
+                Log::warning(
+                    "Dose schedule or Shopify variant GID missing for SKU swap in replacement.",
+                    [
+                        "prescription_id" => $newPrescription->id,
+                        "dose_schedule" => $newPrescription->dose_schedule,
+                    ]
+                );
+            }
+        } catch (\Exception $e) {
+            Log::error(
+                "Failed to update Recharge subscription variant during replacement: " .
+                    $e->getMessage(),
+                [
+                    "recharge_subscription_id" =>
+                        $subscription->recharge_subscription_id ?? null,
+                ]
+            );
+        }
+
+        // 7. Initiate YouSign for the new prescription
+        if ($newPrescription) {
+            InitiateYousignSignatureJob::dispatch($newPrescription->id);
+        }
+
+        // 8. TODO: Send Notifications (e.g., to patient about the updated prescription)
+
+        return response()->json(
+            [
+                "message" =>
+                    "Prescription replaced successfully. Check-in updated and signature process initiated.",
+                "new_prescription" => $newPrescription->fresh(),
+            ],
+            200
+        );
     }
 }

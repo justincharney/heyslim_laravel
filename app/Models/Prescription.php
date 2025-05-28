@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use App\Models\CheckIn;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 use OwenIt\Auditing\Auditable as AuditableTrait;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Prescription extends Model implements AuditableContract
 {
@@ -30,6 +31,8 @@ class Prescription extends Model implements AuditableContract
         "yousign_document_id",
         "signed_at",
         "dose_schedule",
+        "replaces_prescription_id",
+        "replaced_by_prescription_id",
     ];
 
     protected $casts = [
@@ -38,6 +41,28 @@ class Prescription extends Model implements AuditableContract
         "signed_at" => "datetime",
         "dose_schedule" => "array",
     ];
+
+    /**
+     * Get the prescription that this prescription replaces.
+     */
+    public function replacedPrescription(): BelongsTo
+    {
+        return $this->belongsTo(
+            Prescription::class,
+            "replaces_prescription_id"
+        );
+    }
+
+    /**
+     * Get the prescription that replaced this one.
+     */
+    public function replacingPrescription(): BelongsTo
+    {
+        return $this->belongsTo(
+            Prescription::class,
+            "replaced_by_prescription_id"
+        );
+    }
 
     /**
      * Get the initial dose from the dose schedule

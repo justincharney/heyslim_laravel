@@ -271,6 +271,10 @@ Route::middleware(["auth:sanctum", "role:provider|pharmacist"])->group(
             PrescriptionController::class,
             "update",
         ]);
+        Route::post("/prescriptions/{prescription}/replace", [
+            PrescriptionController::class,
+            "issueReplacementPrescription",
+        ]);
 
         // Clinical plans (read-only)
         Route::get("/clinical-plans", [ClinicalPlanController::class, "index"]);

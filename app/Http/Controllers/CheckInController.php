@@ -126,7 +126,10 @@ class CheckInController extends Controller
     public function show($id)
     {
         $user = auth()->user();
-        $checkIn = CheckIn::findOrFail($id);
+        $checkIn = CheckIn::with([
+            "prescription.clinicalPlan",
+            "user",
+        ])->findOrFail($id);
 
         // Set team context
         setPermissionsTeamId($user->current_team_id);
