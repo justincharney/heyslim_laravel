@@ -123,6 +123,18 @@ class GenerateAndNotifyCheckIns extends Command
                     ],
                     [
                         "id" => "question_4",
+                        "type" => "number",
+                        "question" => "What is your current weight? (kg)",
+                        "required" => true,
+                        "response" => null,
+                        "validation" => [
+                            "min" => 30,
+                            "max" => 400,
+                            "message" => "Weight must be between 30 and 400 kg",
+                        ],
+                    ],
+                    [
+                        "id" => "question_5",
                         "type" => "textarea",
                         "question" =>
                             "Any additional information you'd like to share with your provider?",
