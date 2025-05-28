@@ -44,12 +44,11 @@ class ProcessSignedPrescriptionJob implements ShouldQueue
      * Execute the job.
      */
     public function handle(
-        YousignService $yousignService,
         ShopifyService $shopifyService,
         SupabaseStorageService $supabaseService
     ): void {
         Log::info(
-            "Processing signed prescription job for prescription ID: {$this->prescriptionId}"
+            "Processing signed prescription attachment job for prescription ID: {$this->prescriptionId}, order: {$this->shopifyOrderId}"
         );
 
         $prescription = Prescription::find($this->prescriptionId);
@@ -61,148 +60,75 @@ class ProcessSignedPrescriptionJob implements ShouldQueue
             return;
         }
 
-        $uploadedPath = null;
-        // Check if we have not already stored the signed prescription
+        // Check if we have the signed prescription path
         if (empty($prescription->signed_prescription_supabase_path)) {
-            // 1. Download the signed document
-            $signedDocument = $yousignService->downloadSignedDocument(
-                $this->signatureRequestId,
-                $this->documentId
+            Log::error(
+                "Prescription {$this->prescriptionId} does not have signed_prescription_supabase_path set."
             );
-            if (!$signedDocument) {
-                Log::error(
-                    "Failed to download signed document in job for SR ID: {$this->signatureRequestId}"
-                );
-                // Let the queue retry
-                $this->release(60 * 2); // Release back to queue, retry in 2 mins
-                return;
-            }
-            Log::info(
-                "Successfully downloaded signed document for prescription ID: {$this->prescriptionId}"
-            );
-
-            // 2. Upload to Supabase Storage and get URL
-            $supabaseUrl = null;
-
-            // Define a path for the file in Supabase bucket
-            $supabasePath = "signed_prescriptions/prescription_{$prescription->id}";
-
-            try {
-                //Upload with content type for PDF
-                $uploadOptions = [
-                    "contentType" => "application/pdf",
-                    "upsert" => false,
-                ];
-                $uploadedPath = $supabaseService->uploadFile(
-                    $supabasePath,
-                    $signedDocument,
-                    $uploadOptions
-                );
-
-                if (!$uploadedPath) {
-                    Log::error(
-                        "failed to upload signed prescription to Supabase Storage for prescription #{$this->prescriptionId}"
-                    );
-                    $this->release(60 * 2); // Retry in 2 minutes
-                    return;
-                }
-                Log::info(
-                    "Successfully uploaded signed prescription to Supabase Storage.",
-                    [
-                        "prescription_id" => $this->prescriptionId,
-                        "supabase_path" => $uploadedPath,
-                    ]
-                );
-
-                // Save the Supabase path to prescription
-                $prescription->signed_prescription_supabase_path = $uploadedPath;
-                $prescription->save();
-                Log::info(
-                    "Saved Supabase path '{$uploadedPath}' to prescription #{$this->prescriptionId}"
-                );
-            } catch (\Exception $e) {
-                Log::error(
-                    "Exception during Supabase upload or saving path in ProcessSignedPrescriptionJob",
-                    [
-                        "prescription_id" => $this->prescriptionId,
-                        "supabase_attempted_path" => $supabasePath,
-                        "error" => $e->getMessage(),
-                        "trace" => $e->getTraceAsString(),
-                    ]
-                );
-                $this->release(60 * 3); // Longer backoff for exceptions
-                return;
-            }
-        } else {
-            // Use the saved URL
-            $uploadedPath = $prescription->signed_prescription_supabase_path;
+            $this->fail("Signed prescription Supabase path not found.");
+            return;
         }
 
-        // Now, get signed URL to attach to Shopify order
-        $expiresInSeconds = 60 * 60 * 24 * 30; // Example: 30 days
+        // Generate signed URL for the Supabase file
+        $expiresInSeconds = 60 * 60 * 24 * 30; // 30 days
         $supabaseUrl = $supabaseService->createSignedUrl(
-            $uploadedPath,
+            $prescription->signed_prescription_supabase_path,
             $expiresInSeconds
         );
 
         if (!$supabaseUrl) {
             Log::error(
                 "Failed to get Supabase URL for prescription #{$this->prescriptionId}. Releasing job.",
-                ["path" => $uploadedPath]
+                ["path" => $prescription->signed_prescription_supabase_path]
             );
             $this->release(60 * 2); // Retry in 2 minutes
             return;
         }
+
         Log::info(
             "Successfully obtained Supabase URL for prescription #{$this->prescriptionId}.",
             ["url_preview" => substr($supabaseUrl, 0, 100) . "..."]
         );
 
-        if ($supabaseUrl) {
-            $orderGid = $shopifyService->formatGid($this->shopifyOrderId);
-            if (!$orderGid) {
-                Log::error(
-                    "Failed to format Order GID from numeric ID: {$this->shopifyOrderId} for prescription #{$this->prescriptionId}. Cannot set metafield."
-                );
-                $this->release(60 * 10);
-                return;
-            }
-
-            $metafieldNamespace = "custom";
-            $metafieldKey = "prescription_url";
-            $metafieldType = "url";
-
-            $metafieldsToSet = [
-                [
-                    "namespace" => $metafieldNamespace,
-                    "key" => $metafieldKey,
-                    "type" => $metafieldType,
-                    "value" => $supabaseUrl,
-                ],
-            ];
-
-            $success = $shopifyService->setOrderMetafields(
-                $orderGid,
-                $metafieldsToSet
-            );
-
-            if (!$success) {
-                Log::error(
-                    "Failed to set Supabase document URL metafield on Shopify order {$orderGid} for prescription #{$this->prescriptionId}. Releasing job."
-                );
-                $this->release(60 * 2); // Retry in 2 mins
-                return;
-            }
-            Log::info(
-                "Successfully attached Supabase document URL to Shopify order {$orderGid} for prescription #{$this->prescriptionId}"
-            );
-        } else {
+        // Attach URL to Shopify order
+        $orderGid = $shopifyService->formatGid($this->shopifyOrderId);
+        if (!$orderGid) {
             Log::error(
-                "Supabase URL was not obtained for prescription #{$this->prescriptionId}. Retrying"
+                "Failed to format Order GID from numeric ID: {$this->shopifyOrderId} for prescription #{$this->prescriptionId}. Cannot set metafield."
             );
-            $this->release(60);
+            $this->release(60 * 10);
             return;
         }
+
+        $metafieldNamespace = "custom";
+        $metafieldKey = "prescription_url";
+        $metafieldType = "url";
+
+        $metafieldsToSet = [
+            [
+                "namespace" => $metafieldNamespace,
+                "key" => $metafieldKey,
+                "type" => $metafieldType,
+                "value" => $supabaseUrl,
+            ],
+        ];
+
+        $success = $shopifyService->setOrderMetafields(
+            $orderGid,
+            $metafieldsToSet
+        );
+
+        if (!$success) {
+            Log::error(
+                "Failed to set Supabase document URL metafield on Shopify order {$orderGid} for prescription #{$this->prescriptionId}. Releasing job."
+            );
+            $this->release(60); // Retry in 1 mins
+            return;
+        }
+
+        Log::info(
+            "Successfully attached Supabase document URL to Shopify order {$orderGid} for prescription #{$this->prescriptionId}"
+        );
 
         Log::info(
             "ProcessSignedPrescriptionJob completed for prescription #{$this->prescriptionId}"

@@ -31,6 +31,7 @@ class Prescription extends Model implements AuditableContract
         "yousign_document_id",
         "signed_at",
         "dose_schedule",
+        "signed_prescription_supabase_path",
         "replaces_prescription_id",
         "replaced_by_prescription_id",
     ];

@@ -242,15 +242,23 @@ class RechargeWebhookController extends Controller
                         );
 
                         // Handle Attaching the signed prescription to the recurring order
-                        ProcessSignedPrescriptionJob::dispatch(
-                            $updated_prescription_after_decrement->id,
-                            $updated_prescription_after_decrement->yousign_signature_request_id,
-                            $updated_prescription_after_decrement->yousign_document_id,
-                            $currentShopifyOrderId
-                        );
-                        Log::info(
-                            "Dispatched ProcessSignedPrescriptionJob for RECURRING order prescription #{$updated_prescription_after_decrement->id} and order {$currentShopifyOrderId}"
-                        );
+                        if (
+                            !empty(
+                                $updated_prescription_after_decrement->signed_prescription_supabase_path
+                            )
+                        ) {
+                            ProcessSignedPrescriptionJob::dispatch(
+                                $updated_prescription_after_decrement->id,
+                                $currentShopifyOrderId
+                            );
+                            Log::info(
+                                "Dispatched ProcessSignedPrescriptionJob for RECURRING order prescription #{$updated_prescription_after_decrement->id} and order {$currentShopifyOrderId}"
+                            );
+                        } else {
+                            Log::warning(
+                                "Prescription #{$updated_prescription_after_decrement->id} does not have a signed document available. Skipping attachment to recurring order {$currentShopifyOrderId}."
+                            );
+                        }
 
                         // Handle SKU swap for the NEXT ORDER
                         $dose_schedule =
@@ -429,20 +437,24 @@ class RechargeWebhookController extends Controller
 
                     // If prescription is already signed, dispatch job to attach signed PDF
                     if (
-                        $prescription->yousign_document_id &&
-                        $prescription->signed_at
+                        !empty($prescription->signed_prescription_supabase_path)
                     ) {
                         // JOB 2: Process the signed prescription
                         ProcessSignedPrescriptionJob::dispatch(
                             $prescription->id,
-                            $prescription->yousign_signature_request_id,
-                            $prescription->yousign_document_id,
                             $currentShopifyOrderId
+                        );
+                        Log::info(
+                            "Dispatched ProcessSignedPrescriptionJob for CHECKOUT order prescription #{$prescription->id} and order {$currentShopifyOrderId}"
                         );
 
                         // Update the status to 'active'
                         $prescription->status = "active";
                         $prescription->save();
+                    } else {
+                        Log::info(
+                            "Prescription #{$prescription->id} does not have a signed document available yet. Will be attached when signature is completed."
+                        );
                     }
                 } else {
                     Log::error(

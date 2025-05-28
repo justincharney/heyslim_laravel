@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Jobs\ProcessSignedPrescriptionJob;
 use App\Models\Prescription;
+use App\Services\SupabaseStorageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -11,18 +12,22 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use App\Services\ShopifyService;
 use App\Services\YousignService;
+use App\Services\SupabaseStorageService;
 
 class YousignWebhookController extends Controller
 {
     protected $shopifyService;
     protected $yousignService;
+    protected $supabaseService;
 
     public function __construct(
         ShopifyService $shopifyService,
-        YousignService $yousignService
+        YousignService $yousignService,
+        SupabaseStorageService $supabaseService
     ) {
         $this->shopifyService = $shopifyService;
         $this->yousignService = $yousignService;
+        $this->supabaseService = $supabaseService;
     }
 
     /**
@@ -106,8 +111,6 @@ class YousignWebhookController extends Controller
             );
         }
 
-        // Log::info("Prescription #{$prescription->id} marked as signed");
-
         // Get the document id
         $documentId = $request->input("data.signature_request.documents.0.id");
 
@@ -118,12 +121,68 @@ class YousignWebhookController extends Controller
             return response()->json(["error" => "No document ID found"], 400);
         }
 
+        // Download the signed document from YouSign
+        $signedDocument = $this->yousignService->downloadSignedDocument(
+            $signatureRequestId,
+            $documentId
+        );
+
+        if (!$signedDocument) {
+            Log::error(
+                "Failed to download signed document for signature request: $signatureRequestId"
+            );
+            return response()->json(
+                ["error" => "Failed to download signed document"],
+                500
+            );
+        }
+
+        // Upload to Supabase Storage
+        $supabasePath = "signed_prescriptions/prescription_{$prescription->id}";
+        $uploadOptions = [
+            "contentType" => "application/pdf",
+            "upsert" => false,
+        ];
+
+        try {
+            $uploadedPath = $this->supabaseService->uploadFile(
+                $supabasePath,
+                $signedDocument,
+                $uploadOptions
+            );
+
+            if (!$uploadedPath) {
+                Log::error(
+                    "Failed to upload signed prescription to Supabase for prescription #{$prescription->id}"
+                );
+                return response()->json(
+                    ["error" => "Failed to upload signed document"],
+                    500
+                );
+            }
+
+            Log::info("Successfully uploaded signed prescription to Supabase", [
+                "prescription_id" => $prescription->id,
+                "supabase_path" => $uploadedPath,
+            ]);
+        } catch (\Exception $e) {
+            Log::error("Exception during Supabase upload", [
+                "prescription_id" => $prescription->id,
+                "error" => $e->getMessage(),
+            ]);
+            return response()->json(
+                ["error" => "Exception during document upload"],
+                500
+            );
+        }
+
         // ----- PERFORM DB UPDATE -----
         try {
             DB::beginTransaction();
             $updateData = [
                 "signed_at" => now(),
                 "yousign_document_id" => $documentId,
+                "signed_prescription_supabase_path" => $uploadedPath,
             ];
 
             // Only set the status to 'active' if there's a linked subscription
@@ -148,27 +207,33 @@ class YousignWebhookController extends Controller
             );
         }
 
-        // Dispatch job
+        // Conditionally dispatch job based on prescription type
+        $isReplacement = !is_null($prescription->replaces_prescription_id);
         $shopifyOrderId =
             $prescription->subscription?->original_shopify_order_id;
-        if (!$shopifyOrderId) {
-            Log::warning(
-                "Cannot dispatch job for prescription #{$prescription->id}: Missing Shopify Order ID in associated subscription."
-            );
-        } else {
+
+        if (!$isReplacement && $shopifyOrderId) {
+            // This is an initial prescription with an associated original order
             ProcessSignedPrescriptionJob::dispatch(
                 $prescription->id,
-                $signatureRequestId,
-                $documentId,
                 $shopifyOrderId
             );
             Log::info(
-                "Dispatched ProcessSignedPrescriptionJob for prescription #{$prescription->id}."
+                "Dispatched ProcessSignedPrescriptionJob for initial prescription #{$prescription->id} to original order {$shopifyOrderId}"
+            );
+        } elseif ($isReplacement) {
+            // This is a replacement prescription - do NOT dispatch job here
+            Log::info(
+                "Prescription #{$prescription->id} is a replacement. Signed document uploaded but no job dispatched. RechargeWebhookController will handle attachment to future orders."
+            );
+        } else {
+            Log::warning(
+                "Cannot dispatch job for prescription #{$prescription->id}: Missing Shopify Order ID or unclear prescription type."
             );
         }
 
         return response()->json(
-            ["message" => "Webhook received, processing initiated"],
+            ["message" => "Webhook received, processing completed"],
             200
         );
     }
