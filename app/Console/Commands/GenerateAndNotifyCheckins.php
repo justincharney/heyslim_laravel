@@ -123,18 +123,6 @@ class GenerateAndNotifyCheckIns extends Command
                     ],
                     [
                         "id" => "question_4",
-                        "type" => "select",
-                        "question" =>
-                            "Would you like to change your dose from your outlined dose schedule? If so, this requires a new subscription and meeting with your prescriber.",
-                        "options" => [
-                            ["value" => "yes", "label" => "Yes"],
-                            ["value" => "no", "label" => "No"],
-                        ],
-                        "required" => true,
-                        "response" => null,
-                    ],
-                    [
-                        "id" => "question_5",
                         "type" => "textarea",
                         "question" =>
                             "Any additional information you'd like to share with your provider?",
@@ -143,14 +131,14 @@ class GenerateAndNotifyCheckIns extends Command
                     ],
                 ];
 
-                // Create a new check-in with the due date set to the next charge date
+                // Create a new check-in with the due date set to one day before the next charge date
                 $checkIn = CheckIn::create([
                     "user_id" => $subscription->user_id,
                     "prescription_id" => $subscription->prescription_id,
                     "subscription_id" => $subscription->id,
                     "status" => "pending",
                     "questions_and_responses" => $questionsAndResponses,
-                    "due_date" => $nextChargeDate->format("Y-m-d"),
+                    "due_date" => $nextChargeDate->subDays(1)->format("Y-m-d"),
                 ]);
 
                 $generatedCount++;
@@ -163,9 +151,8 @@ class GenerateAndNotifyCheckIns extends Command
                 $checkIn = $existingCheckIn;
             }
 
-            // Send notification if the due date is within the week and notification hasn't been sent
-            $daysUntilDue = $todayDate->diffInDays($nextChargeDate, false);
-            if ($daysUntilDue <= 7 && !$checkIn->notification_sent) {
+            // Send notification if notification hasn't been sent
+            if (!$checkIn->notification_sent) {
                 $patient = $subscription->user;
 
                 // Send notification
