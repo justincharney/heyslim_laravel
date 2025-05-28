@@ -138,6 +138,39 @@ class RechargeWebhookController extends Controller
                         );
                     }
 
+                    // For replacement prescriptions, check if this is truly their first order ever
+                    $isReplacement = !is_null(
+                        $prescription->replaces_prescription_id
+                    );
+                    $shouldDecrementRefills = true;
+
+                    if ($isReplacement) {
+                        // Check if this replacement has been processed in any RECURRING order
+                        $prescriptionEverProcessedInRecurring = ProcessedRecurringOrder::where(
+                            "prescription_id",
+                            $prescription->id
+                        )->exists();
+
+                        // Check if this replacement has been through CHECKOUT by looking at subscription
+                        $hasHadCheckoutOrder =
+                            $prescription->subscription &&
+                            $prescription->subscription
+                                ->original_shopify_order_id;
+
+                        // If this replacement hasn't had any RECURRING orders AND hasn't had a CHECKOUT,
+                        // then this RECURRING order is effectively its "initial dose"
+                        if (
+                            !$prescriptionEverProcessedInRecurring &&
+                            !$hasHadCheckoutOrder
+                        ) {
+                            $shouldDecrementRefills = false;
+                            Log::info(
+                                "This is the first order ever for replacement prescription #{$prescription->id}. " .
+                                    "Treating this RECURRING order as initial dose - not decrementing refills."
+                            );
+                        }
+                    }
+
                     // Only decrement if we have refills remaining
                     if ($prescription->refills <= 0) {
                         Log::warning(
@@ -169,41 +202,36 @@ class RechargeWebhookController extends Controller
                             $prescription->id
                         );
 
-                        // Check refills again inside transaction (just to be safe)
-                        if ($prescription->refills > 0) {
-                            // Decrement and save
-                            $prescription->refills -= 1;
-                            $prescription->save();
+                        // For replacement prescription on their first RECURRING
+                        if ($shouldDecrementRefills) {
+                            // Check refills again inside transaction (just to be safe)
+                            if ($prescription->refills > 0) {
+                                // Decrement and save
+                                $prescription->refills -= 1;
+                                $prescription->save();
+                            } else {
+                                // No refills left now (race condition)
+                                DB::rollBack();
+                                Log::warning(
+                                    "Renewal order received but prescription has no refills remaining (race condition)",
+                                    [
+                                        "order_id" => $currentShopifyOrderId,
+                                        "subscription_id" => $rechargeSubId,
+                                        "prescription_id" => $prescription->id,
+                                    ]
+                                );
 
-                            // Record that this order event processed a refill
-                            ProcessedRecurringOrder::create([
-                                "shopify_order_id" => $currentShopifyOrderId,
-                                "prescription_id" => $prescription->id,
-                                "processed_at" => now(),
-                            ]);
-
-                            // COMMIT TRANSACTION BEFORE dispatching job
-                            DB::commit();
-                            $refill_decremented_successfully = true;
-                            $updated_prescription_after_decrement = $prescription->fresh();
+                                return response()->json(
+                                    [
+                                        "message" =>
+                                            "Warning: Prescription has no refills remaining",
+                                    ],
+                                    200
+                                );
+                            }
                         } else {
-                            // No refills left now (race condition)
-                            DB::rollBack();
-                            Log::warning(
-                                "Renewal order received but prescription has no refills remaining (race condition)",
-                                [
-                                    "order_id" => $currentShopifyOrderId,
-                                    "subscription_id" => $rechargeSubId,
-                                    "prescription_id" => $prescription->id,
-                                ]
-                            );
-
-                            return response()->json(
-                                [
-                                    "message" =>
-                                        "Warning: Prescription has no refills remaining",
-                                ],
-                                200
+                            Log::info(
+                                "Skipped refill decrement for first-time replacement prescription #{$prescription->id}"
                             );
                         }
                     } catch (\Exception $dbError) {
@@ -227,6 +255,18 @@ class RechargeWebhookController extends Controller
                             500
                         );
                     }
+
+                    // Record that this order event processed a refill
+                    ProcessedRecurringOrder::create([
+                        "shopify_order_id" => $currentShopifyOrderId,
+                        "prescription_id" => $prescription->id,
+                        "processed_at" => now(),
+                    ]);
+
+                    // COMMIT TRANSACTION BEFORE dispatching job
+                    DB::commit();
+                    $refill_decremented_successfully = true;
+                    $updated_prescription_after_decrement = $prescription->fresh();
 
                     if (
                         $refill_decremented_successfully &&
