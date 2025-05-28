@@ -242,6 +242,20 @@ class CheckInController extends Controller
             );
         }
 
+        // Add status check: Only allow review if submitted
+        $allowedReviewStatuses = ["submitted"];
+        if (!in_array($checkIn->status, $allowedReviewStatuses)) {
+            return response()->json(
+                [
+                    "message" =>
+                        "This check-in cannot be reviewed. Its current status is '{$checkIn->status}'. Only check-ins with status(es): " .
+                        implode(", ", $allowedReviewStatuses) .
+                        " can be reviewed.",
+                ],
+                422
+            );
+        }
+
         $validated = $request->validate([
             "provider_notes" => "required|string",
         ]);
@@ -249,6 +263,7 @@ class CheckInController extends Controller
         // Update check-in
         $checkIn->update([
             "reviewed_by" => $user->id,
+            "status" => "reviewed",
             "reviewed_at" => now(),
             "provider_notes" => $validated["provider_notes"],
         ]);

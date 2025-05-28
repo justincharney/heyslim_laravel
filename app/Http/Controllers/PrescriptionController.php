@@ -676,6 +676,28 @@ class PrescriptionController extends Controller
             "subscription",
         ]);
 
+        // Don't allow replacing an already replaced subscription
+        $replaceableStatuses = [
+            "active",
+            "pending_signature",
+            "pending_payment",
+        ];
+        if (!in_array($oldPrescription->status, $replaceableStatuses)) {
+            $message = "This prescription cannot be replaced. Its current status is '{$oldPrescription->status}'. ";
+            if ($oldPrescription->status === "replaced") {
+                $message .= "It has already been replaced by prescription ID {$oldPrescription->replaced_by_prescription_id}. Please target the current active prescription for changes.";
+            } elseif ($oldPrescription->status === "completed") {
+                $message .=
+                    "Completed prescriptions cannot be replaced. Please issue a new prescription if continuing treatment.";
+            } else {
+                $message .=
+                    "Only prescriptions with status(es): " .
+                    implode(", ", $replaceableStatuses) .
+                    " can be replaced via this action.";
+            }
+            return response()->json(["message" => $message], 409);
+        }
+
         // Validate the new prescription data
         $validated = $request->validate([
             "patient_id" => "required|exists:users,id",
@@ -773,7 +795,7 @@ class PrescriptionController extends Controller
             $newPrescription->save(); // Save new prescription to get its ID
 
             // 3. Update and Cancel the Old Prescription, linking it to the new one
-            $oldPrescription->status = "cancelled";
+            $oldPrescription->status = "replaced";
             $oldPrescription->end_date = now();
             $oldPrescription->replaced_by_prescription_id =
                 $newPrescription->id; // Link to the newly created prescription
