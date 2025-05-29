@@ -16,3 +16,4 @@ Schedule::command("app:sync-recharge-subscriptions")->daily();
 Schedule::command("app:generate-and-notify-check-ins")->daily();
 Schedule::command("app:mark-overdue-check-ins-as-skipped")->daily();
 Schedule::command("horizon:snapshot")->everyFiveMinutes();
+Schedule::command("app:cancel-overdue-pending-payment-prescriptions")->daily();
