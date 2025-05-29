@@ -82,6 +82,13 @@ class ShopifyWebhookController extends Controller
                 Log::error("Submission record not found in database", [
                     "submission_id" => $submissionId,
                 ]);
+                return response()->json(
+                    [
+                        "message" =>
+                            "Submission record referenced in webhook payload not found",
+                    ],
+                    400
+                );
             }
 
             // Return a successful response
