@@ -16,7 +16,7 @@ class GLP1Seeder extends Seeder
     public function run(): void
     {
         $questionnaireTitle = "GLP-1 Weight Management Treatment Plan";
-        $targetVersion = 2; // Define the version this seeder creates
+        $targetVersion = 3; // Define the version this seeder creates
 
         // Check if the target version already exists and is current
         $existingCurrentQuestionnaire = Questionnaire::where(
@@ -79,7 +79,7 @@ class GLP1Seeder extends Seeder
         // Define sections and their questions
         $sections = [
             [
-                "title" => "Physical Measurements and Verification",
+                "title" => "Physical Measurements and Verification", // 3 questions
                 "questions" => [
                     [
                         "text" => "Height (cm)",
@@ -122,7 +122,7 @@ class GLP1Seeder extends Seeder
                 ],
             ],
             [
-                "title" => "Eligibility Screening",
+                "title" => "Eligibility Screening", // 1 question
                 "questions" => [
                     [
                         "text" =>
@@ -140,7 +140,7 @@ class GLP1Seeder extends Seeder
                 ],
             ],
             [
-                "title" => "Medical History",
+                "title" => "Medical History - Part 1", // 3 questions
                 "questions" => [
                     [
                         "text" =>
@@ -172,6 +172,11 @@ class GLP1Seeder extends Seeder
                         "type" => "yes_no",
                         "required" => false,
                     ],
+                ],
+            ],
+            [
+                "title" => "Medical History - Part 2", // 1 question
+                "questions" => [
                     [
                         "text" =>
                             "Have you undergone any other surgeries in the past 12 months?",
@@ -181,7 +186,7 @@ class GLP1Seeder extends Seeder
                 ],
             ],
             [
-                "title" => "Medication History",
+                "title" => "Medication History - Part 1", // 3 questions
                 "questions" => [
                     [
                         "text" =>
@@ -201,6 +206,11 @@ class GLP1Seeder extends Seeder
                         "type" => "yes_no",
                         "required" => false,
                     ],
+                ],
+            ],
+            [
+                "title" => "Medication History - Part 2", // 3 questions
+                "questions" => [
                     [
                         "text" => "Please specify any allergies",
                         "type" => "textarea",
@@ -221,7 +231,7 @@ class GLP1Seeder extends Seeder
                 ],
             ],
             [
-                "title" => "Lifestyle and Weight Management",
+                "title" => "Lifestyle and Weight Management - Part 1", // 3 questions
                 "questions" => [
                     [
                         "text" =>
@@ -236,8 +246,8 @@ class GLP1Seeder extends Seeder
                             "I follow a specific diet (e.g. keto, intermittent fasting, vegetarian)",
                             "I tend to eat late at night",
                             "I frequently consume high-sugar or high-fat foods",
-                            "I eat when I'm stressed, bored or emotional",
-                            "I'm tracking calories/macros or using a diet app",
+                            "I eat when I\'m stressed, bored or emotional",
+                            "I\'m tracking calories/macros or using a diet app",
                             "None of the above",
                         ],
                     ],
@@ -261,6 +271,11 @@ class GLP1Seeder extends Seeder
                             "None of the above",
                         ],
                     ],
+                ],
+            ],
+            [
+                "title" => "Lifestyle and Weight Management - Part 2", // 2 questions
+                "questions" => [
                     [
                         "text" =>
                             "Are you willing to make long-term lifestyle changes, including diet and exercise, alongside medication?",
@@ -285,7 +300,7 @@ class GLP1Seeder extends Seeder
                 ],
             ],
             [
-                "title" => "Risk Assessment and Exclusions",
+                "title" => "Risk Assessment and Exclusions - Part 1", // 3 questions
                 "questions" => [
                     [
                         "text" =>
@@ -305,6 +320,11 @@ class GLP1Seeder extends Seeder
                         "type" => "yes_no",
                         "required" => false,
                     ],
+                ],
+            ],
+            [
+                "title" => "Risk Assessment and Exclusions - Part 2", // 3 questions
+                "questions" => [
                     [
                         "text" => "Do you use recreational drugs?",
                         "type" => "yes_no",
@@ -327,7 +347,7 @@ class GLP1Seeder extends Seeder
                 ],
             ],
             [
-                "title" => "Understanding and Follow-Up",
+                "title" => "Understanding and Follow-Up", // 3 questions
                 "questions" => [
                     [
                         "text" =>
@@ -350,7 +370,7 @@ class GLP1Seeder extends Seeder
                 ],
             ],
             [
-                "title" => "Treatment Selection",
+                "title" => "Treatment Selection", // 1 question
                 "questions" => [
                     [
                         "text" => "Please select your preferred medication",
@@ -361,7 +381,7 @@ class GLP1Seeder extends Seeder
                 ],
             ],
             [
-                "title" => "Consent and Data Handling",
+                "title" => "Consent and Data Handling", // 1 question
                 "questions" => [
                     [
                         "text" =>
@@ -372,7 +392,7 @@ class GLP1Seeder extends Seeder
                 ],
             ],
             [
-                "title" => "Declaration",
+                "title" => "Declaration", // 1 question
                 "questions" => [
                     [
                         "text" =>
