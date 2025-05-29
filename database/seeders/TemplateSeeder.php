@@ -32,7 +32,7 @@ class TemplateSeeder extends Seeder
         }
 
         // Clinical Plan Templates
-        // $this->createClinicalPlanTemplates($admin->id);
+        $this->createClinicalPlanTemplates($admin->id);
 
         // Prescription Templates
         $this->createPrescriptionTemplates($admin->id);
