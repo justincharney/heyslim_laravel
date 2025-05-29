@@ -620,7 +620,7 @@ class QuestionnaireController extends Controller
                 "questions.options",
             ])
                 ->where("is_current", true)
-                ->where("title", $decodedTitle) // Query by title
+                ->whereRaw("LOWER(title) = LOWER(?)", [$decodedTitle]) // Query by title (case insensitive)
                 ->firstOrFail(); // Use firstOrFail if title is unique for current questionnaires
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             // If the questionnaire template is not found, return a 404 error
