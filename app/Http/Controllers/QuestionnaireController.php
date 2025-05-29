@@ -606,4 +606,66 @@ class QuestionnaireController extends Controller
             ],
         ]);
     }
+
+    public function getTemplateByTitle(Request $request, $title)
+    {
+        try {
+            // Decode the title, as it might be URL-encoded
+            $decodedTitle = urldecode($title);
+
+            // Fetch the questionnaire by its title, along with its questions and their options
+            // Assuming 'title' is a unique field for current questionnaires.
+            $questionnaire = Questionnaire::with([
+                "questions",
+                "questions.options",
+            ])
+                ->where("is_current", true)
+                ->where("title", $decodedTitle) // Query by title
+                ->firstOrFail(); // Use firstOrFail if title is unique for current questionnaires
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            // If the questionnaire template is not found, return a 404 error
+            return response()->json(
+                [
+                    "error" =>
+                        "Questionnaire template not found with title: " .
+                        $decodedTitle,
+                ],
+                404
+            );
+        }
+
+        // Return the questionnaire structure in a JSON response (same structure as getTemplate)
+        return response()->json([
+            "questionnaire" => [
+                "id" => $questionnaire->id,
+                "title" => $questionnaire->title,
+                "description" => $questionnaire->description,
+                "questions" => $questionnaire->questions->map(function (
+                    $question
+                ) {
+                    // Note: No answers are included here as this is just the template structure
+                    return [
+                        "id" => $question->id,
+                        "number" => $question->question_number,
+                        "text" => $question->question_text,
+                        "type" => $question->question_type,
+                        "label" => $question->label,
+                        "description" => $question->description,
+                        "is_required" => $question->is_required,
+                        "required_answer" => $question->required_answer,
+                        "calculated" => $question->calculated,
+                        "validation" => $question->validation,
+                        "options" => $question->options->map(function (
+                            $option
+                        ) {
+                            return [
+                                "number" => $option->option_number,
+                                "text" => $option->option_text,
+                            ];
+                        }),
+                    ];
+                }),
+            ],
+        ]);
+    }
 }

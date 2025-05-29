@@ -30,6 +30,10 @@ Route::middleware(["auth:sanctum"])->group(function () {
         QuestionnaireController::class,
         "getTemplate",
     ]);
+    Route::get("/questionnaires/template/by-title/{title}", [
+        QuestionnaireController::class,
+        "getTemplateByTitle",
+    ]);
 
     // Authentication routes
     Route::get("/user", [AuthController::class, "user"]);
