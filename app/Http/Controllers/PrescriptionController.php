@@ -75,8 +75,9 @@ class PrescriptionController extends Controller
         }
         // For other roles (like patients)
         else {
-            // Patients can only see their own prescriptions
+            // Patients can only see their own prescriptions (that are not replaced)
             $prescriptions = Prescription::where("patient_id", $user->id)
+                ->whereNull("replaced_by_prescription_id")
                 ->with([
                     "patient:id,name",
                     "prescriber:id,name",
