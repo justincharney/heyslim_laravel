@@ -400,21 +400,6 @@ class GLP1Seeder extends Seeder
                 "questions" => [
                     [
                         "text" =>
-                            "What are your main reasons for wanting to lose weight?",
-                        "type" => "multi-select",
-                        "required" => true,
-                        "options" => [
-                            "Improving my overall health",
-                            "Avoiding or managing a specific health condition",
-                            "Looking and feeling better",
-                            "Becoming more active",
-                            "Improving my mood or mental wellbeing",
-                            "Improving my sleep or energy levels",
-                            "Other",
-                        ],
-                    ],
-                    [
-                        "text" =>
                             "Do you consent to the collection, processing, and GDPR-compliant storage of your personal and medical data for weight loss medication prescription, with information shared only with relevant healthcare professionals and in accordance with our terms and conditions?",
                         "type" => "yes_no",
                         "required" => true,
