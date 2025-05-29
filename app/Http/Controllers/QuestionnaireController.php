@@ -218,8 +218,10 @@ class QuestionnaireController extends Controller
         if ($existingSubmission) {
             // If it's a draft, return it
             if (
-                $existingSubmission->status === "draft" ||
-                $existingSubmission->status === "pending_payment"
+                in_array($existingSubmission->status, [
+                    "draft",
+                    "pending_payment",
+                ])
             ) {
                 return response()->json([
                     "message" => "Existing draft found",
@@ -230,7 +232,7 @@ class QuestionnaireController extends Controller
                 ]);
             }
 
-            // If it's submitted or approved, check if there's an active prescription
+            // If it's submitted, approved, or pending_payment check if there's an active prescription
             if (
                 in_array($existingSubmission->status, ["submitted", "approved"])
             ) {
@@ -255,20 +257,19 @@ class QuestionnaireController extends Controller
                     );
                 }
 
-                // Check if there are any active prescriptions
-                $hasActivePrescription = Prescription::where(
+                // Check if there are any prescriptions not in 'completed' or 'cancelled' status
+                $hasNonCompletedOrCancelledPrescription = Prescription::where(
                     "clinical_plan_id",
                     $clinicalPlan->id
                 )
-                    ->where("status", "active")
-                    ->where("end_date", ">=", now())
+                    ->whereNotIn("status", ["completed", "cancelled"])
                     ->exists();
 
-                if ($hasActivePrescription) {
+                if ($hasNonCompletedOrCancelledPrescription) {
                     return response()->json(
                         [
                             "message" =>
-                                "You already have an active treatment plan. A new submission is not allowed at this time.",
+                                "You currently have an ongoing treatment plan. A new submission is not allowed at this time.",
                             "submission_id" => $existingSubmission->id,
                             "questionnaire_id" =>
                                 $existingSubmission->questionnaire_id,
