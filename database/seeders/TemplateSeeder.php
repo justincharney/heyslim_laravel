@@ -169,7 +169,7 @@ class TemplateSeeder extends Seeder
                 "medication_name" => "Wegovy",
                 "refills" => 5,
                 "directions" =>
-                    "Inject subcutaneously once weekly as directed. Store in refrigerator. May be kept at room temperature for up to 28 days. Do not freeze.",
+                    "Inject subcutaneously once weekly on the same day, any time; rotate injection sites between abdomen, thigh or upper arm. If you miss a dose and your next scheduled dose is more than 2 days away, inject as soon as possible; if less than 2 days away, skip and resume your regular schedule.",
                 "dose_schedule" => [
                     [
                         "refill_number" => 0,
@@ -217,7 +217,7 @@ class TemplateSeeder extends Seeder
                 "medication_name" => "Mounjaro",
                 "refills" => 5,
                 "directions" =>
-                    "Inject subcutaneously once weekly as directed. Store in refrigerator. May be kept at room temperature for up to 28 days. Do not freeze.",
+                    "Inject subcutaneously once weekly on the same day, any time; rotate injection sites between abdomen, thigh or upper arm. If you miss a dose, give it within 3 days or skip and resume your usual schedule.",
                 "dose_schedule" => [
                     [
                         "refill_number" => 0,
