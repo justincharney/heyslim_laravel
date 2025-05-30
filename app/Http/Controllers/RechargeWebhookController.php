@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\AttachLabelToShopifyJob;
+use App\Jobs\CancelSubscriptionJob;
 use App\Jobs\SkuSwapJob;
 use App\Jobs\ProcessSignedPrescriptionJob;
 use App\Services\RechargeService;
@@ -361,6 +362,11 @@ class RechargeWebhookController extends Controller
                             } else {
                                 Log::info(
                                     "No more doses in schedule for SKU swap or invalid index. Prescription #{$updated_prescription_after_decrement->id}. next_dose_index: {$next_dose_index}"
+                                );
+                                // After processing this refill, if the next_dose_index is invalid -> cancel subscription
+                                CancelSubscriptionJob::dispatch(
+                                    $localSubscription->recharge_subscription_id,
+                                    $updated_prescription_after_decrement->id
                                 );
                             }
                         }
