@@ -114,38 +114,107 @@ class SyncRechargeSubscriptions extends Command
                     }
                 } else {
                     // Create a new subscription record
+                    // Use updateOrCreate to prevent race conditions
                     try {
-                        $userId = User::where("email", $email)->first()->id;
+                        $userId = User::where("email", $email)->first()?->id;
 
-                        if ($userId) {
-                            $subscription = $this->createNewSubscription(
-                                $subscription,
-                                $userId
-                            );
-                            if ($subscription) {
-                                $created++;
-                                $this->info(
-                                    "Created new subscription: {$rechargeSubId}"
-                                );
-                            } else {
-                                $this->error(
-                                    "Failed to create new subscription: {$rechargeSubId}"
-                                );
-                                $errors++;
-                            }
-                        } else {
+                        if (!$userId) {
                             $this->warn(
-                                "Could not find or create user for email: {$email}. Skipping."
+                                "Could not find user for email: {$email}. Skipping."
                             );
                             $skipped++;
+                            continue;
+                        }
+
+                        // Get first order data for new subscriptions only
+                        $firstOrder = null;
+                        $originalShopifyOrderId = null;
+                        $questionnaireSubId = null;
+
+                        // Check if this subscription already exists to avoid unnecessary API calls
+                        $existingSubscription = Subscription::where(
+                            "recharge_subscription_id",
+                            $rechargeSubId
+                        )->first();
+
+                        if (!$existingSubscription) {
+                            // Only fetch first order data for new subscriptions
+                            $firstOrder = $this->rechargeService->getFirstOrderForSubscription(
+                                $rechargeSubId
+                            );
+                            $originalShopifyOrderId =
+                                $firstOrder["shopify_order_id"] ?? null;
+                            $noteAttributes =
+                                $firstOrder["note_attributes"] ?? [];
+                            foreach ($noteAttributes as $attribute) {
+                                if (
+                                    $attribute["name"] ===
+                                    "questionnaire_submission_id"
+                                ) {
+                                    $questionnaireSubId = $attribute["value"];
+                                    break;
+                                }
+                            }
+
+                            // Skip if we can't find required order data for new subscriptions
+                            if (
+                                !$originalShopifyOrderId ||
+                                !$questionnaireSubId
+                            ) {
+                                $this->warn(
+                                    "Could not find required order data for new subscription {$rechargeSubId}. Skipping."
+                                );
+                                $skipped++;
+                                continue;
+                            }
+                        }
+
+                        $subscriptionRecord = Subscription::updateOrCreate(
+                            ["recharge_subscription_id" => $rechargeSubId],
+                            array_filter([
+                                "recharge_customer_id" =>
+                                    $subscription["customer_id"] ?? null,
+                                "shopify_product_id" =>
+                                    $subscription["shopify_product_id"] ?? null,
+                                "product_name" =>
+                                    $subscription["product_title"] ??
+                                    "Unknown Product",
+                                "status" =>
+                                    $subscription["status"] === "ACTIVE"
+                                        ? "active"
+                                        : "paused",
+                                "next_charge_scheduled_at" =>
+                                    $subscription["next_charge_scheduled_at"] ??
+                                    null,
+                                "user_id" => $userId,
+                                // Only set these for new subscriptions
+                                "original_shopify_order_id" => $existingSubscription
+                                    ? $existingSubscription->original_shopify_order_id
+                                    : $originalShopifyOrderId,
+                                "questionnaire_submission_id" => $existingSubscription
+                                    ? $existingSubscription->questionnaire_submission_id
+                                    : $questionnaireSubId,
+                            ])
+                        );
+
+                        if ($subscriptionRecord->wasRecentlyCreated) {
+                            $created++;
+                            $this->info(
+                                "Created new subscription: {$rechargeSubId}"
+                            );
+                        } else {
+                            $updated++;
+                            $this->info(
+                                "Updated subscription: {$rechargeSubId}"
+                            );
                         }
                     } catch (\Exception $e) {
                         $this->error(
-                            "Error creating subscription {$rechargeSubId}: " .
+                            "Error processing subscription {$rechargeSubId}: " .
                                 $e->getMessage()
                         );
                         Log::error(
-                            "Error creating subscription from Recharge",
+                            "Error processing subscription from Recharge",
                             [
                                 "subscription_id" => $rechargeSubId,
                                 "error" => $e->getMessage(),
