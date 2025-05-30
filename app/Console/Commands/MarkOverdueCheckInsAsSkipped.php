@@ -28,7 +28,7 @@ class MarkOverdueCheckInsAsSkipped extends Command
     public function handle()
     {
         $overdueCheckIns = CheckIn::where("status", "pending")
-            ->whereData("due_date", "<", Carbon::today())
+            ->where("due_date", "<", Carbon::today())
             ->get();
 
         if ($overdueCheckIns->isEmpty()) {
