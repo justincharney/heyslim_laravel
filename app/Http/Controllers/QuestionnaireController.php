@@ -216,13 +216,8 @@ class QuestionnaireController extends Controller
 
         // If there's an existing submission, handle based on its status
         if ($existingSubmission) {
-            // If it's a draft, return it
-            if (
-                in_array($existingSubmission->status, [
-                    "draft",
-                    "pending_payment",
-                ])
-            ) {
+            // Only treat true drafts as editable
+            if ($existingSubmission->status === "draft") {
                 return response()->json([
                     "message" => "Existing draft found",
                     "submission_id" => $existingSubmission->id,
@@ -230,6 +225,21 @@ class QuestionnaireController extends Controller
                     "status" => "draft",
                     "is_new" => false,
                 ]);
+            }
+
+            // Handle pending_payment separately - don't allow overwriting
+            if ($existingSubmission->status === "pending_payment") {
+                return response()->json(
+                    [
+                        "message" =>
+                            "You have a completed submission pending payment. Please complete the payment process.",
+                        "submission_id" => $existingSubmission->id,
+                        "questionnaire_id" =>
+                            $existingSubmission->questionnaire_id,
+                        "status" => $existingSubmission->status,
+                    ],
+                    403
+                );
             }
 
             // If it's submitted, approved, or pending_payment check if there's an active prescription
