@@ -21,22 +21,14 @@ class ProcessSignedPrescriptionJob implements ShouldQueue
     public $backoff = [60, 300, 600];
 
     protected $prescriptionId;
-    protected $signatureRequestId;
-    protected $documentId;
     protected $shopifyOrderId;
 
     /**
      * Create a new job instance.
      */
-    public function __construct(
-        int $prescriptionId,
-        string $signatureRequestId,
-        string $documentId,
-        string $shopifyOrderId
-    ) {
+    public function __construct(int $prescriptionId, string $shopifyOrderId)
+    {
         $this->prescriptionId = $prescriptionId;
-        $this->signatureRequestId = $signatureRequestId;
-        $this->documentId = $documentId;
         $this->shopifyOrderId = $shopifyOrderId;
     }
 
