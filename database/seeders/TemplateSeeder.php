@@ -167,7 +167,7 @@ class TemplateSeeder extends Seeder
                 "description" =>
                     "Standard protocol for Wegovy (semaglutide) for weight management",
                 "medication_name" => "Wegovy",
-                "refills" => 5,
+                "refills" => 2,
                 "directions" =>
                     "Inject subcutaneously once weekly on the same day, any time; rotate injection sites between abdomen, thigh or upper arm. If you miss a dose and your next scheduled dose is more than 2 days away, inject as soon as possible; if less than 2 days away, skip and resume your regular schedule.",
                 "dose_schedule" => [
@@ -192,20 +192,6 @@ class TemplateSeeder extends Seeder
                             $wegovyVariants[2]["shopify_variant_gid"],
                         "selling_plan_id" => $wegovySellingPlanId,
                     ],
-                    [
-                        "refill_number" => 3,
-                        "dose" => "1.7mg",
-                        "shopify_variant_gid" =>
-                            $wegovyVariants[3]["shopify_variant_gid"],
-                        "selling_plan_id" => $wegovySellingPlanId,
-                    ],
-                    [
-                        "refill_number" => 4,
-                        "dose" => "2.4mg",
-                        "shopify_variant_gid" =>
-                            $wegovyVariants[4]["shopify_variant_gid"],
-                        "selling_plan_id" => $wegovySellingPlanId,
-                    ],
                 ],
                 "is_global" => true,
                 "created_by" => $adminId,
@@ -215,7 +201,7 @@ class TemplateSeeder extends Seeder
                 "description" =>
                     "Standard protocol for Tirzepatide for weight management",
                 "medication_name" => "Mounjaro",
-                "refills" => 5,
+                "refills" => 2,
                 "directions" =>
                     "Inject subcutaneously once weekly on the same day, any time; rotate injection sites between abdomen, thigh or upper arm. If you miss a dose, give it within 3 days or skip and resume your usual schedule.",
                 "dose_schedule" => [
@@ -238,27 +224,6 @@ class TemplateSeeder extends Seeder
                         "dose" => "7.5mg",
                         "shopify_variant_gid" =>
                             $mounjaroVariants[2]["shopify_variant_gid"],
-                        "selling_plan_id" => $mounjaroSellingPlanId,
-                    ],
-                    [
-                        "refill_number" => 3,
-                        "dose" => "10mg",
-                        "shopify_variant_gid" =>
-                            $mounjaroVariants[3]["shopify_variant_gid"],
-                        "selling_plan_id" => $mounjaroSellingPlanId,
-                    ],
-                    [
-                        "refill_number" => 4,
-                        "dose" => "12.5mg",
-                        "shopify_variant_gid" =>
-                            $mounjaroVariants[4]["shopify_variant_gid"],
-                        "selling_plan_id" => $mounjaroSellingPlanId,
-                    ],
-                    [
-                        "refill_number" => 5,
-                        "dose" => "15mg",
-                        "shopify_variant_gid" =>
-                            $mounjaroVariants[5]["shopify_variant_gid"],
                         "selling_plan_id" => $mounjaroSellingPlanId,
                     ],
                 ],
