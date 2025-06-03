@@ -16,7 +16,7 @@ class GLP1Seeder extends Seeder
     public function run(): void
     {
         $questionnaireTitle = "GLP-1 Weight Management Treatment Plan";
-        $targetVersion = 3; // Define the version this seeder creates
+        $targetVersion = 4; // Define the version this seeder creates
 
         // Check if the target version already exists and is current
         $existingCurrentQuestionnaire = Questionnaire::where(
@@ -149,7 +149,6 @@ class GLP1Seeder extends Seeder
                         "required" => true,
                         "options" => [
                             "Type 1 Diabetes",
-                            "Type 2 Diabetes",
                             "Cardiovascular disease (e.g., heart attack, angina, stroke)",
                             "Pancreatitis (current or history of)",
                             "Gallbladder disease or gallstones",
@@ -159,6 +158,13 @@ class GLP1Seeder extends Seeder
                             "Eating disorders (e.g., anorexia nervosa, bulimia)",
                             "Depression or mental health conditions",
                             "None of the above",
+                        ],
+                        "validation" => [
+                            "disqualifying_options" => [
+                                "Type 1 Diabetes",
+                                "Pancreatitis (current or history of)",
+                                "Eating disorders (e.g., anorexia nervosa, bulimia)",
+                            ],
                         ],
                     ],
                     [
@@ -376,7 +382,11 @@ class GLP1Seeder extends Seeder
                         "text" => "Please select your preferred medication",
                         "type" => "select",
                         "required" => true,
-                        "options" => ["Mounjaro", "Wegovy"],
+                        "options" => [
+                            "Mounjaro",
+                            "Wegovy",
+                            "Let my provider choose / no preference",
+                        ],
                     ],
                 ],
             ],
