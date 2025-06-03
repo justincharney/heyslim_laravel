@@ -45,20 +45,22 @@ class PrescriptionCheckoutNotification extends Notification implements
             $this->prescription->prescriber->name ?? "your healthcare provider";
 
         return (new MailMessage())
-            ->subject("Your Prescription for {$medicationName}")
+            ->subject(
+                "Action Required: Complete Your {$medicationName} Prescription Checkout"
+            )
             ->greeting("Hello " . $notifiable->name . ",")
             ->line(
-                "Your prescription for {$medicationName} has been created by {$providerName}."
+                "Please complete your checkout to receive your {$medicationName} prescription, prescribed by {$providerName}."
             )
             ->line(
-                "To receive your first supply, please complete the subscription checkout using the link below."
+                "Your first supply is ready, but you must complete the subscription checkout using the link below."
             )
-            ->action("Complete Checkout", $this->checkoutUrl)
+            ->action("Complete Your Checkout Now", $this->checkoutUrl)
             ->line(
                 "Once your checkout is complete, your order will be processed by our pharmacy."
             )
             ->line(
-                "If you have any questions, please use the chat feature in your patient portal."
+                "For support, you can contact us at support@heyslim.co.uk or by live-chat on our website. If you need to speak with your provider about a medical question, please use the chat feature in your patient portal."
             )
             ->line("Thank you for using " . config("app.title") . ".");
     }
