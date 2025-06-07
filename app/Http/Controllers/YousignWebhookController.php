@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use App\Services\ShopifyService;
 use App\Services\YousignService;
+use App\Jobs\SendGpLetterJob;
 
 class YousignWebhookController extends Controller
 {
@@ -205,6 +206,10 @@ class YousignWebhookController extends Controller
                 500
             );
         }
+
+        $prescription->refresh();
+        // Dispatch the job to generate and send the GP letter
+        SendGpLetterJob::dispatch($prescription->id);
 
         // Conditionally dispatch job based on prescription type
         $isReplacement = !is_null($prescription->replaces_prescription_id);
