@@ -198,123 +198,162 @@ class QuestionnaireController extends Controller
 
     public function initializeDraft(Request $request)
     {
+        $userId = auth()->id();
         $validated = $request->validate([
             "questionnaire_id" => "required|exists:questionnaires,id",
         ]);
 
-        $currentQuestionnaire = Questionnaire::where("is_current", true)
-            ->where("id", $validated["questionnaire_id"])
-            ->firstOrFail(); // Ensure it's the current version
+        $questionnaireId = $validated["questionnaire_id"];
 
-        // Get the title of the questionnaire
+        // This is the specific version being requested
+        $currentQuestionnaire = Questionnaire::where("is_current", true)
+            ->where("id", $questionnaireId)
+            ->firstOrFail();
+
         $questionnaireTitle = $currentQuestionnaire->title;
 
-        // Check if the user already has any submission for this questionnaire (based on title)
-        $existingSubmission = QuestionnaireSubmission::where([
-            "user_id" => auth()->id(),
-        ])
+        // Check 1: Is there any 'draft', 'submitted', or 'pending_payment' submission for this questionnaire TITLE by this user?
+        $activeSubmissionForTitle = QuestionnaireSubmission::where(
+            "user_id",
+            $userId
+        )
             ->whereHas("questionnaire", function ($query) use (
                 $questionnaireTitle
             ) {
                 $query->where("title", $questionnaireTitle);
             })
+            ->whereIn("status", ["draft", "submitted", "pending_payment"])
             ->orderBy("created_at", "desc")
             ->first();
 
-        // If there's an existing submission, handle based on its status
-        if ($existingSubmission) {
-            // Only treat true drafts as editable
-            if ($existingSubmission->status === "draft") {
+        if ($activeSubmissionForTitle) {
+            // Scenario 1.1: It's a draft for the *exact version* requested.
+            if (
+                $activeSubmissionForTitle->status === "draft" &&
+                $activeSubmissionForTitle->questionnaire_id ==
+                    $currentQuestionnaire->id
+            ) {
                 return response()->json([
-                    "message" => "Existing draft found",
-                    "submission_id" => $existingSubmission->id,
-                    "questionnaire_id" => $existingSubmission->questionnaire_id,
+                    "message" => "Existing draft found for this version.",
+                    "submission_id" => $activeSubmissionForTitle->id,
+                    "questionnaire_id" =>
+                        $activeSubmissionForTitle->questionnaire_id,
                     "status" => "draft",
                     "is_new" => false,
                 ]);
             }
-
-            // Handle pending_payment separately - don't allow overwriting
-            if ($existingSubmission->status === "pending_payment") {
+            // Scenario 1.2: It's a draft but for a *different version* of the same title.
+            elseif ($activeSubmissionForTitle->status === "draft") {
                 return response()->json(
                     [
                         "message" =>
-                            "You have a completed submission pending payment. Please complete the payment process.",
-                        "submission_id" => $existingSubmission->id,
+                            "You have an existing draft for the questionnaire '" .
+                            $questionnaireTitle .
+                            "'. Please complete or discard it before starting a new one.",
+                        "submission_id" => $activeSubmissionForTitle->id,
                         "questionnaire_id" =>
-                            $existingSubmission->questionnaire_id,
-                        "status" => $existingSubmission->status,
+                            $activeSubmissionForTitle->questionnaire_id,
+                        "status" => $activeSubmissionForTitle->status,
                     ],
                     403
                 );
             }
-
-            // If it's submitted, approved check if there's an active prescription
-            if (
-                in_array($existingSubmission->status, ["submitted", "approved"])
-            ) {
-                // First check if there's a clinical plan
-                $clinicalPlan = ClinicalPlan::where(
-                    "questionnaire_submission_id",
-                    $existingSubmission->id
-                )->first();
-
-                // If no clinical plan exists yet, they should wait for review
-                if (!$clinicalPlan) {
-                    return response()->json(
-                        [
-                            "message" =>
-                                "Your previous submission is still being reviewed. Please wait for the review to complete.",
-                            "submission_id" => $existingSubmission->id,
-                            "questionnaire_id" =>
-                                $existingSubmission->questionnaire_id,
-                            "status" => $existingSubmission->status,
-                        ],
-                        403
-                    );
-                }
-
-                // Check if there are any prescriptions not in 'completed', 'cancelled', or 'pending_payment' status
-                $hasNonCompletedOrCancelledPrescription = Prescription::where(
-                    "clinical_plan_id",
-                    $clinicalPlan->id
-                )
-                    ->whereNotIn("status", ["completed", "cancelled"])
-                    ->exists();
-
-                if ($hasNonCompletedOrCancelledPrescription) {
-                    return response()->json(
-                        [
-                            "message" =>
-                                "You currently have an ongoing treatment plan. A new submission is not allowed at this time.",
-                            "submission_id" => $existingSubmission->id,
-                            "questionnaire_id" =>
-                                $existingSubmission->questionnaire_id,
-                            "status" => $existingSubmission->status,
-                        ],
-                        403
-                    );
-                }
-                // If they had prescriptions but all are completed/cancelled, we fall through to allow creation
+            // Scenario 1.3: It's 'pending_payment'.
+            elseif ($activeSubmissionForTitle->status === "pending_payment") {
+                return response()->json(
+                    [
+                        "message" =>
+                            "You have a submission for the questionnaire '" .
+                            $questionnaireTitle .
+                            "' that is awaiting payment. Please complete the payment process.",
+                        "submission_id" => $activeSubmissionForTitle->id,
+                        "questionnaire_id" =>
+                            $activeSubmissionForTitle->questionnaire_id,
+                        "status" => $activeSubmissionForTitle->status,
+                    ],
+                    403
+                );
             }
-            // If it's rejected, we'll allow a new submission (fall through to creation code)
+            // Scenario 1.4: It's 'submitted'.
+            elseif ($activeSubmissionForTitle->status === "submitted") {
+                return response()->json(
+                    [
+                        "message" =>
+                            "Your submission for the questionnaire '" .
+                            $questionnaireTitle .
+                            "' is currently under review. Please wait for the review to complete.",
+                        "submission_id" => $activeSubmissionForTitle->id,
+                        "questionnaire_id" =>
+                            $activeSubmissionForTitle->questionnaire_id,
+                        "status" => $activeSubmissionForTitle->status,
+                    ],
+                    403
+                );
+            }
         }
 
-        // Create new draft if none exists
-        $submission = QuestionnaireSubmission::create([
+        // Check 2: If no 'draft', 'submitted', or 'pending_payment' submission exists for this TITLE,
+        // then check for any ongoing or pending treatment plan (active/pending prescription)
+        // related to ANY submission (e.g. an older 'approved' one) for this questionnaire TITLE by this user.
+        $submissionWithActiveTreatment = QuestionnaireSubmission::where(
+            "user_id",
+            $userId
+        )
+            ->whereHas("questionnaire", function ($query) use (
+                $questionnaireTitle
+            ) {
+                $query->where("title", $questionnaireTitle);
+            })
+            ->whereHas("clinicalPlan.prescriptions", function (
+                $prescriptionQuery
+            ) {
+                // Active/pending prescription statuses
+                $prescriptionQuery->whereNotIn("status", [
+                    "completed",
+                    "cancelled",
+                    "replaced",
+                ]);
+            })
+            ->orderBy("created_at", "desc")
+            ->first();
+
+        if ($submissionWithActiveTreatment) {
+            return response()->json(
+                [
+                    "message" =>
+                        "You currently have an ongoing or pending treatment plan related to the questionnaire '" .
+                        $questionnaireTitle .
+                        "'. A new submission is not allowed at this time.",
+                    "submission_id" => $submissionWithActiveTreatment->id, // ID of the submission linked to the active treatment
+                    "questionnaire_id" =>
+                        $submissionWithActiveTreatment->questionnaire_id,
+                    "status" => $submissionWithActiveTreatment->status, // Status of that submission
+                ],
+                403
+            );
+        }
+
+        // If all prior checks pass, it's okay to create a new draft.
+        // This covers:
+        // - No 'draft', 'submitted', or 'pending_payment' for this TITLE.
+        // - No 'approved' (or other status) submission for this TITLE has an active/pending treatment.
+        // - This also implicitly handles cases where the latest submission for the title was 'rejected'
+        //   or 'approved' but with all treatments completed/cancelled/replaced.
+        $newSubmission = QuestionnaireSubmission::create([
             "questionnaire_id" => $currentQuestionnaire->id,
-            "user_id" => auth()->id(),
+            "user_id" => $userId,
             "status" => "draft",
         ]);
 
         return response()->json(
             [
                 "message" => "Draft questionnaire created",
-                "submission_id" => $submission->id,
+                "submission_id" => $newSubmission->id,
             ],
             201
         );
     }
+
     /**
      * Process and save questionnaire answers
      *
