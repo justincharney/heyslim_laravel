@@ -16,7 +16,7 @@ class GLP1Seeder extends Seeder
     public function run(): void
     {
         $questionnaireTitle = "GLP-1 Weight Management Treatment Plan";
-        $targetVersion = 4; // Define the version this seeder creates
+        $targetVersion = 5; // Define the version this seeder creates
 
         // Check if the target version already exists and is current
         $existingCurrentQuestionnaire = Questionnaire::where(
@@ -125,15 +125,32 @@ class GLP1Seeder extends Seeder
                 "title" => "Eligibility Screening", // 1 question
                 "questions" => [
                     [
-                        "text" =>
-                            "Do you have any of the following conditions?",
+                        "text" => "Do you have, or have you ever been diagnosed
+                            with, any of the following health conditions?",
                         "type" => "multi-select",
                         "required" => true,
                         "options" => [
+                            "Prediabetes",
                             "Type 2 Diabetes",
                             "High blood pressure",
-                            "Dyslipidemia",
+                            "Raised cholesterol (dyslipidemia)",
                             "Sleep apnea",
+                            "Polycystic ovarian syndrome (PCOS)",
+                            "Fatty liver disease (NAFLD)",
+                            "None of the above",
+                        ],
+                    ],
+                    [
+                        "text" =>
+                            "Has your weight ever caused or worsened any of the following?",
+                        "type" => "multi-select",
+                        "required" => true,
+                        "options" => [
+                            "Knee or hip osteoarthritis",
+                            "Asthma",
+                            "Cardiovascular disease (e.g., heart attack, angina, stroke)",
+                            "Acid reflux or GORD",
+                            "Erectile dysfunction",
                             "None of the above",
                         ],
                     ],
@@ -149,11 +166,14 @@ class GLP1Seeder extends Seeder
                         "required" => true,
                         "options" => [
                             "Type 1 Diabetes",
-                            "Cardiovascular disease (e.g., heart attack, angina, stroke)",
+                            "Diabetic retinopathy",
+                            "Heart failure",
                             "Pancreatitis (current or history of)",
                             "Gallbladder disease or gallstones",
                             "Thyroid conditions (e.g., hypothyroidism, hyperthyroidism)",
+                            "Currently being treated for cancer",
                             "Gastrointestinal conditions (e.g., Crohn's disease, IBS)",
+                            "Chronic malabsorption syndrome (problems absorbing food)",
                             "Kidney or liver disease",
                             "Eating disorders (e.g., anorexia nervosa, bulimia)",
                             "Depression or mental health conditions",
@@ -163,6 +183,8 @@ class GLP1Seeder extends Seeder
                             "disqualifying_options" => [
                                 "Type 1 Diabetes",
                                 "Pancreatitis (current or history of)",
+                                "Currently being treated for cancer",
+                                "Chronic malabsorption syndrome (problems absorbing food)",
                                 "Eating disorders (e.g., anorexia nervosa, bulimia)",
                             ],
                         ],
@@ -338,7 +360,7 @@ class GLP1Seeder extends Seeder
                     ],
                     [
                         "text" =>
-                            "Do you have a family history of medullary thyroid carcinoma (MTC) or multiple endocrine neoplasia syndrome type 2 (MEN 2)?",
+                            "Do you have a personal or family history of medullary thyroid carcinoma (MTC) or multiple endocrine neoplasia syndrome type 2 (MEN 2)?",
                         "type" => "yes_no",
                         "required" => false,
                         "required_answer" => "no",
