@@ -206,11 +206,18 @@ class QuestionnaireController extends Controller
             ->where("id", $validated["questionnaire_id"])
             ->firstOrFail(); // Ensure it's the current version
 
-        // Check if the user already has any submission for this questionnaire
+        // Get the title of the questionnaire
+        $questionnaireTitle = $currentQuestionnaire->title;
+
+        // Check if the user already has any submission for this questionnaire (based on title)
         $existingSubmission = QuestionnaireSubmission::where([
-            "questionnaire_id" => $currentQuestionnaire->id,
             "user_id" => auth()->id(),
         ])
+            ->whereHas("questionnaire", function ($query) use (
+                $questionnaireTitle
+            ) {
+                $query->where("title", $questionnaireTitle);
+            })
             ->orderBy("created_at", "desc")
             ->first();
 
@@ -242,7 +249,7 @@ class QuestionnaireController extends Controller
                 );
             }
 
-            // If it's submitted, approved, or pending_payment check if there's an active prescription
+            // If it's submitted, approved check if there's an active prescription
             if (
                 in_array($existingSubmission->status, ["submitted", "approved"])
             ) {
@@ -267,7 +274,7 @@ class QuestionnaireController extends Controller
                     );
                 }
 
-                // Check if there are any prescriptions not in 'completed' or 'cancelled' status
+                // Check if there are any prescriptions not in 'completed', 'cancelled', or 'pending_payment' status
                 $hasNonCompletedOrCancelledPrescription = Prescription::where(
                     "clinical_plan_id",
                     $clinicalPlan->id
