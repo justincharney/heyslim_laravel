@@ -144,4 +144,37 @@ class User extends Authenticatable
     {
         return $this->hasMany(UserFile::class);
     }
+
+    /**
+     * Define the fields required for a patient profile to be considered complete.
+     * This could also be pulled from a configuration file.
+     */
+    protected function getRequiredProfileFields(): array
+    {
+        return ["date_of_birth", "address", "gender", "ethnicity"];
+    }
+
+    /**
+     * Get an array of profile fields that are currently missing.
+     */
+    public function getMissingProfileFields(): array
+    {
+        $missing = [];
+        $requiredFields = $this->getRequiredProfileFields();
+        foreach ($requiredFields as $field) {
+            if (empty($this->{$field})) {
+                $missing[] = $field;
+            }
+        }
+        return $missing;
+    }
+
+    /**
+     * Check if the profile is currently complete based on required fields.
+     * This does NOT update the profile_completed flag itself.
+     */
+    public function isProfileConsideredComplete(): bool
+    {
+        return empty($this->getMissingProfileFields());
+    }
 }

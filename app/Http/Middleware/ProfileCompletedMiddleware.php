@@ -44,7 +44,7 @@ class ProfileCompletedMiddleware
         }
 
         // Check if profile is complete
-        if (!$user->profile_completed) {
+        if (!$user->isProfileConsideredComplete()) {
             // For API requests, return a structured response with status code
             return response()->json(
                 [

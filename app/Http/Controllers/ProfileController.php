@@ -63,19 +63,8 @@ class ProfileController extends Controller
     {
         $user = auth()->user();
 
-        // Define required fields for a complete profile
-        $requiredFields = ["date_of_birth", "address", "gender", "ethnicity"];
-
-        // Check if all required fields are filled
-        $isComplete = true;
-        $missingFields = [];
-
-        foreach ($requiredFields as $field) {
-            if (empty($user->{$field})) {
-                $isComplete = false;
-                $missingFields[] = $field;
-            }
-        }
+        $missingFields = $user->getMissingProfileFields();
+        $isComplete = empty($missingFields);
 
         // Update profile_completed status in case it's out of sync
         if ($isComplete !== $user->profile_completed) {
