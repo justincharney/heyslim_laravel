@@ -114,6 +114,7 @@ class ChatController extends Controller
             !in_array($chat->prescription->status, [
                 "active",
                 "pending_signature",
+                "pending_payment",
             ])
         ) {
             return response()->json(
