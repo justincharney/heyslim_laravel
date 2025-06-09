@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Mail;
 use App\Models\ClinicalPlan;
 use App\Models\Prescription;
 use App\Jobs\ProcessRejectedQuestionnaireJob;
+use App\Services\QuestionnaireValidationService;
 
 class QuestionnaireController extends Controller
 {
@@ -504,6 +505,20 @@ class QuestionnaireController extends Controller
                 [
                     "message" => "Required questions are not answered",
                     "missing_questions" => $missingRequired,
+                ],
+                422
+            );
+        }
+
+        // Validate submission based on answer combinations
+        $validationService = new QuestionnaireValidationService();
+        $validationResult = $validationService->validateSubmission($submission);
+
+        if (!$validationResult["valid"]) {
+            return response()->json(
+                [
+                    "message" => "Questionnaire submission failed validation",
+                    "validation_errors" => $validationResult["errors"],
                 ],
                 422
             );

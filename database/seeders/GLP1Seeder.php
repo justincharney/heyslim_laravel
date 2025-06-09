@@ -16,7 +16,7 @@ class GLP1Seeder extends Seeder
     public function run(): void
     {
         $questionnaireTitle = "GLP-1 Weight Management Treatment Plan";
-        $targetVersion = 5; // Define the version this seeder creates
+        $targetVersion = 6; // Define the version this seeder creates
 
         // Check if the target version already exists and is current
         $existingCurrentQuestionnaire = Questionnaire::where(
@@ -205,6 +205,11 @@ class GLP1Seeder extends Seeder
             [
                 "title" => "Medical History - Part 2", // 1 question
                 "questions" => [
+                    [
+                        "text" => "Have you had your gallbladder removed?",
+                        "type" => "yes_no",
+                        "required" => false,
+                    ],
                     [
                         "text" =>
                             "Have you undergone any other surgeries in the past 12 months?",
