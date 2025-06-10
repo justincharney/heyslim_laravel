@@ -33,7 +33,7 @@ class SendGpLetterJob implements ShouldQueue
     {
         $prescription = Prescription::with([
             "patient",
-            "clinicalPlan.questionnaireSubmission.answers.question",
+            "clinicalPlan.questionnaireSubmission.answers.question.options",
         ])->find($this->prescriptionId);
 
         if (!$prescription) {
@@ -90,6 +90,16 @@ class SendGpLetterJob implements ShouldQueue
                 optional($keyedAnswers->get($q_bariatric_text))->answer_text
             ),
         ];
+
+        // Fetch options for conditions
+        $conditionsAnswerObject = $keyedAnswers->get($q_conditions_text);
+        $conditionsQuestion = optional($conditionsAnswerObject)->question;
+        $conditionsOptionsList = collect();
+        $conditionsOptionsList = $conditionsQuestion->options->pluck(
+            "option_text"
+        );
+
+        $viewAnswers["conditions_options"] = $conditionsOptionsList;
 
         // Handle 'conditions' if it's stored as a JSON string array
         $conditionsData = $viewAnswers["conditions"];

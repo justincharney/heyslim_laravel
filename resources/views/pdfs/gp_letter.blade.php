@@ -5,15 +5,16 @@
     <title>GP Information Letter</title>
     <style>
         body { font-family: sans-serif; margin: 20px; color: #333; font-size: 10pt; }
-        .header, .footer { text-align: center; margin-bottom: 20px; }
-        .clinic-info { text-align: right; margin-bottom: 30px; font-size: 9pt; }
-        .patient-info, .prescriber-info { margin-bottom: 20px; }
+        .header, .footer { text-align: center; margin-bottom: 15px; }
+        .clinic-info { text-align: right; margin-bottom: 15px; font-size: 9pt; }
+        .patient-info, .prescriber-info { margin-bottom: 15px; }
         .section-title { font-weight: bold; margin-top: 15px; margin-bottom: 5px; font-size: 11pt; }
         table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; vertical-align: top;}
         th { background-color: #f2f2f2; }
         .emphasize { font-weight: bold; }
         .small-text { font-size: 9pt; }
+        .conditions-list, .conditions-options-list { list-style-type: disc; padding-left: 20px; }
     </style>
 </head>
 <body>
@@ -42,12 +43,12 @@
 
     <div class="section-title">Prescription Details</div>
     <table>
-        <tr><th>Medication:</th><td>{{ $prescription->medication_name }}</td></tr>
+        <tr><th>Medication:</th><td>{{ $prescription->medication_name }} {{$prescription->dose_schedule[0]['dose']}}</td></tr>
         <tr><th>Prescriber:</th><td>{{ $prescriber->name }} (Reg No: {{ $prescriber->registration_number ?? 'N/A' }})</td></tr>
         <tr><th>Date of Issue:</th><td>{{ $prescription->created_at->format('d/m/Y') }}</td></tr>
     </table>
 
-    <div class="section-title">Dose Schedule</div>
+    <!-- <div class="section-title">Dose Schedule</div>
     @if(!empty($prescription->dose_schedule) && is_array($prescription->dose_schedule))
         <table>
             <thead><tr><th>Stage/Month</th><th>Dose</th></tr></thead>
@@ -62,7 +63,7 @@
         </table>
     @else
         <p>Dose schedule not specified in this format.</p>
-    @endif
+    @endif -->
 
     <p>They have provided us with the following measurements:
         Height: <span class="emphasize">{{ $answers['height'] ?? 'N/A' }} cm</span>,
@@ -75,7 +76,29 @@
     <p>They have advised us that they are registered to your surgery and have provided the following information regarding their medical history:</p>
 
     <p><span class="emphasize">Relevant medical conditions they have or have ever had:</span></p>
-    @php
+       @php
+           // $answers['conditions'] is expected to be an array of selected condition strings from the Job.
+           // $answers['conditions_options'] is a collection/array of available option strings from the Job.
+           $patientSelectedConditions = $answers['conditions'] ?? [];
+           $availableOptions = $answers['conditions_options'] ?? collect();
+       @endphp
+
+       @if($availableOptions->isNotEmpty())
+           <p>The patient was presented with the following options for medical conditions and responded as indicated:</p>
+           <ul class="conditions-options-list">
+           @foreach($availableOptions as $optionText)
+               <li>
+                   {{ $optionText }} -
+                   @if(is_array($patientSelectedConditions) && in_array($optionText, $patientSelectedConditions))
+                       <span class="emphasize">Selected</span>
+                   @else
+                       Not Selected
+                   @endif
+               </li>
+           @endforeach
+           </ul>
+        @endif
+    <!-- @php
         $conditionsDisplay = $answers['conditions'] ?? 'Information not provided or N/A.';
     @endphp
     @if(is_array($conditionsDisplay) && !empty($conditionsDisplay))
@@ -87,8 +110,8 @@
     @elseif(is_string($conditionsDisplay) && !empty(trim($conditionsDisplay)) && $conditionsDisplay !== 'Not specified'  && $conditionsDisplay !== 'Information not provided or N/A.')
         <p>{{ $conditionsDisplay }}</p>
     @else
-        <p>None disclosed or N/A.</p> {{-- More specific fallback --}}
-    @endif
+        <p>None disclosed or N/A.</p>
+    @endif -->
 
     <p><span class="emphasize">Are you pregnant, planning to become pregnant, or currently breastfeeding?</span></p>
     <p>{{ $answers['pregnancy'] ?? 'Information not provided or N/A.' }}</p>
@@ -112,7 +135,7 @@
 
     <p>This treatment was initiated following an assessment conducted via our platform. We encourage open communication for continuity of care.</p> -->
 
-    <div class="signature-section" style="margin-top: 20px;">
+    <div class="signature-section">
         <p>Sincerely,</p><br>
         <p>{{ $prescriber->name }}</p>
         <p>For {{ config('app.title', 'HeySlim Clinic') }}</p>
