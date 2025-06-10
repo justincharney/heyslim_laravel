@@ -168,7 +168,7 @@ class PrescriptionController extends Controller
         // If a clinical plan was provided, validate that the user can prescribe based on the plan
         if (isset($validated["clinical_plan_id"])) {
             $plan = ClinicalPlan::findOrFail($validated["clinical_plan_id"]);
-            $autoApproved = false;
+            // $autoApproved = false;
 
             // Make sure the plan is active (only if the user is a pharmacist)
             if ($plan->status !== "active" && $user->hasRole("pharmacist")) {
@@ -205,21 +205,21 @@ class PrescriptionController extends Controller
             }
 
             // If user is a pharmacist, make sure the plan has been agreed to by a pharmacist
-            if ($user->hasRole("pharmacist") && !$plan->pharmacist_agreed_at) {
-                return response()->json(
-                    [
-                        "message" =>
-                            "This clinical management plan has not been agreed to by a pharmacist",
-                    ],
-                    400
-                );
-            }
+            // if ($user->hasRole("pharmacist") && !$plan->pharmacist_agreed_at) {
+            //     return response()->json(
+            //         [
+            //             "message" =>
+            //                 "This clinical management plan has not been agreed to by a pharmacist",
+            //         ],
+            //         400
+            //     );
+            // }
 
             // If user is a provider and the plan doesn't have pharmacist approval
             // We will auto-approve it
-            if ($user->hasRole("provider") && !$plan->pharmacist_agreed_at) {
-                $autoApproved = true;
-            }
+            // if ($user->hasRole("provider") && !$plan->pharmacist_agreed_at) {
+            //     $autoApproved = true;
+            // }
         }
 
         // Set initial status to pending_payment
@@ -239,15 +239,15 @@ class PrescriptionController extends Controller
             $prescription = Prescription::create($validated);
 
             // 2. Auto-approve clinical plan if needed
-            if ($autoApproved) {
-                $plan->update([
-                    "pharmacist_agreed_at" => now(),
-                    "pharmacist_id" => $user->id, // Provider is acting as pharmacist in this case
-                    "status" => "active",
-                ]);
-            }
+            // if ($autoApproved) {
+            //     $plan->update([
+            //         "pharmacist_agreed_at" => now(),
+            //         "pharmacist_id" => $user->id, // Provider is acting as pharmacist in this case
+            //         "status" => "active",
+            //     ]);
+            // }
 
-            // 3. Approve the questionnaire submission if not already approved
+            // 2. Approve the questionnaire submission if not already approved
             if ($plan->questionnaire_submission_id) {
                 $submission = QuestionnaireSubmission::find(
                     $plan->questionnaire_submission_id

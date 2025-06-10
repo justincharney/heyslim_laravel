@@ -69,7 +69,7 @@ class PatientController extends Controller
             },
             "clinicalPlansAsPatient" => function ($query) use ($teamId) {
                 $query
-                    ->with(["provider", "pharmacist", "patient"])
+                    ->with(["provider", "patient"])
                     ->whereHas("provider", function ($q) use ($teamId) {
                         $q->where("current_team_id", $teamId);
                     })

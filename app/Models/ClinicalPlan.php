@@ -15,7 +15,6 @@ class ClinicalPlan extends Model implements AuditableContract
     protected $fillable = [
         "patient_id",
         "provider_id",
-        "pharmacist_id",
         "questionnaire_submission_id",
         "condition_treated",
         "medicines_that_may_be_prescribed",
@@ -25,13 +24,11 @@ class ClinicalPlan extends Model implements AuditableContract
         "process_for_reporting_adrs",
         "patient_allergies",
         "provider_agreed_at",
-        "pharmacist_agreed_at",
         "status",
     ];
 
     protected $casts = [
         "provider_agreed_at" => "datetime",
-        "pharmacist_agreed_at" => "datetime",
     ];
 
     /**
@@ -53,10 +50,10 @@ class ClinicalPlan extends Model implements AuditableContract
     /**
      * Get the pharmacist associated with the clinical plan.
      */
-    public function pharmacist()
-    {
-        return $this->belongsTo(User::class, "pharmacist_id");
-    }
+    // public function pharmacist()
+    // {
+    //     return $this->belongsTo(User::class, "pharmacist_id");
+    // }
 
     /**
      * Get the questionnaire submission associated with the clinical plan.

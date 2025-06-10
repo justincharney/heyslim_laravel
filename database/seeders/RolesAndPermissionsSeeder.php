@@ -18,31 +18,31 @@ class RolesAndPermissionsSeeder extends Seeder
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
 
         // Patient permissions
-        Permission::create(["name" => "view own profile"]);
-        Permission::create(["name" => "edit own profile"]);
-        Permission::create(["name" => "view own questionnaires"]);
-        Permission::create(["name" => "submit questionnaires"]);
+        Permission::findOrCreate("view own profile");
+        Permission::findOrCreate("edit own profile");
+        Permission::findOrCreate("view own questionnaires");
+        Permission::findOrCreate("submit questionnaires");
 
         // Create permissions for providers
-        Permission::create(["name" => "read patients"]);
-        Permission::create(["name" => "write patients"]);
-        Permission::create(["name" => "read questionnaires"]);
-        Permission::create(["name" => "write questionnaires"]); // Can approve/disapprove
-        Permission::create(["name" => "read treatment plans"]);
-        Permission::create(["name" => "write treatment plans"]);
-        Permission::create(["name" => "read prescriptions"]);
-        Permission::create(["name" => "write prescriptions"]);
+        Permission::findOrCreate("read patients");
+        Permission::findOrCreate("write patients");
+        Permission::findOrCreate("read questionnaires");
+        Permission::findOrCreate("write questionnaires"); // Can approve/disapprove
+        Permission::findOrCreate("read treatment plans");
+        Permission::findOrCreate("write treatment plans");
+        Permission::findOrCreate("read prescriptions");
+        Permission::findOrCreate("write prescriptions");
 
         // Admin permissions
-        Permission::create(["name" => "manage teams"]);
-        Permission::create(["name" => "manage users"]);
-        Permission::create(["name" => "manage roles"]);
-        Permission::create(["name" => "manage permissions"]);
-        Permission::create(["name" => "manage system"]);
+        Permission::findOrCreate("manage teams");
+        Permission::findOrCreate("manage users");
+        Permission::findOrCreate("manage roles");
+        Permission::findOrCreate("manage permissions");
+        Permission::findOrCreate("manage system");
 
         // Create roles and assign permissions
-        $patientRole = Role::create(["name" => "patient"]);
-        $patientRole->givePermissionTo([
+        $patientRole = Role::findOrCreate("patient");
+        $patientRole->syncPermissions([
             "view own profile",
             "edit own profile",
             "view own questionnaires",
@@ -50,8 +50,8 @@ class RolesAndPermissionsSeeder extends Seeder
             "read prescriptions",
         ]);
 
-        $providerRole = Role::create(["name" => "provider"]);
-        $providerRole->givePermissionTo([
+        $providerRole = Role::findOrCreate("provider");
+        $providerRole->syncPermissions([
             "view own profile",
             "edit own profile",
             "read patients",
@@ -64,8 +64,8 @@ class RolesAndPermissionsSeeder extends Seeder
             "write prescriptions",
         ]);
 
-        $pharmacistRole = Role::create(["name" => "pharmacist"]);
-        $pharmacistRole->givePermissionTo([
+        $pharmacistRole = Role::findOrCreate("pharmacist");
+        $pharmacistRole->syncPermissions([
             "view own profile",
             "edit own profile",
             "read patients",
@@ -73,10 +73,10 @@ class RolesAndPermissionsSeeder extends Seeder
             "read questionnaires",
             "read treatment plans",
             "read prescriptions",
-            "write prescriptions",
+            // "write prescriptions",
         ]);
 
-        $adminRole = Role::create(["name" => "admin"]);
-        $adminRole->givePermissionTo(Permission::all());
+        $adminRole = Role::findOrCreate("admin");
+        $adminRole->syncPermissions(Permission::all());
     }
 }

@@ -40,27 +40,24 @@ class ClinicalPlanController extends Controller
         if ($user->hasRole("provider")) {
             $plans = $user
                 ->clinicalPlansAsProvider()
-                ->with(["patient", "pharmacist", "provider"])
+                ->with(["patient", "provider"])
                 ->whereHas("patient", function ($query) use ($teamId) {
                     $query->where("current_team_id", $teamId);
                 })
                 ->orderBy("created_at", "desc")
                 ->get();
         }
-        // If pharmacist, get plans where they're the pharmacist or plans in their team
+        // If pharmacist, get plans in their team
         elseif ($user->hasRole("pharmacist")) {
-            $plans = ClinicalPlan::where(function ($query) use ($user) {
-                $query
-                    ->where("pharmacist_id", $user->id)
-                    ->orWhere("pharmacist_id", null);
+            $plans = ClinicalPlan::whereHas("patient", function ($query) use (
+                $teamId
+            ) {
+                $query->where("current_team_id", $teamId);
             })
-                ->whereHas("patient", function ($query) use ($teamId) {
-                    $query->where("current_team_id", $teamId);
-                })
                 ->whereHas("provider", function ($query) use ($teamId) {
                     $query->where("current_team_id", $teamId);
                 })
-                ->with(["patient", "pharmacist", "provider"])
+                ->with(["patient", "provider"])
                 ->orderBy("created_at", "desc")
                 ->get();
         }
@@ -71,7 +68,7 @@ class ClinicalPlanController extends Controller
             ) {
                 $query->where("current_team_id", $teamId);
             })
-                ->with(["patient", "provider", "pharmacist"])
+                ->with(["patient", "provider"])
                 ->orderBy("created_at", "desc")
                 ->get();
         } else {
@@ -196,7 +193,6 @@ class ClinicalPlanController extends Controller
         $clinicalManagementPlan->load([
             "patient",
             "provider",
-            "pharmacist",
             "prescriptions.prescriber",
         ]);
 
@@ -268,94 +264,94 @@ class ClinicalPlanController extends Controller
     /**
      * Pharmacist agrees to the clinical management plan
      */
-    public function agreeAsPharmacist(Request $request, $id)
-    {
-        $user = auth()->user();
+    // public function agreeAsPharmacist(Request $request, $id)
+    // {
+    //     $user = auth()->user();
 
-        if (!$user->hasRole("pharmacist")) {
-            return response()->json(
-                [
-                    "message" => "Only pharmacists can perform this action",
-                ],
-                403
-            );
-        }
+    //     if (!$user->hasRole("pharmacist")) {
+    //         return response()->json(
+    //             [
+    //                 "message" => "Only pharmacists can perform this action",
+    //             ],
+    //             403
+    //         );
+    //     }
 
-        $clinicalManagementPlan = ClinicalPlan::findOrFail($id);
+    //     $clinicalManagementPlan = ClinicalPlan::findOrFail($id);
 
-        DB::beginTransaction();
+    //     DB::beginTransaction();
 
-        try {
-            $clinicalManagementPlan->update([
-                "pharmacist_id" => $user->id,
-                "pharmacist_agreed_at" => now(),
-                "status" => "active",
-            ]);
+    //     try {
+    //         $clinicalManagementPlan->update([
+    //             "pharmacist_id" => $user->id,
+    //             "pharmacist_agreed_at" => now(),
+    //             "status" => "active",
+    //         ]);
 
-            DB::commit();
+    //         DB::commit();
 
-            return response()->json([
-                "message" => "Pharmacist agreement recorded successfully",
-            ]);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json(
-                [
-                    "message" => "Failed to record pharmacist agreement",
-                    "error" => $e->getMessage(),
-                ],
-                500
-            );
-        }
-    }
+    //         return response()->json([
+    //             "message" => "Pharmacist agreement recorded successfully",
+    //         ]);
+    //     } catch (\Exception $e) {
+    //         DB::rollBack();
+    //         return response()->json(
+    //             [
+    //                 "message" => "Failed to record pharmacist agreement",
+    //                 "error" => $e->getMessage(),
+    //             ],
+    //             500
+    //         );
+    //     }
+    // }
 
     /**
      * Get clinical plans that require pharmacist approval
      */
-    public function getPlansNeedingPharmacistApproval()
-    {
-        $user = auth()->user();
-        $teamId = $user->current_team_id;
+    // public function getPlansNeedingPharmacistApproval()
+    // {
+    //     $user = auth()->user();
+    //     $teamId = $user->current_team_id;
 
-        if (!$teamId) {
-            return response()->json(
-                [
-                    "message" =>
-                        "You must be associated with a team to view clinical plans",
-                ],
-                403
-            );
-        }
+    //     if (!$teamId) {
+    //         return response()->json(
+    //             [
+    //                 "message" =>
+    //                     "You must be associated with a team to view clinical plans",
+    //             ],
+    //             403
+    //         );
+    //     }
 
-        // Set team context for permissions
-        setPermissionsTeamId($teamId);
+    //     // Set team context for permissions
+    //     setPermissionsTeamId($teamId);
 
-        // Check if user is a pharmacist
-        if (!$user->hasRole("pharmacist")) {
-            return response()->json(
-                [
-                    "message" => "Only pharmacists can access this endpoint",
-                ],
-                403
-            );
-        }
+    //     // Check if user is a pharmacist
+    //     if (!$user->hasRole("pharmacist")) {
+    //         return response()->json(
+    //             [
+    //                 "message" => "Only pharmacists can access this endpoint",
+    //             ],
+    //             403
+    //         );
+    //     }
 
-        // Get clinical plans that don't have pharmacist approval
-        $plans = ClinicalPlan::whereNull("pharmacist_agreed_at")
-            ->whereHas("patient", function ($query) use ($teamId) {
-                $query->where("current_team_id", $teamId);
-            })
-            ->whereHas("provider", function ($query) use ($teamId) {
-                $query->where("current_team_id", $teamId);
-            })
-            ->with(["patient", "pharmacist", "provider"])
-            ->orderBy("created_at", "desc")
-            ->get();
+    //     // Get clinical plans that don't have pharmacist approval
+    //     $plans = ClinicalPlan::whereNull("pharmacist_agreed_at")
+    //         ->whereHas("patient", function ($query) use ($teamId) {
+    //             $query->where("current_team_id", $teamId);
+    //         })
+    //         ->whereHas("provider", function ($query) use ($teamId) {
+    //             $query->where("current_team_id", $teamId);
+    //         })
+    //         ->with(["patient", "pharmacist", "provider"])
+    //         ->orderBy("created_at", "desc")
+    //         ->get();
 
-        return response()->json([
-            "clinical_plans" => $plans,
-        ]);
-    }
+    //     return response()->json([
+    //         "clinical_plans" => $plans,
+    //     ]);
+    // }
 
     /**
      * Get clinical plans that don't have any prescriptions
@@ -400,22 +396,16 @@ class ClinicalPlanController extends Controller
         if ($user->hasRole("provider")) {
             $plansQuery->where("provider_id", $user->id);
         }
-        // If pharmacist, filter plans where they're the pharmacist or plans in their team
+        // If pharmacist, filter for plans in their team
         elseif ($user->hasRole("pharmacist")) {
-            $plansQuery
-                ->where(function ($query) use ($user) {
-                    $query
-                        ->where("pharmacist_id", $user->id)
-                        ->orWhere("pharmacist_id", null);
-                })
-                ->whereHas("provider", function ($query) use ($teamId) {
-                    $query->where("current_team_id", $teamId);
-                });
+            $plansQuery->whereHas("provider", function ($query) use ($teamId) {
+                $query->where("current_team_id", $teamId);
+            });
         }
 
         // Get plans
         $plans = $plansQuery
-            ->with(["patient", "pharmacist", "provider"])
+            ->with(["patient", "provider"])
             ->orderBy("created_at", "desc")
             ->get();
 
