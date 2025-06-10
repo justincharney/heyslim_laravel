@@ -25,7 +25,8 @@ class UserFileController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            "file" => "required|file|mimes:jpg,jpeg,png,pdf,doc,docx|max:10240",
+            "file" =>
+                "required|file|mimes:jpg,jpeg,png,webp,heic,heif|max:10240",
             "description" => "nullable|string|max:255",
         ]);
 
