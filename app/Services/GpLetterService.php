@@ -13,10 +13,13 @@ class GpLetterService
      * Generates the PDF content for the GP letter.
      *
      * @param Prescription $prescription
+     * @param array $viewAnswers An array of processed answers from the questionnaire
      * @return string|null Binary PDF content or null on failure.
      */
-    public function generatePdfContent(Prescription $prescription): ?string
-    {
+    public function generatePdfContent(
+        Prescription $prescription,
+        array $viewAnswers
+    ): ?string {
         try {
             // Ensure necessary related data is loaded for the PDF view
             $prescription->load(["patient", "prescriber", "clinicalPlan"]);
@@ -38,6 +41,7 @@ class GpLetterService
                 "patient" => $prescription->patient,
                 "prescriber" => $prescription->prescriber,
                 "clinicalPlan" => $prescription->clinicalPlan,
+                "answers" => $viewAnswers,
                 "currentDate" => now()->format("jS F Y"),
             ])
                 ->format("a4")

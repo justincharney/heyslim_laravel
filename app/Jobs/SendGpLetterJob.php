@@ -31,9 +31,10 @@ class SendGpLetterJob implements ShouldQueue
      */
     public function handle(GpLetterService $gpLetterService): void
     {
-        $prescription = Prescription::with("patient")->find(
-            $this->prescriptionId
-        );
+        $prescription = Prescription::with([
+            "patient",
+            "clinicalPlan.questionnaireSubmission.answers.question",
+        ])->find($this->prescriptionId);
 
         if (!$prescription) {
             Log::error(
@@ -53,8 +54,60 @@ class SendGpLetterJob implements ShouldQueue
             return;
         }
 
+        // Fetch and prepare questionnaire answers
+        $keyedAnswers = collect();
+        $keyedAnswers = $prescription->clinicalPlan->questionnaireSubmission->answers
+            ->keyBy(function ($answer) {
+                // Answer question_text safely
+                return optional(optional($answer)->question)->question_text;
+            })
+            ->filter(function ($value, $key) {
+                return !is_null($key);
+            });
+
+        // Text for the question answers we need for the GP letter
+        $q_height_text = "Height (cm)";
+        $q_weight_text = "Weight (kg)";
+        $q_bmi_text = "Calculated BMI";
+        $q_conditions_text =
+            "Do you have or have you ever had any of the following conditions?";
+        $q_pregnancy_text =
+            "Are you pregnant, planning to become pregnant, or currently breastfeeding?";
+        $q_bariatric_text = "Have you had any bariatric (weight loss) surgery?";
+
+        $viewAnswers = [
+            "height" => optional($keyedAnswers->get($q_height_text))
+                ->answer_text,
+            "weight" => optional($keyedAnswers->get($q_weight_text))
+                ->answer_text,
+            "bmi" => optional($keyedAnswers->get($q_bmi_text))->answer_text,
+            "conditions" => optional($keyedAnswers->get($q_conditions_text))
+                ->answer_text,
+            "pregnancy" => strtoupper(
+                optional($keyedAnswers->get($q_pregnancy_text))->answer_text
+            ),
+            "bariatric_surgery" => strtoupper(
+                optional($keyedAnswers->get($q_bariatric_text))->answer_text
+            ),
+        ];
+
+        // Handle 'conditions' if it's stored as a JSON string array
+        $conditionsData = $viewAnswers["conditions"];
+        if (is_string($conditionsData)) {
+            $decodedConditions = json_decode($conditionsData, true);
+            if (
+                json_last_error() === JSON_ERROR_NONE &&
+                is_array($decodedConditions)
+            ) {
+                $viewAnswers["conditions"] = $decodedConditions;
+            }
+        }
+
         try {
-            $pdfBinary = $gpLetterService->generatePdfContent($prescription);
+            $pdfBinary = $gpLetterService->generatePdfContent(
+                $prescription,
+                $viewAnswers
+            );
 
             if (!$pdfBinary) {
                 Log::error(

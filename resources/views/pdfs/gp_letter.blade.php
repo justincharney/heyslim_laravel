@@ -19,7 +19,7 @@
 <body>
     <div class="header">
         <h1>{{ config('app.title', 'HeySlim Clinic') }}</h1>
-        {{-- Add clinic address and contact if desired --}}
+        <p>email: support@heyslim.co.uk</p>
     </div>
 
     <div class="clinic-info">
@@ -36,7 +36,9 @@
 
     <p>Dear Doctor,</p>
 
-    <p>We are writing to inform you that your patient, <span class="emphasize">{{ $patient->name }}</span>, has been prescribed the following medication through our service:</p>
+    <p>We are writing to inform you that your patient, <span class="emphasize">{{ $patient->name }}</span>, has commenced private weight management treatment under our care at HeySlim.</p>
+
+    <p>Following a comprehensive consulation and assement, we have initiated therapy with the following medication:</p>
 
     <div class="section-title">Prescription Details</div>
     <table>
@@ -62,7 +64,43 @@
         <p>Dose schedule not specified in this format.</p>
     @endif
 
-    <div class="section-title">Clinical Information</div>
+    <p>They have provided us with the following measurements:
+        Height: <span class="emphasize">{{ $answers['height'] ?? 'N/A' }} cm</span>,
+           Weight: <span class="emphasize">{{ $answers['weight'] ?? 'N/A' }} kg</span>.
+           Calculated BMI: <span class="emphasize">{{ $answers['bmi'] ?? 'N/A' }}</span>.
+    </p>
+
+
+
+    <p>They have advised us that they are registered to your surgery and have provided the following information regarding their medical history:</p>
+
+    <p><span class="emphasize">Relevant medical conditions they have or have ever had:</span></p>
+    @php
+        $conditionsDisplay = $answers['conditions'] ?? 'Information not provided or N/A.';
+    @endphp
+    @if(is_array($conditionsDisplay) && !empty($conditionsDisplay))
+        <ul class="conditions-list">
+        @foreach($conditionsDisplay as $condition)
+            <li>{{ $condition }}</li>
+        @endforeach
+        </ul>
+    @elseif(is_string($conditionsDisplay) && !empty(trim($conditionsDisplay)) && $conditionsDisplay !== 'Not specified'  && $conditionsDisplay !== 'Information not provided or N/A.')
+        <p>{{ $conditionsDisplay }}</p>
+    @else
+        <p>None disclosed or N/A.</p> {{-- More specific fallback --}}
+    @endif
+
+    <p><span class="emphasize">Are you pregnant, planning to become pregnant, or currently breastfeeding?</span></p>
+    <p>{{ $answers['pregnancy'] ?? 'Information not provided or N/A.' }}</p>
+
+    <p><span class="emphasize">Have you had any bariatric (weight loss) surgery?</span></p>
+    <p>{{ $answers['bariatric_surgery'] ?? 'Information not provided or N/A.' }}</p>
+
+    <p>If you are aware the information that they have provided may be inaccurate we would greatly appreciate it if you could contact us at support@heyslim.co.uk, so that we can discuss next steps with the patient.</p>
+
+    <p>We do recognise your workload and thank you for taking the time to read this letter and responding if you feel it is necessary. Please don’t hesitate to contact us if you have any questions.</p>
+
+    <!-- <div class="section-title">Clinical Information</div>
     @if($clinicalPlan)
         <table>
             <tr><th>Condition Treated:</th><td>{{ $clinicalPlan->condition_treated ?: 'N/A' }}</td></tr>
@@ -72,16 +110,16 @@
         <p>Associated clinical plan information not available.</p>
     @endif
 
-    <p>This treatment was initiated following an assessment conducted via our platform. We encourage open communication for continuity of care.</p>
+    <p>This treatment was initiated following an assessment conducted via our platform. We encourage open communication for continuity of care.</p> -->
 
-    <div class="signature-section" style="margin-top: 40px;">
-        <p>Sincerely,</p><br><br>
+    <div class="signature-section" style="margin-top: 20px;">
+        <p>Sincerely,</p><br>
         <p>{{ $prescriber->name }}</p>
         <p>For {{ config('app.title', 'HeySlim Clinic') }}</p>
     </div>
 
-    <div class="footer small-text" style="margin-top: 30px; text-align: center;">
+    <!-- <div class="footer small-text" style="margin-top: 30px; text-align: center;">
         <p>This letter is for informational purposes for the patient's General Practitioner.</p>
-    </div>
+    </div> -->
 </body>
 </html>

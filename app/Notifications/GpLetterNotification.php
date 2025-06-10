@@ -66,9 +66,7 @@ class GpLetterNotification extends Notification implements ShouldQueue
             )
             ->attachData($pdfContent, $this->pdfFilename, [
                 "mime" => "application/pdf",
-            ])
-            ->line("Thank you,")
-            ->line(config("app.name") . " Team");
+            ]);
     }
 
     /**
