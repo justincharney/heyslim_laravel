@@ -231,7 +231,7 @@ class PrescriptionController extends Controller
         $prescription = null;
         $chat = null;
         $checkoutUrl = null;
-        $discountCode = "CONSULTATION_DISCOUNT";
+        $discountCode = null; // "CONSULTATION_DISCOUNT";
 
         DB::beginTransaction();
         try {

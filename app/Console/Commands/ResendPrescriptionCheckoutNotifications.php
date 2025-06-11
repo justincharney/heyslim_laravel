@@ -108,7 +108,7 @@ class ResendPrescriptionCheckoutNotifications extends Command
                 continue;
             }
 
-            $discountCode = "CONSULTATION_DISCOUNT";
+            $discountCode = null; //"CONSULTATION_DISCOUNT";
             try {
                 $cartData = $this->shopifyService->createCheckout(
                     $shopifyVariantGid,
