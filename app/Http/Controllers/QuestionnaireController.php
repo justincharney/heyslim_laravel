@@ -6,6 +6,7 @@ use App\Models\Questionnaire;
 use App\Models\QuestionnaireSubmission;
 use App\Models\User;
 use App\Notifications\QuestionnaireRejectedNotification;
+use App\Notifications\QuestionnaireSubmittedNotification;
 use App\Services\RechargeService;
 use App\Services\ShopifyService;
 use Illuminate\Support\Facades\DB;
@@ -524,31 +525,45 @@ class QuestionnaireController extends Controller
             );
         }
 
+        // Send the patient the notification
+        $patient = auth()->user();
+        $patient->notify(new QuestionnaireSubmittedNotification($submission));
+
+        // Simply mark the questionnaire as submitted
+        $submission->update([
+            "status" => "submitted",
+            "submitted_at" => now(),
+        ]);
+
+        return response()->json([
+            "message" => "Questionnaire submitted successfully.",
+        ]);
+
         // Now, create a checkout for the consultation product.
-        $consultationProductId = ShopifyProductMapping::getConsultationProductId();
+        // $consultationProductId = ShopifyProductMapping::getConsultationProductId();
 
-        if ($consultationProductId) {
-            // Create checkout for the consultation product
-            $shopifyService = app(ShopifyService::class);
-            $cart = $shopifyService->createCheckout(
-                $consultationProductId,
-                $submission->id
-            );
+        // if ($consultationProductId) {
+        //     // Create checkout for the consultation product
+        //     $shopifyService = app(ShopifyService::class);
+        //     $cart = $shopifyService->createCheckout(
+        //         $consultationProductId,
+        //         $submission->id
+        //     );
 
-            if ($cart) {
-                $submission->update([
-                    "status" => "pending_payment",
-                    "submitted_at" => now(),
-                ]);
+        //     if ($cart) {
+        //         $submission->update([
+        //             "status" => "pending_payment",
+        //             "submitted_at" => now(),
+        //         ]);
 
-                return response()->json([
-                    "message" => "Questionnaire requires payment to complete.",
-                    "checkout_url" => $cart["checkoutUrl"],
-                ]);
-            }
-        }
-        // If we reach here, either consultationProductId was not found or checkout creation failed.
-        throw new \Exception("Failed to create checkout for consultation.");
+        //         return response()->json([
+        //             "message" => "Questionnaire requires payment to complete.",
+        //             "checkout_url" => $cart["checkoutUrl"],
+        //         ]);
+        //     }
+        // }
+        // // If we reach here, either consultationProductId was not found or checkout creation failed.
+        // throw new \Exception("Failed to create checkout for consultation.");
     }
 
     public function reject(Request $request, $id)
