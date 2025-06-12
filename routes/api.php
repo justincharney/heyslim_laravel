@@ -3,6 +3,7 @@
 use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\ChatController;
+use App\Http\Controllers\ConsultationController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\QuestionnaireController;
 use App\Http\Controllers\SubscriptionController;
@@ -85,6 +86,12 @@ Route::middleware(["auth:sanctum", "role:patient"])->group(function () {
     Route::get("/user-files", [UserFileController::class, "index"]);
     Route::get("/user-files/{id}", [UserFileController::class, "show"]);
     Route::delete("/user-files/{id}", [UserFileController::class, "destroy"]);
+
+    // Consultation checkout route
+    Route::post("/consultation/checkout", [
+        ConsultationController::class,
+        "createCheckout",
+    ]);
 
     // Questionnaire routes
     Route::middleware([ProfileCompletedMiddleware::class])

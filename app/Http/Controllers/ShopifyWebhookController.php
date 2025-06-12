@@ -2,7 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Config\ShopifyProductMapping;
 use App\Models\QuestionnaireSubmission;
+use App\Models\User;
+use App\Notifications\ScheduleConsultationNotification;
+use App\Services\CalendlyService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use App\Services\RechargeService;
@@ -56,6 +60,91 @@ class ShopifyWebhookController extends Controller
 
         // Decode the webhook payload
         $payload = json_decode($data, true);
+
+        // Determine if this is a consultation order
+        $isConsultationOrder = false;
+        if (isset($payload["line_items"]) && is_array($payload["line_items"])) {
+            foreach ($payload["line_items"] as $item) {
+                $productId = $item["product_id"];
+                // Check if this numeric product id matches the numberic part of our consultation product GID
+                $consultationProductId = ShopifyProductMapping::getConsultationProductId();
+                if (
+                    $consultationProductId &&
+                    str_contains($consultationProductId, (string) $productId)
+                ) {
+                    $isConsultationOrder = true;
+                    break;
+                }
+            }
+        }
+
+        if ($isConsultationOrder) {
+            // Handle the consultation order
+            $customerEmail = $payload["customer"]["email"] ?? null;
+            $user = User::where("email", $customerEmail)->first();
+            if (!$user) {
+                Log::error("User not found for consultation order", [
+                    "email" => $customerEmail,
+                ]);
+                return response()->json(
+                    [
+                        "message" => "User not found for consultation order",
+                    ],
+                    404
+                );
+            }
+
+            // Send a consultation link to the user
+            $calendlyService = app(CalendlyService::class);
+            try {
+                $calendlyResult = $calendlyService->selectProviderAndGenerateLink(
+                    $user
+                );
+
+                if ($calendlyResult) {
+                    $user->notify(
+                        new ScheduleConsultationNotification(
+                            null, // no  questionnaire submission for direct consultation purchase
+                            $calendlyResult["provider"],
+                            $calendlyResult["booking_url"]
+                        )
+                    );
+                } else {
+                    Log::error("Failed to generate calendly link", [
+                        "user_id" => $user->id,
+                    ]);
+
+                    // Return a failure response for webhook retrying
+                    return response()->json(
+                        [
+                            "message" => "Failed to generate calendly link",
+                        ],
+                        500
+                    );
+                }
+            } catch (\Exception $e) {
+                Log::error(
+                    "Exception during direct consultation notification process: " .
+                        $e->getMessage(),
+                    [
+                        "user_id" => $user->id,
+                        "trace" => $e->getTraceAsString(),
+                    ]
+                );
+
+                // Return a failure response for webhook retrying
+                return response()->json(
+                    [
+                        "message" => "Failed to process consultation order",
+                    ],
+                    500
+                );
+            }
+            // Return success response after processing consultation order
+            return response()->json([
+                "message" => "Consultation order webhook processed",
+            ]);
+        }
 
         // Update the status of the questionnaire submission
         // Attempt to retrieve custom questionnaire submission id from the order's note attributes

@@ -29,17 +29,34 @@ class QuestionnaireController extends Controller
             ->orderBy("created_at", "desc")
             ->get();
 
+        $formattedQuestionnaires = $questionnaires->map(function (
+            $questionnaire
+        ) {
+            return [
+                "id" => $questionnaire->id,
+                "title" => $questionnaire->title,
+                "description" => $questionnaire->description,
+                "type" => "questionnaire",
+                "created_at" => $questionnaire->created_at->format(
+                    "Y-m-d H:i:s"
+                ),
+            ];
+        });
+
+        // Add the consultation product as a treatment option
+        $consultationProduct = ShopifyProductMapping::getConsultationProductDetails();
+        if ($consultationProduct) {
+            $formattedQuestionnaires->prepend([
+                "id" => $consultationProduct["id"], // Using Shopify Product GID as ID
+                "title" => $consultationProduct["title"],
+                "description" => $consultationProduct["description"],
+                "type" => $consultationProduct["type"],
+                "created_at" => now()->format("Y-m-d H:i:s"),
+            ]);
+        }
+
         return response()->json([
-            "questionnaires" => $questionnaires->map(function ($questionnaire) {
-                return [
-                    "id" => $questionnaire->id,
-                    "title" => $questionnaire->title,
-                    "description" => $questionnaire->description,
-                    "created_at" => $questionnaire->created_at->format(
-                        "Y-m-d H:i:s"
-                    ),
-                ];
-            }),
+            "questionnaires" => $formattedQuestionnaires,
         ]);
     }
 

@@ -92,6 +92,13 @@ class ShopifyProductMapping
     ];
 
     public static $consultationProductId = "gid://shopify/Product/7396602249312";
+    public static $consulationProductDetails = [
+        "id" => "gid://shopify/Product/7396602249312",
+        "type" => "consultation",
+        "title" => "Clinical Consultation",
+        "description" =>
+            "Book a one-on-one consultation with our clinical team to discuss your health goals and treatment options.",
+    ];
 
     public static function getProductId($optionText)
     {
@@ -126,6 +133,11 @@ class ShopifyProductMapping
     public static function getConsultationProductId()
     {
         return self::$consultationProductId;
+    }
+
+    public static function getConsultationProductDetails()
+    {
+        return self::$consulationProductDetails;
     }
 
     public static function getSellingPlanId($productGid)

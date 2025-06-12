@@ -23,7 +23,7 @@ class ScheduleConsultationNotification extends Notification implements
      * Create a new notification instance.
      */
     public function __construct(
-        QuestionnaireSubmission $submission,
+        ?QuestionnaireSubmission $submission,
         User $provider,
         string $bookingUrl
     ) {
@@ -47,23 +47,31 @@ class ScheduleConsultationNotification extends Notification implements
      */
     public function toMail(object $notifiable): MailMessage
     {
-        $questionnaire = $this->submission->questionnaire;
-
-        return (new MailMessage())
+        $mail = (new MailMessage())
             ->subject("Schedule Your Consultation")
-            ->greeting("Hello " . $notifiable->name)
-            ->line(
-                'Thank you for submitting your questionnaire for "' .
-                    $questionnaire->title .
-                    '".'
-            )
-            ->line(
-                "Your submission is being reviewed by our medical team. The next step is to schedule a consultation with one of our healthcare providers."
-            )
+            ->greeting("Hello " . $notifiable->name);
+
+        if ($this->submission && $this->submission->questionnaire) {
+            $mail
+                ->line(
+                    'Thank you for submitting your questionnaire for "' .
+                        $this->submission->questionnaire->title .
+                        '".'
+                )
+                ->line(
+                    "Your submission is being reviewed by our medical team. The next step is to schedule a consultation with one of our healthcare providers."
+                );
+        } else {
+            $mail->line(
+                "Thank you for your interest in a consultation. Please use the link below to schedule your appointment."
+            );
+        }
+
+        $mail
             ->line(
                 "Dr. " .
                     StringUtils::removeTitles($this->provider->name) .
-                    " is available to discuss your treatment plan."
+                    " is available to discuss your health goals and treatment options."
             )
             ->action("Schedule Your Consultation", $this->bookingUrl)
             ->line(
@@ -72,6 +80,8 @@ class ScheduleConsultationNotification extends Notification implements
             ->line(
                 "If you have any questions, please contact our support team."
             );
+
+        return $mail;
     }
 
     /**
@@ -81,13 +91,21 @@ class ScheduleConsultationNotification extends Notification implements
      */
     public function toArray(object $notifiable): array
     {
-        return [
-            "submission_id" => $this->submission->id,
-            "questionnaire_id" => $this->submission->questionnaire_id,
-            "questionnaire_title" => $this->submission->questionnaire->title,
+        $data = [
             "provider_id" => $this->provider->id,
             "provider_name" => $this->provider->name,
             "booking_url" => $this->bookingUrl,
         ];
+
+        if ($this->submission) {
+            $data["submission_id"] = $this->submission->id;
+            if ($this->submission->questionnaire) {
+                $data["questionnaire_id"] = $this->submission->questionnaire_id;
+                $data["questionnaire_title"] =
+                    $this->submission->questionnaire->title;
+            }
+        }
+
+        return $data;
     }
 }
