@@ -97,7 +97,7 @@ class ShopifyProductMapping
         "type" => "consultation",
         "title" => "Clinical Consultation",
         "description" =>
-            "Book a one-on-one consultation with our clinical team to discuss your health goals and treatment options.",
+            "Book a one-on-one consultation with our specialist weight loss doctors to discuss your health goals and personalised treatment options.",
     ];
 
     public static function getProductId($optionText)
