@@ -89,6 +89,7 @@ class ProfileController extends Controller
             "address" => "required|string",
             "gender" => "required|string|max:255",
             "ethnicity" => "required|string|max:255",
+            "affiliate_id" => "nullable|string|max:255",
         ]);
 
         $user->update($validated);

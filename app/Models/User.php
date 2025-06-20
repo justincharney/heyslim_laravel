@@ -39,6 +39,7 @@ class User extends Authenticatable
         "profile_completed",
         "gender",
         "ethnicity",
+        "affiliate_id",
     ];
 
     /**

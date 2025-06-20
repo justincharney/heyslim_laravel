@@ -775,6 +775,18 @@ GRAPHQL;
                     "value" => (string) $prescriptionId,
                 ],
             ];
+
+            // Add Refersion affiliate ID by getting the prescription patient and their affiliate id if available
+            $prescription = Prescription::find($prescriptionId);
+            if (
+                $prescription->patient &&
+                $prescription->patient->affiliate_id
+            ) {
+                $cartInput["attributes"][] = [
+                    "key" => "auto_credit_affiliate_id",
+                    "value" => (string) $prescription->patient->affiliate_id,
+                ];
+            }
         }
 
         // Add discount code if available
