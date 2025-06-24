@@ -30,4 +30,10 @@ class UserFile extends Model
     {
         return $this->BelongsTo(User::class);
     }
+
+    // Get the check-in that uses this file
+    public function checkIn()
+    {
+        return $this->hasOne(CheckIn::class, "user_file_id");
+    }
 }

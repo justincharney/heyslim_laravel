@@ -79,17 +79,24 @@ class GenerateAndNotifyCheckIns extends Command
                         "id" => "question_1",
                         "type" => "select",
                         "question" =>
-                            "How have you been feeling on your current medication?",
+                            "How has your appetite changed since your last injection?",
                         "required" => true,
                         "options" => [
                             [
-                                "value" => "better",
-                                "label" => "Better than before",
+                                "value" => "Much less hunger",
+                                "label" => "Much less hunger",
                             ],
-                            ["value" => "same", "label" => "About the same"],
                             [
-                                "value" => "worse",
-                                "label" => "Worse than before",
+                                "value" => "Slightly less hunger",
+                                "label" => "Slightly less hunger",
+                            ],
+                            [
+                                "value" => "No change",
+                                "label" => "No change",
+                            ],
+                            [
+                                "value" => "Increased hunger",
+                                "label" => "Increased hunger",
                             ],
                         ],
                         "response" => null,
@@ -102,15 +109,53 @@ class GenerateAndNotifyCheckIns extends Command
                         "required" => true,
                         "options" => [
                             ["value" => "nausea", "label" => "Nausea"],
+                            ["value" => "vomitting", "label" => "Vomitting"],
+                            ["value" => "diarrhoea", "label" => "Diarrhoea"],
+                            [
+                                "value" => "constipation",
+                                "label" => "Constipation",
+                            ],
+                            ["value" => "bloating", "label" => "Bloating"],
                             ["value" => "headache", "label" => "Headache"],
-                            ["value" => "dizziness", "label" => "Dizziness"],
-                            ["value" => "fatigue", "label" => "Fatigue"],
                             ["value" => "none", "label" => "None of the above"],
                         ],
                         "response" => null,
                     ],
                     [
                         "id" => "question_3",
+                        "type" => "textarea",
+                        "question" =>
+                            "Please describe any other symptoms you are experiencing:",
+                        "required" => false,
+                        "response" => null,
+                    ],
+                    [
+                        "id" => "question_4",
+                        "type" => "select",
+                        "question" =>
+                            "How severe are your symptoms, if you have any?",
+                        "options" => [
+                            [
+                                "value" => "mild",
+                                "label" =>
+                                    "Mild – not affecting day-to-day activities",
+                            ],
+                            [
+                                "value" => "moderate",
+                                "label" =>
+                                    "Moderate – noticeable but manageable",
+                            ],
+                            [
+                                "value" => "severe",
+                                "label" =>
+                                    "Severe – affecting daily life or work",
+                            ],
+                        ],
+                        "required" => false,
+                        "response" => null,
+                    ],
+                    [
+                        "id" => "question_5",
                         "type" => "select",
                         "question" =>
                             "Are you taking your medication as prescribed?",
@@ -122,7 +167,7 @@ class GenerateAndNotifyCheckIns extends Command
                         "response" => null,
                     ],
                     [
-                        "id" => "question_4",
+                        "id" => "question_6",
                         "type" => "number",
                         "question" => "What is your current weight? (kg)",
                         "required" => true,
@@ -134,7 +179,27 @@ class GenerateAndNotifyCheckIns extends Command
                         ],
                     ],
                     [
-                        "id" => "question_5",
+                        "id" => "question_7",
+                        "type" => "select",
+                        "question" =>
+                            "Would you be open to increasing your dose next week?",
+                        "options" => [
+                            ["value" => "Yes", "label" => "Yes – I’m ready"],
+                            [
+                                "value" => "No",
+                                "label" =>
+                                    "No – prefer to stay on current dose",
+                            ],
+                            [
+                                "value" => "Maybe",
+                                "label" => "Maybe – would like to discuss",
+                            ],
+                        ],
+                        "required" => true,
+                        "response" => null,
+                    ],
+                    [
+                        "id" => "question_8",
                         "type" => "textarea",
                         "question" =>
                             "Any additional information you'd like to share with your provider?",

@@ -22,6 +22,7 @@ class CheckIn extends Model implements AuditableContract
         "reviewed_by",
         "reviewed_at",
         "provider_notes",
+        "user_file_id",
     ];
 
     protected $casts = [
@@ -94,5 +95,11 @@ class CheckIn extends Model implements AuditableContract
     public function isOverdue(): bool
     {
         return $this->due_date < now() && $this->status === "pending";
+    }
+
+    // Get the user file associated with the check-in.
+    public function userFile()
+    {
+        return $this->belongsTo(UserFile::class, "user_file_id");
     }
 }

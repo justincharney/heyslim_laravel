@@ -9,9 +9,20 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
+use App\Services\SupabaseStorageService;
+use Illuminate\Support\Facades\DB;
+use App\Models\UserFile;
+use Illuminate\Support\Str;
 
 class CheckInController extends Controller
 {
+    protected $supabaseStorageService;
+
+    public function __construct(SupabaseStorageService $supabaseStorageService)
+    {
+        $this->supabaseStorageService = $supabaseStorageService;
+    }
+
     /**
      * Display a listing of the check-ins.
      */
@@ -129,6 +140,7 @@ class CheckInController extends Controller
         $checkIn = CheckIn::with([
             "prescription.clinicalPlan",
             "user",
+            "userFile",
         ])->findOrFail($id);
 
         // Set team context
@@ -155,6 +167,14 @@ class CheckInController extends Controller
                     403
                 );
             }
+        }
+
+        // Generate a signed URL for the file if it exists
+        if ($checkIn->userFile) {
+            $signedUrl = $checkIn->userFile->url = $this->supabaseStorageService->createSignedUrl(
+                $checkIn->userFile->supabase_path,
+                3600
+            );
         }
 
         return response()->json([
@@ -194,20 +214,97 @@ class CheckInController extends Controller
         }
 
         $validated = $request->validate([
-            "questions_and_responses" => "required|array",
+            "questions_and_responses" => "required|string",
+            "file" =>
+                "nullable|file|mimes:jpg,jpeg,png,webp,heic,heif|max:10240",
+            "description" => "nullable|string|max:255",
         ]);
 
-        // Update check-in
-        $checkIn->update([
-            "questions_and_responses" => $validated["questions_and_responses"],
-            "status" => "completed",
-            "completed_at" => now(),
-        ]);
+        // Parse the JSON string
+        $questionsAndResponses = json_decode(
+            $validated["questions_and_responses"],
+            true
+        );
 
-        return response()->json([
-            "message" => "Check-in updated successfully",
-            "check_in" => $checkIn,
-        ]);
+        DB::beginTransaction();
+        try {
+            $userFileId = null;
+
+            // Handle file upload only if a file is provided
+            if ($request->hasFile("file")) {
+                $file = $request->file("file");
+                $originalFileName = $file->getClientOriginalName();
+                $sanitizedFileName =
+                    Str::slug(pathinfo($originalFileName, PATHINFO_FILENAME)) .
+                    "." .
+                    $file->getClientOriginalExtension();
+                $fileContent = file_get_contents($file->getRealPath());
+                $mimeType = $file->getMimeType();
+                $size = $file->getSize();
+
+                // Define path in Supabase for file
+                $timestamp = now()->format("YmdHis");
+                $supabasePath = "user_uploads/{$user->id}/{$timestamp}_{$sanitizedFileName}";
+
+                // Upload to Supabase
+                $uploadedPath = $this->supabaseStorageService->uploadFile(
+                    $supabasePath,
+                    $fileContent,
+                    ["contentType" => $mimeType, "upsert" => false]
+                );
+
+                if (!$uploadedPath) {
+                    throw new \Exception("Failed to upload file to Supabase");
+                }
+
+                // Create UserFile record
+                $userFile = UserFile::create([
+                    "user_id" => $user->id,
+                    "file_name" => $originalFileName,
+                    "supabase_path" => $uploadedPath,
+                    "mime_type" => $mimeType,
+                    "size" => $size,
+                    "description" => $request->input("description"),
+                    "uploaded_at" => now(),
+                ]);
+
+                $userFileId = $userFile->id;
+            }
+
+            // Update check-in (with or without file reference)
+            $updateData = [
+                "questions_and_responses" => $questionsAndResponses,
+                "status" => "submitted",
+                "completed_at" => now(),
+            ];
+
+            // Only set user_file_id if a file was uploaded
+            if ($userFileId) {
+                $updateData["user_file_id"] = $userFileId;
+            }
+
+            $checkIn->update($updateData);
+
+            DB::commit();
+
+            return response()->json([
+                "message" => "Check-in updated successfully",
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Error updating check-in: " . $e->getMessage(), [
+                "check_in_id" => $checkIn->id,
+                "user_id" => $user->id,
+                "trace" => $e->getTraceAsString(),
+            ]);
+
+            return response()->json(
+                [
+                    "message" => "Error updating check-in",
+                ],
+                500
+            );
+        }
     }
 
     /**

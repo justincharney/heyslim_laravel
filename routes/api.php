@@ -68,7 +68,7 @@ Route::middleware([
         // CheckIns
         Route::get("/check-ins", [CheckInController::class, "index"]);
         Route::get("/check-ins/{id}", [CheckInController::class, "show"]);
-        Route::put("/check-ins/{id}", [CheckInController::class, "update"]);
+        Route::post("/check-ins/{id}", [CheckInController::class, "update"]);
     });
 });
 
