@@ -288,13 +288,13 @@ class ShopifyWebhookController extends Controller
             );
         }
 
-        // Calculate the next order date (e.g., 1 month from fulfillment)
+        // Calculate the next order date (e.g., 28 days from fulfillment)
         $fulfillmentDate = isset($payload["fulfillments"][0]["created_at"])
             ? new \DateTime($payload["fulfillments"][0]["created_at"])
             : new \DateTime(); // Fallback to now if created_at is missing
 
         $nextOrderDate = clone $fulfillmentDate;
-        $nextOrderDate->modify("+1 months");
+        $nextOrderDate->modify("+28 days");
         $nextOrderDateStr = $nextOrderDate->format("Y-m-d");
 
         $rechargeService = app(RechargeService::class);
