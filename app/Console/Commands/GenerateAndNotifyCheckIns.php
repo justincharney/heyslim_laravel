@@ -61,12 +61,15 @@ class GenerateAndNotifyCheckIns extends Command
                 continue;
             }
 
+            // The Due-Date for the Check-In is one day after the next charge date
+            $checkInDueDate = $nextChargeDate->copy()->subDays(1);
+
             // Check if a check-in already exists for this subscription and due date
             $existingCheckIn = CheckIn::where(
                 "subscription_id",
                 $subscription->id
             )
-                ->where("due_date", $nextChargeDate->format("Y-m-d"))
+                ->where("due_date", $checkInDueDate->format("Y-m-d"))
                 ->first();
 
             // Log::info(
@@ -215,12 +218,12 @@ class GenerateAndNotifyCheckIns extends Command
                     "subscription_id" => $subscription->id,
                     "status" => "pending",
                     "questions_and_responses" => $questionsAndResponses,
-                    "due_date" => $nextChargeDate->subDays(1)->format("Y-m-d"),
+                    "due_date" => $checkInDueDate->format("Y-m-d"),
                 ]);
 
                 $generatedCount++;
                 $this->info(
-                    "Generated check-in for prescription #{$subscription->prescription_id}, due on {$nextChargeDate->format(
+                    "Generated check-in for prescription #{$subscription->prescription_id}, due on {$checkInDueDate->format(
                         "Y-m-d"
                     )}"
                 );
