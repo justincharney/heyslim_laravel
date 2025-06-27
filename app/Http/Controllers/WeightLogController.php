@@ -16,13 +16,13 @@ class WeightLogController extends Controller
         // Optional filtering by date range
         $startDate = $request->input("start_date");
         $endDate = $request->input("end_date");
-        $limit = $request->input("limit", 50); // Default to 50
+        $limit = $request->input("limit");
 
-        $query = $user->weightLogs();
+        $query = $user->weightLogs()->orderBy("log_date", "asc");
 
         if ($startDate) {
             $query->where(
-                "date",
+                "log_date",
                 ">=",
                 Carbon::parse($startDate)->toDateString()
             );
@@ -30,13 +30,17 @@ class WeightLogController extends Controller
 
         if ($endDate) {
             $query->where(
-                "date",
+                "log_date",
                 "<=",
                 Carbon::parse($endDate)->toDateString()
             );
         }
 
-        $weightLogs = $query->limit($limit)->get();
+        if ($limit) {
+            $query->limit($limit);
+        }
+
+        $weightLogs = $query->get();
 
         return response()->json([
             "weight_logs" => $weightLogs,
