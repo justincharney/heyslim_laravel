@@ -112,6 +112,7 @@ class AuthController extends Controller
     public function user(Request $request)
     {
         $user = $request->user();
+        $user->load("todaysWeightLog");
         $userData = $user->toArray();
         // Add roles to the userData
         $userData["roles"] = $user->getRoleNames();

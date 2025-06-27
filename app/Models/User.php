@@ -178,4 +178,36 @@ class User extends Authenticatable
     {
         return empty($this->getMissingProfileFields());
     }
+
+    /**
+     * Get the weight logs for the user.
+     */
+    public function weightLogs(): HasMany
+    {
+        return $this->hasMany(WeightLog::class)->orderBy("log_date", "desc");
+    }
+
+    /**
+     * Get the latest weight log for the user.
+     */
+    public function latestWeightLog()
+    {
+        return $this->hasOne(WeightLog::class)->latestOfMany("log_date");
+    }
+
+    /**
+     * Get today's weight log for the user.
+     */
+    public function todaysWeightLog()
+    {
+        return $this->hasOne(WeightLog::class)->whereDate("log_date", today());
+    }
+
+    /**
+     * Check if the user has logged weight today.
+     */
+    public function hasLoggedWeightToday(): bool
+    {
+        return $this->todaysWeightLog()->exists();
+    }
 }
