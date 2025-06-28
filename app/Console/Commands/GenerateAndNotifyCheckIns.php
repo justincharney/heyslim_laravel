@@ -57,16 +57,16 @@ class GenerateAndNotifyCheckIns extends Command
 
             // Only create check-ins when next charge is within 7 days
             $daysUntilCharge = $todayDate->diffInDays($nextChargeDate, false);
-            $this->info(
-                "Processing subscription #{$subscription->id}, next charge on {$nextChargeDate->format(
-                    "Y-m-d"
-                )}, daysUntilCharge: {$daysUntilCharge}"
-            );
+            // $this->info(
+            //     "Processing subscription #{$subscription->id}, next charge on {$nextChargeDate->format(
+            //         "Y-m-d"
+            //     )}, daysUntilCharge: {$daysUntilCharge}"
+            // );
 
             if ($daysUntilCharge > 7) {
-                $this->info(
-                    "Skipping subscription #{$subscription->id} because it's more than 7 days away."
-                );
+                // $this->info(
+                //     "Skipping subscription #{$subscription->id} because it's more than 7 days away."
+                // );
                 continue;
             }
 
@@ -74,11 +74,11 @@ class GenerateAndNotifyCheckIns extends Command
             $checkInDueDate = $nextChargeDate->copy()->subDays(1);
 
             // Check if a check-in already exists for this subscription and due date
-            $this->info(
-                "Checking for existing check-in for subscription #{$subscription->id} with due date {$checkInDueDate->format(
-                    "Y-m-d"
-                )}"
-            );
+            // $this->info(
+            //     "Checking for existing check-in for subscription #{$subscription->id} with due date {$checkInDueDate->format(
+            //         "Y-m-d"
+            //     )}"
+            // );
             $existingCheckIn = CheckIn::where(
                 "subscription_id",
                 $subscription->id
@@ -86,9 +86,9 @@ class GenerateAndNotifyCheckIns extends Command
                 ->where("due_date", $checkInDueDate->format("Y-m-d"))
                 ->first();
 
-            Log::info(
-                "Existing check-in: " . ($existingCheckIn ? "Yes" : "No")
-            );
+            // Log::info(
+            //     "Existing check-in: " . ($existingCheckIn ? "Yes" : "No")
+            // );
 
             if (!$existingCheckIn) {
                 $questionsAndResponses = [
