@@ -57,14 +57,14 @@ class GenerateAndNotifyCheckIns extends Command
 
             // Only create check-ins when next charge is within 7 days
             $daysUntilCharge = $todayDate->diffInDays($nextChargeDate, false);
-            Log::info(
+            $this->info(
                 "Processing subscription #{$subscription->id}, next charge on {$nextChargeDate->format(
                     "Y-m-d"
                 )}, daysUntilCharge: {$daysUntilCharge}"
             );
 
             if ($daysUntilCharge > 7) {
-                Log::info(
+                $this->info(
                     "Skipping subscription #{$subscription->id} because it's more than 7 days away."
                 );
                 continue;
@@ -74,7 +74,7 @@ class GenerateAndNotifyCheckIns extends Command
             $checkInDueDate = $nextChargeDate->copy()->subDays(1);
 
             // Check if a check-in already exists for this subscription and due date
-            Log::info(
+            $this->info(
                 "Checking for existing check-in for subscription #{$subscription->id} with due date {$checkInDueDate->format(
                     "Y-m-d"
                 )}"
