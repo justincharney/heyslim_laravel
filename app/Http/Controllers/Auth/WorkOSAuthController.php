@@ -61,6 +61,13 @@ class WorkOSAuthController extends Controller
 
     public function authenticate(AuthKitAuthenticationRequest $request)
     {
+        // Check if this is an impersonation request (no state parameter)
+        $stateParam = $request->query("state");
+
+        if (is_null($stateParam)) {
+            return $this->handleImpersonationAuthentication($request);
+        }
+
         $user = $request->authenticate();
 
         // Get and store the WorkOS session ID from the access token
@@ -185,5 +192,89 @@ class WorkOSAuthController extends Controller
         return redirect(
             config("app.front_end_url") . "/post-login?state=" . $state
         );
+    }
+
+    private function handleImpersonationAuthentication(
+        AuthKitAuthenticationRequest $request
+    ) {
+        WorkOS::configure();
+
+        $userManagement = new \WorkOS\UserManagement();
+
+        try {
+            $authResult = $userManagement->authenticateWithCode(
+                config("services.workos.client_id"),
+                $request->query("code")
+            );
+
+            $workosUser = $authResult->user;
+            $accessToken = $authResult->access_token;
+            $refreshToken = $authResult->refresh_token;
+
+            // Find existing user
+            $user = User::where("workos_id", $workosUser->id)->first();
+
+            if (!$user) {
+                Log::warning("Impersonation attempted for non-existent user", [
+                    "workos_id" => $workosUser->id,
+                    "email" => $workosUser->email,
+                ]);
+
+                return redirect(
+                    config("app.front_end_url") . "/error?msg=user_not_found"
+                );
+            }
+
+            // Log the user in
+            auth()->login($user);
+
+            // Store tokens in session
+            $request->session()->put("workos_access_token", $accessToken);
+            $request->session()->put("workos_refresh_token", $refreshToken);
+            $request->session()->regenerate();
+
+            // Store WorkOS session ID
+            if ($accessToken) {
+                $workOsSession = WorkOS::decodeAccessToken($accessToken);
+                if (isset($workOsSession["sid"])) {
+                    Cache::put(
+                        "workos_sid_" . $user->id,
+                        $workOsSession["sid"],
+                        now()->addDays(7)
+                    );
+                }
+            }
+
+            // Issue a Sanctum token for API access
+            $token = $user->createToken(
+                "user-token",
+                expiresAt: now()->addHours(2)
+            )->plainTextToken;
+
+            // Generate a short-lived random state parameter for additional security
+            $state = hash("sha256", uniqid(mt_rand(), true));
+
+            // Store state in Cache
+            Cache::put("token_state:{$state}", $token, now()->addMinutes(5));
+
+            Log::info("User impersonation successful", [
+                "user_id" => $user->id,
+                "workos_id" => $user->workos_id,
+                "email" => $user->email,
+            ]);
+
+            // Return redirect for impersonation
+            return redirect(
+                config("app.front_end_url") . "/post-login?state=" . $state
+            );
+        } catch (\Exception $e) {
+            Log::error("WorkOS authentication failed", [
+                "error" => $e->getMessage(),
+            ]);
+
+            return redirect(
+                config("app.front_end_url") . "/error?msg=authentication_failed"
+            );
+        }
     }
 }
