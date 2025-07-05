@@ -443,42 +443,64 @@ class RechargeService
     public function getUpcomingRenewals(): array
     {
         try {
-            // Calculate today's and tomorrow's dates for renewals
-            $today = Carbon::today()->format("Y-m-d");
+            // Tomorrow's date for renewals
             $tomorrow = Carbon::tomorrow()->format("Y-m-d");
-
-            // Get all active subscriptions
-            $response = Http::withHeaders([
-                "X-Recharge-Access-Token" => $this->apiKey,
-                "Accept" => "application/json",
-                "Content-Type" => "application/json",
-            ])->get("{$this->endpoint}/subscriptions", [
+            $upcomingRenewals = [];
+            $url = "{$this->endpoint}/subscriptions";
+            $params = [
                 "status" => "ACTIVE",
-            ]);
+                "limit" => 250,
+            ];
 
-            if (!$response->successful()) {
-                return [];
-            }
+            do {
+                $response = Http::withHeaders([
+                    "X-Recharge-Access-Token" => $this->apiKey,
+                    "Accept" => "application/json",
+                    "Content-Type" => "application/json",
+                ])->get($url, $params);
 
-            $subscriptions = $response->json()["subscriptions"] ?? [];
-
-            // Filter subscriptions that have a next_charge_scheduled_at today or tomorrow
-            $upcomingSubscriptions = [];
-            foreach ($subscriptions as $subscription) {
-                $nextChargeScheduledAt = Carbon::parse(
-                    $subscription["next_charge_scheduled_at"] ?? null
-                )->format("Y-m-d");
-                if (
-                    $nextChargeScheduledAt === $today ||
-                    $nextChargeScheduledAt === $tomorrow
-                ) {
-                    $upcomingSubscriptions[] = $subscription;
+                if (!$response->successful()) {
+                    Log::error(
+                        "Failed to retrieve active subscriptions from Recharge for renewal check",
+                        [
+                            "status_code" => $response->status(),
+                            "response" => $response->json(),
+                        ]
+                    );
+                    break;
                 }
-            }
 
-            // Log::info($upcomingSubscriptions);
+                $currentSubscriptions =
+                    $response->json()["subscriptions"] ?? [];
 
-            return $upcomingSubscriptions;
+                // Filter this list of subscriptions for those renewing tomorrow
+                foreach ($currentSubscriptions as $subscription) {
+                    $nextChargeDate = Carbon::parse(
+                        $subscription["next_charge_scheduled_at"]
+                    )->format("Y-m-d");
+                    if ($nextChargeDate === $tomorrow) {
+                        $upcomingRenewals[] = $subscription;
+                    }
+                }
+
+                // Get the next page cursor
+                $linkHeader = $response->header("Link");
+                $url = null;
+                $params = []; // Params are included in the cursor URL
+
+                if ($linkHeader) {
+                    preg_match(
+                        '/<([^>]*)>;\s*rel="next"/',
+                        $linkHeader,
+                        $matches
+                    );
+                    if (isset($matches[1])) {
+                        $url = $matches[1];
+                    }
+                }
+            } while ($url !== null);
+
+            return $upcomingRenewals;
         } catch (\Exception $e) {
             Log::error("Exception while fetching upcoming renewals", [
                 "error" => $e->getMessage(),
