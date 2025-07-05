@@ -443,8 +443,8 @@ class RechargeService
     public function getUpcomingRenewals(): array
     {
         try {
-            // Tomorrow's date for renewals
             $tomorrow = Carbon::tomorrow()->format("Y-m-d");
+            $dayAfterTomorrow = Carbon::tomorrow()->addDay()->format("Y-m-d");
             $upcomingRenewals = [];
             $url = "{$this->endpoint}/subscriptions";
             $params = [
@@ -461,7 +461,7 @@ class RechargeService
 
                 if (!$response->successful()) {
                     Log::error(
-                        "Failed to retrieve active subscriptions from Recharge for renewal check",
+                        "Failed to retrieve active subscriptions from Recharge for upcoming renewals check",
                         [
                             "status_code" => $response->status(),
                             "response" => $response->json(),
@@ -473,20 +473,23 @@ class RechargeService
                 $currentSubscriptions =
                     $response->json()["subscriptions"] ?? [];
 
-                // Filter this list of subscriptions for those renewing tomorrow
+                // Filter for subscriptions renewing tomorrow OR the day after
                 foreach ($currentSubscriptions as $subscription) {
-                    $nextChargeDate = Carbon::parse(
-                        $subscription["next_charge_scheduled_at"]
+                    $nextChargeScheduledAt = Carbon::parse(
+                        $subscription["next_charge_scheduled_at"] ?? null
                     )->format("Y-m-d");
-                    if ($nextChargeDate === $tomorrow) {
+                    if (
+                        $nextChargeScheduledAt === $tomorrow ||
+                        $nextChargeScheduledAt === $dayAfterTomorrow
+                    ) {
                         $upcomingRenewals[] = $subscription;
                     }
                 }
 
-                // Get the next page cursor
+                // Get next page cursor
                 $linkHeader = $response->header("Link");
                 $url = null;
-                $params = []; // Params are included in the cursor URL
+                $params = [];
 
                 if ($linkHeader) {
                     preg_match(
