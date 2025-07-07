@@ -18,6 +18,7 @@ use App\Models\ClinicalPlan;
 use App\Models\Prescription;
 use App\Jobs\ProcessRejectedQuestionnaireJob;
 use App\Services\QuestionnaireValidationService;
+use App\Models\WeightLog;
 
 class QuestionnaireController extends Controller
 {
@@ -542,6 +543,32 @@ class QuestionnaireController extends Controller
             );
         }
 
+        // Log the weight from the questionnaire
+        $weightQuestion = $submission->questionnaire->questions
+            ->where("question_text", "Weight (kg)")
+            ->first();
+
+        if ($weightQuestion) {
+            $weightAnswer = QuestionAnswer::where(
+                "submission_id",
+                $submission->id
+            )
+                ->where("question_id", $weightQuestion->id)
+                ->first();
+            if ($weightAnswer && is_numeric($weightAnswer->answer_text)) {
+                $user = auth()->user();
+                WeightLog::updateOrCreate(
+                    [
+                        "user_id" => $user->id,
+                        "log_date" => today()->toDateString(),
+                    ],
+                    [
+                        "weight" => (float) $weightAnswer->answer_text,
+                        "unit" => "kg",
+                    ]
+                );
+            }
+        }
         // Send the patient the notification
         $patient = auth()->user();
         $patient->notify(new QuestionnaireSubmittedNotification($submission));

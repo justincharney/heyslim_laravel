@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\CheckIn;
 use App\Models\Prescription;
 use App\Models\Subscription;
+use App\Models\WeightLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
@@ -269,6 +270,28 @@ class CheckInController extends Controller
                 ]);
 
                 $userFileId = $userFile->id;
+            }
+
+            // Log the weight from the check-in
+            $weightResponse = null;
+            foreach ($questionsAndResponses as $qr) {
+                if (
+                    $qr["question"] === "What is your current weight? (kg)" &&
+                    isset($qr["response"])
+                ) {
+                    $weightResponse = $qr["response"];
+                    break;
+                }
+            }
+
+            if ($weightResponse && is_numeric($weightResponse)) {
+                WeightLog::updateOrCreate(
+                    [
+                        "user_id" => $user->id,
+                        "log_date" => today()->toDateString(),
+                    ],
+                    ["weight" => (float) $weightResponse, "unit" => "kg"]
+                );
             }
 
             // Update check-in (with or without file reference)
