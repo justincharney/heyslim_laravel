@@ -170,6 +170,41 @@ class CheckInController extends Controller
             }
         }
 
+        // Fetch all weight logs for the user
+        $weightLogs = WeightLog::where("user_id", $checkIn->user_id)
+            ->orderBy("log_date", "asc")
+            ->get();
+
+        // Calculate the rate of weight loss over the last 4 weeks
+        $rateOfWeightLoss = null;
+        if ($weightLogs->count() >= 2) {
+            $endDate = Carbon::parse($checkIn->due_date);
+            $startDate = $endDate->copy()->subWeeks(4);
+
+            $logsInPeriod = $weightLogs
+                ->where("log_date", ">=", $startDate)
+                ->where("log_date", "<=", $endDate);
+
+            if ($logsInPeriod->count() >= 2) {
+                $firstLog = $logsInPeriod->first();
+                $lastLog = $logsInPeriod->last();
+
+                $weightChange =
+                    $firstLog->getWeightInKgAttribute() -
+                    $lastLog->getWeightInKgAttribute();
+                $daysDifference = Carbon::parse(
+                    $firstLog->log_date
+                )->diffInDays(Carbon::parse($lastLog->log_date));
+
+                if ($daysDifference > 0) {
+                    $rateOfWeightLoss = round(
+                        ($weightChange / $daysDifference) * 7,
+                        2
+                    ); // kg per week
+                }
+            }
+        }
+
         // Generate a signed URL for the file if it exists
         if ($checkIn->userFile) {
             $signedUrl = $checkIn->userFile->url = $this->supabaseStorageService->createSignedUrl(
@@ -180,6 +215,8 @@ class CheckInController extends Controller
 
         return response()->json([
             "check_in" => $checkIn,
+            "weight_logs" => $weightLogs,
+            "rate_of_weight_loss_kg_per_week" => $rateOfWeightLoss,
         ]);
     }
 
