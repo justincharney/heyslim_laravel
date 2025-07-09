@@ -69,6 +69,7 @@ class TeamController extends Controller
         $validated = $request->validate([
             "name" => "required|string|max:255",
             "description" => "nullable|string",
+            "slack_webhook_url" => "nullable|url|max:255",
         ]);
 
         $team = Team::create($validated);
@@ -107,6 +108,7 @@ class TeamController extends Controller
                 "id" => $team->id,
                 "name" => $team->name,
                 "description" => $team->description,
+                "slack_webhook_url" => $team->slack_webhook_url,
                 "members" => $members,
                 "updated_at" => $team->updated_at,
             ],
@@ -123,6 +125,7 @@ class TeamController extends Controller
         $validated = $request->validate([
             "name" => "required|string|max:255",
             "description" => "nullable|string",
+            "slack_webhook_url" => "nullable|url|max:255",
             "last_updated_at" => "required|date", // Client sends back the timestamp for optimistic locking
         ]);
 
@@ -142,6 +145,7 @@ class TeamController extends Controller
         $team->update([
             "name" => $validated["name"],
             "description" => $validated["description"],
+            "slack_webhook_url" => $validated["slack_webhook_url"],
         ]);
 
         return response()->json([

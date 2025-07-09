@@ -7,6 +7,8 @@ use App\Models\QuestionnaireSubmission;
 use App\Models\User;
 use App\Notifications\QuestionnaireRejectedNotification;
 use App\Notifications\QuestionnaireSubmittedNotification;
+use App\Notifications\QuestionnaireSubmittedForProviderNotification;
+use App\Models\Team;
 use App\Services\RechargeService;
 use App\Services\ShopifyService;
 use Illuminate\Support\Facades\DB;
@@ -578,6 +580,18 @@ class QuestionnaireController extends Controller
             "status" => "submitted",
             "submitted_at" => now(),
         ]);
+
+        // Notify the providers on the patient's team
+        if ($patient->current_team_id) {
+            $team = Team::find($patient->current_team_id);
+            if ($team) {
+                $team->notify(
+                    new QuestionnaireSubmittedForProviderNotification(
+                        $submission
+                    )
+                );
+            }
+        }
 
         return response()->json([
             "message" => "Questionnaire submitted successfully.",

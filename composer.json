@@ -16,6 +16,7 @@
         "laravel/nightwatch": "^1.7",
         "laravel/octane": "^2.9",
         "laravel/sanctum": "^4.0",
+        "laravel/slack-notification-channel": "^3.6",
         "laravel/telescope": "^5.5",
         "laravel/tinker": "^2.9",
         "laravel/workos": "^0.2.0",
