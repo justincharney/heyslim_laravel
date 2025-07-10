@@ -2,91 +2,97 @@
 
 namespace App\Notifications;
 
-use App\Models\QuestionnaireSubmission;
+use App\Models\CheckIn;
 use App\Models\Team;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Notifications\Slack\SlackMessage;
 use Illuminate\Notifications\Notification;
-use Illuminate\Notifications\Slack\BlockKit\Blocks\ActionsBlock;
 use Illuminate\Notifications\Slack\BlockKit\Blocks\ContextBlock;
 use Illuminate\Notifications\Slack\BlockKit\Blocks\SectionBlock;
-use Illuminate\Notifications\Slack\SlackMessage;
+use Illuminate\Support\Facades\Config;
 
-class QuestionnaireSubmittedForProviderNotification
-    extends Notification
-    implements ShouldQueue
+class CheckInSubmittedForProviderNotification extends Notification implements
+    ShouldQueue
 {
     use Queueable;
 
-    protected QuestionnaireSubmission $submission;
+    protected CheckIn $checkIn;
 
     /**
      * Create a new notification instance.
      *
-     * @param QuestionnaireSubmission $submission
+     * @param CheckIn $checkIn
      */
-    public function __construct(QuestionnaireSubmission $submission)
+    public function __construct(CheckIn $checkIn)
     {
         // Eager load relationships to prevent N+1 issues in the queue
-        $this->submission = $submission->load(["user", "questionnaire"]);
+        $this->checkIn = $checkIn->load(["user", "prescription"]);
     }
 
     /**
      * Get the notification's delivery channels.
      *
-     * @param  Team $notifiable The Team model instance
+     * @param  Team  $notifiable The Team model instance
      * @return array
      */
     public function via(Team $notifiable): array
     {
         // Only attempt to send via Slack if the team has a configured channel name.
-        // The routing will be handled by the `routeNotificationForSlack` method on the Team model.
         return !empty($notifiable->slack_notification_channel) ? ["slack"] : [];
     }
 
     /**
      * Get the Slack representation of the notification.
      *
-     * @param  Team $notifiable The Team model instance
+     * @param  Team  $notifiable The Team model instance
      * @return \Illuminate\Notifications\Slack\SlackMessage
      */
     public function toSlack(Team $notifiable): SlackMessage
     {
-        $patient = $this->submission->user;
-        $questionnaire = $this->submission->questionnaire;
+        $patient = $this->checkIn->user;
+        $prescription = $this->checkIn->prescription;
 
-        $providerUrl = config("app.front_end_url", "https://app.heyslim.co.uk");
-        $submissionUrl =
+        // Construct the URL to the check-in review page in the provider portal
+        $providerUrl = Config::get(
+            "app.front_end_url",
+            "https://app.heyslim.co.uk"
+        );
+        $reviewUrl =
             rtrim($providerUrl, "/") .
-            "provider/patients/{$patient->id}/questionnaires/{$this->submission->id}";
+            "provider/patients/{$this->patient->id}/check-ins/{$this->checkIn->id}";
 
         return (new SlackMessage())
             ->text(
-                "A new questionnaire has been submitted by {$patient->name} and requires review."
-            ) // This is fallback text for notifications
-            ->headerBlock("New Questionnaire Submission")
+                "A new check-in has been submitted by {$patient->name} and requires review."
+            )
+            ->headerBlock("New Patient Check-In Submitted")
             ->contextBlock(function (ContextBlock $block) {
                 $block->text(
                     "Submitted at: " .
-                        ($this->submission->submitted_at ?? now())->format(
+                        ($this->checkIn->completed_at ?? now())->format(
                             "Y-m-d H:i T"
                         )
                 );
             })
             ->sectionBlock(function (SectionBlock $block) use (
                 $patient,
-                $questionnaire
+                $prescription
             ) {
                 $block
                     ->field("*Patient:*\n{$patient->name} ({$patient->email})")
                     ->markdown();
-                $block
-                    ->field("*Questionnaire:*\n{$questionnaire->title}")
-                    ->markdown();
+                if ($prescription) {
+                    $block
+                        ->field(
+                            "*Medication:*\n{$prescription->medication_name}"
+                        )
+                        ->markdown();
+                }
             })
-            ->sectionBlock(function (SectionBlock $block) use ($submissionUrl) {
+            ->sectionBlock(function (SectionBlock $block) use ($reviewUrl) {
                 $block
-                    ->text("Click here to <{$submissionUrl}|View Submission>.")
+                    ->text("Click here to <{$reviewUrl}|Review Check-In>.")
                     ->markdown();
             });
     }
@@ -100,9 +106,9 @@ class QuestionnaireSubmittedForProviderNotification
     public function toArray($notifiable): array
     {
         return [
-            "submission_id" => $this->submission->id,
-            "patient_id" => $this->submission->user_id,
-            "team_id" => $this->submission->user->current_team_id,
+            "check_in_id" => $this->checkIn->id,
+            "patient_id" => $this->checkIn->user_id,
+            "team_id" => $this->checkIn->user->current_team_id,
         ];
     }
 }

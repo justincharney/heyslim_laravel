@@ -14,6 +14,8 @@ use App\Services\SupabaseStorageService;
 use Illuminate\Support\Facades\DB;
 use App\Models\UserFile;
 use Illuminate\Support\Str;
+use App\Models\Team;
+use App\Notifications\CheckInSubmittedForProviderNotification;
 
 class CheckInController extends Controller
 {
@@ -346,6 +348,16 @@ class CheckInController extends Controller
             $checkIn->update($updateData);
 
             DB::commit();
+
+            // Notify the providers on the patient's team
+            if ($user->current_team_id) {
+                $team = Team::find($user->current_team_id);
+                if ($team) {
+                    $team->notify(
+                        new CheckInSubmittedForProviderNotification($checkIn)
+                    );
+                }
+            }
 
             return response()->json([
                 "message" => "Check-in updated successfully",
