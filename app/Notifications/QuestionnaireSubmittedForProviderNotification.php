@@ -6,11 +6,15 @@ use App\Models\QuestionnaireSubmission;
 use App\Models\Team;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Notifications\Messages\SlackMessage;
 use Illuminate\Notifications\Notification;
-use Illuminate\Support\Facades\Config;
+use Illuminate\Notifications\Slack\BlockKit\Blocks\ActionsBlock;
+use Illuminate\Notifications\Slack\BlockKit\Blocks\ContextBlock;
+use Illuminate\Notifications\Slack\BlockKit\Blocks\SectionBlock;
+use Illuminate\Notifications\Slack\SlackMessage;
 
-class QuestionnaireSubmittedForProviderNotification extends Notification implements ShouldQueue
+class QuestionnaireSubmittedForProviderNotification
+    extends Notification
+    implements ShouldQueue
 {
     use Queueable;
 
@@ -35,58 +39,53 @@ class QuestionnaireSubmittedForProviderNotification extends Notification impleme
      */
     public function via(Team $notifiable): array
     {
-        // Only attempt to send via Slack if the team has a configured webhook URL.
+        // Only attempt to send via Slack if the team has a configured channel name.
         // The routing will be handled by the `routeNotificationForSlack` method on the Team model.
-        return !empty($notifiable->slack_webhook_url) ? ["slack"] : [];
+        return !empty($notifiable->slack_notification_channel) ? ["slack"] : [];
     }
 
     /**
      * Get the Slack representation of the notification.
      *
      * @param  Team $notifiable The Team model instance
-     * @return \Illuminate\Notifications\Messages\SlackMessage
+     * @return \Illuminate\Notifications\Slack\SlackMessage
      */
     public function toSlack(Team $notifiable): SlackMessage
     {
         $patient = $this->submission->user;
         $questionnaire = $this->submission->questionnaire;
 
-        // Construct the URL to the submission details page in the provider portal
-        // Using config() helper is safer, with a fallback.
-        $providerUrl = Config::get(
-            "app.provider_frontend_url",
-            "http://localhost:3001"
-        );
+        $providerUrl = config("app.front_end_url", "https://app.heyslim.co.uk");
         $submissionUrl =
             rtrim($providerUrl, "/") .
             "/patients/{$patient->id}/questionnaires/{$this->submission->id}";
 
         return (new SlackMessage())
-            ->from("HeySlim Platform", ":syringe:")
-            ->content(
-                "A new questionnaire has been submitted and requires review."
-            ) // Fallback content for notifications that don't support blocks
-            ->attachment(function ($attachment) use (
+            ->text(
+                "A new questionnaire has been submitted by {$patient->name} and requires review."
+            ) // This is fallback text for notifications
+            ->headerBlock("New Questionnaire Submission")
+            ->contextBlock(function (ContextBlock $block) {
+                $block->text(
+                    "Submitted at: " .
+                        ($this->submission->submitted_at ?? now())->format(
+                            "Y-m-d H:i T"
+                        )
+                );
+            })
+            ->sectionBlock(function (SectionBlock $block) use (
                 $patient,
-                $questionnaire,
-                $submissionUrl
+                $questionnaire
             ) {
-                $attachment
-                    ->title(
-                        "New Questionnaire Submission: " . $questionnaire->title,
-                        $submissionUrl
-                    )
-                    ->fields([
-                        "Patient" =>
-                            $patient->name . " (" . $patient->email . ")",
-                        "Submitted At" => $this->submission->submitted_at
-                            ? $this->submission->submitted_at->format(
-                                "Y-m-d H:i T"
-                            )
-                            : now()->format("Y-m-d H:i T"),
-                    ])
-                    ->color("#3AA3E3") // A nice blue color
-                    ->action("View Submission", $submissionUrl, "primary");
+                $block
+                    ->field("*Patient:*\n{$patient->name} ({$patient->email})")
+                    ->markdown();
+                $block
+                    ->field("*Questionnaire:*\n{$questionnaire->title}")
+                    ->markdown();
+            })
+            ->actionsBlock(function (ActionsBlock $block) use ($submissionUrl) {
+                $block->button("View Submission", $submissionUrl)->primary();
             });
     }
 

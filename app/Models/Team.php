@@ -4,12 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Notifications\Notifiable;
 
 class Team extends Model
 {
-    use HasFactory;
+    use HasFactory, Notifiable;
 
-    protected $fillable = ["name", "description", "slack_webhook_url"];
+    protected $fillable = ["name", "description", "slack_notification_channel"];
     public $timestamps = true;
 
     public function users()
@@ -30,6 +31,6 @@ class Team extends Model
      */
     public function routeNotificationForSlack($notification): ?string
     {
-        return $this->slack_webhook_url;
+        return $this->slack_notification_channel;
     }
 }
