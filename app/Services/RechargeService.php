@@ -438,13 +438,16 @@ class RechargeService
     }
 
     /**
-     * Get subscriptions with renewals in the next 24 hours
+     * Get subscriptions with renewals in the next X days.
+     *
+     * @param int $daysOut The number of days to look ahead for renewals.
+     * @return array
      */
-    public function getUpcomingRenewals(): array
+    public function getUpcomingRenewals(int $daysOut = 2): array
     {
         try {
-            $tomorrow = Carbon::tomorrow()->format("Y-m-d");
-            $dayAfterTomorrow = Carbon::tomorrow()->addDay()->format("Y-m-d");
+            $startDate = Carbon::today();
+            $endDate = Carbon::today()->addDays($daysOut);
             $upcomingRenewals = [];
             $url = "{$this->endpoint}/subscriptions";
             $params = [
@@ -473,15 +476,13 @@ class RechargeService
                 $currentSubscriptions =
                     $response->json()["subscriptions"] ?? [];
 
-                // Filter for subscriptions renewing tomorrow OR the day after
+                // Filter for subscriptions renewing within the specified date range
                 foreach ($currentSubscriptions as $subscription) {
-                    $nextChargeScheduledAt = Carbon::parse(
+                    $nextChargeDate = Carbon::parse(
                         $subscription["next_charge_scheduled_at"] ?? null
-                    )->format("Y-m-d");
-                    if (
-                        $nextChargeScheduledAt === $tomorrow ||
-                        $nextChargeScheduledAt === $dayAfterTomorrow
-                    ) {
+                    );
+
+                    if ($nextChargeDate->between($startDate, $endDate)) {
                         $upcomingRenewals[] = $subscription;
                     }
                 }
@@ -507,6 +508,7 @@ class RechargeService
         } catch (\Exception $e) {
             Log::error("Exception while fetching upcoming renewals", [
                 "error" => $e->getMessage(),
+                "days_out" => $daysOut,
             ]);
             return [];
         }
