@@ -84,8 +84,10 @@ class QuestionnaireSubmittedForProviderNotification
                     ->field("*Questionnaire:*\n{$questionnaire->title}")
                     ->markdown();
             })
-            ->actionsBlock(function (ActionsBlock $block) use ($submissionUrl) {
-                $block->button("View Submission", $submissionUrl)->primary();
+            ->sectionBlock(function (SectionBlock $block) use ($submissionUrl) {
+                $block
+                    ->text("Click here to <{$submissionUrl}|View Submission>.")
+                    ->markdown();
             });
     }
 
