@@ -85,6 +85,7 @@ class ProfileController extends Controller
 
         $validated = $request->validate([
             "name" => "required|string|max:255",
+            "phone_number" => "required|string|max:255",
             "date_of_birth" => "required|date|before:today",
             "address" => "required|string",
             "gender" => "required|string|max:255",

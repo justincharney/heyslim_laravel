@@ -83,8 +83,10 @@ Route::middleware(["auth:sanctum", "role:patient"])->group(function () {
     Route::put("/profile", [ProfileController::class, "updatePatientProfile"]);
 
     // Weight Log Routes
-    Route::post("/weight-logs", [WeightLogController::class, "store"]);
-    Route::get("/weight-logs", [WeightLogController::class, "index"]);
+    Route::middleware([ProfileCompletedMiddleware::class])->group(function () {
+        Route::post("/weight-logs", [WeightLogController::class, "store"]);
+        Route::get("/weight-logs", [WeightLogController::class, "index"]);
+    });
 
     // User File Uploads
     Route::post("/user-files", [UserFileController::class, "store"]);

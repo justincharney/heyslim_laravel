@@ -26,6 +26,7 @@ class User extends Authenticatable
     protected $fillable = [
         "name",
         "email",
+        "phone_number",
         "password",
         "shopify_customer_id",
         "shopify_password",
@@ -152,7 +153,13 @@ class User extends Authenticatable
      */
     protected function getRequiredProfileFields(): array
     {
-        return ["date_of_birth", "address", "gender", "ethnicity"];
+        return [
+            "date_of_birth",
+            "address",
+            "gender",
+            "ethnicity",
+            "phone_number",
+        ];
     }
 
     /**
