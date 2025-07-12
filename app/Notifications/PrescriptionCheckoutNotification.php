@@ -6,6 +6,7 @@ use App\Models\Prescription;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Notifications\Messages\VonageMessage;
 use Illuminate\Notifications\Notification;
 
 class PrescriptionCheckoutNotification extends Notification implements
@@ -32,7 +33,13 @@ class PrescriptionCheckoutNotification extends Notification implements
      */
     public function via(object $notifiable): array
     {
-        return ["mail"];
+        $channels = ["mail"];
+
+        if (!empty($notifiable->phone_number)) {
+            $channels[] = "vonage";
+        }
+
+        return $channels;
     }
 
     /**
@@ -63,6 +70,18 @@ class PrescriptionCheckoutNotification extends Notification implements
                 "For support, you can contact us at support@heyslim.co.uk or by live-chat on our website. If you need to speak with your provider about a medical question, please use the chat feature in your patient portal."
             )
             ->line("Thank you for using " . config("app.title") . ".");
+    }
+
+    /**
+     * Get the Vonage / SMS representation of the notification.
+     */
+    public function toVonage(object $notifiable): VonageMessage
+    {
+        $message =
+            "Your HeySlim prescription is ready for payment. Complete your order here: " .
+            $this->checkoutUrl;
+
+        return (new VonageMessage())->content($message);
     }
 
     /**

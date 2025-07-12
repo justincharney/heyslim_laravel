@@ -10,6 +10,7 @@ use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 use App\Models\CheckIn;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Notifications\Notification;
 
 class User extends Authenticatable
 {
@@ -216,5 +217,14 @@ class User extends Authenticatable
     public function hasLoggedWeightToday(): bool
     {
         return $this->todaysWeightLog()->exists();
+    }
+
+    /**
+     * Route notifications for the Vonage channel.
+     */
+    public function routeNotificationForVonage(
+        Notification $notification
+    ): string {
+        return $this->phone_number;
     }
 }
