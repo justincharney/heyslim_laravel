@@ -754,33 +754,26 @@ class PrescriptionController extends Controller
                 "status" => "pending_signature",
                 // 'replaces_prescription_id' will be set after oldPrescription is confirmed
             ]);
-            // ... (calculate end_date for newPrescriptionData as before) ...
-            if (empty($newPrescriptionData["end_date"])) {
-                $doseScheduleArray = json_decode(
-                    $newPrescriptionData["dose_schedule"],
-                    true
+            // Always recalculate end_date based on new dose schedule
+            $doseScheduleArray = json_decode(
+                $newPrescriptionData["dose_schedule"],
+                true
+            );
+            if (is_array($doseScheduleArray) && !empty($doseScheduleArray)) {
+                $startDate = new \DateTime($newPrescriptionData["start_date"]);
+                $numberOfDoses = count($doseScheduleArray);
+                $newPrescriptionData["end_date"] = $startDate
+                    ->modify("+" . $numberOfDoses . " months") // Adjust period as needed
+                    ->format("Y-m-d");
+            } else {
+                DB::rollBack();
+                return response()->json(
+                    [
+                        "message" =>
+                            "Invalid dose schedule format for new prescription.",
+                    ],
+                    422
                 );
-                if (
-                    is_array($doseScheduleArray) &&
-                    !empty($doseScheduleArray)
-                ) {
-                    $startDate = new \DateTime(
-                        $newPrescriptionData["start_date"]
-                    );
-                    $numberOfDoses = count($doseScheduleArray);
-                    $newPrescriptionData["end_date"] = $startDate
-                        ->modify("+" . $numberOfDoses . " months") // Adjust period as needed
-                        ->format("Y-m-d");
-                } else {
-                    DB::rollBack();
-                    return response()->json(
-                        [
-                            "message" =>
-                                "Invalid dose schedule format for new prescription.",
-                        ],
-                        422
-                    );
-                }
             }
             $newPrescription = new Prescription($newPrescriptionData);
             // We will set replaces_prescription_id after confirming oldPrescription exists
