@@ -78,8 +78,7 @@ class PrescriptionCheckoutNotification extends Notification implements
     public function toVonage(object $notifiable): VonageMessage
     {
         $message =
-            "Your HeySlim prescription is ready for payment. Complete your order here: " .
-            $this->checkoutUrl;
+            "Your heySlim prescription is ready for payment. Check your email to complete your order.";
 
         return (new VonageMessage())->content($message);
     }
