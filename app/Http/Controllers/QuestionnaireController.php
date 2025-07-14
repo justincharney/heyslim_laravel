@@ -210,6 +210,8 @@ class QuestionnaireController extends Controller
                                         "text" => $option->option_text,
                                     ];
                                 }),
+                                "display_conditions" =>
+                                    $question->display_conditions,
                             ];
                         }
                     ),
@@ -745,6 +747,7 @@ class QuestionnaireController extends Controller
                                 "text" => $option->option_text,
                             ];
                         }),
+                        "display_conditions" => $question->display_conditions,
                     ];
                 }),
             ],
@@ -807,6 +810,7 @@ class QuestionnaireController extends Controller
                                 "text" => $option->option_text,
                             ];
                         }),
+                        "display_conditions" => $question->display_conditions,
                     ];
                 }),
             ],

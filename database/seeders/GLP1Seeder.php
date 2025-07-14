@@ -2,8 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use App\Models\Questionnaire;
@@ -16,7 +14,7 @@ class GLP1Seeder extends Seeder
     public function run(): void
     {
         $questionnaireTitle = "GLP-1 Weight Management Treatment Plan";
-        $targetVersion = 6; // Define the version this seeder creates
+        $targetVersion = 7; // Define the version this seeder creates
 
         // Check if the target version already exists and is current
         $existingCurrentQuestionnaire = Questionnaire::where(
@@ -79,7 +77,7 @@ class GLP1Seeder extends Seeder
         // Define sections and their questions
         $sections = [
             [
-                "title" => "Physical Measurements and Verification", // 3 questions
+                "title" => "Physical Measurements and Verification",
                 "questions" => [
                     [
                         "text" => "Height (cm)",
@@ -122,11 +120,11 @@ class GLP1Seeder extends Seeder
                 ],
             ],
             [
-                "title" => "Eligibility Screening", // 1 question
+                "title" => "Eligibility Screening",
                 "questions" => [
                     [
-                        "text" => "Do you have, or have you ever been diagnosed
-                            with, any of the following health conditions?",
+                        "text" =>
+                            "Do you have, or have you ever been diagnosed with, any of the following health conditions?",
                         "type" => "multi-select",
                         "required" => true,
                         "options" => [
@@ -157,7 +155,7 @@ class GLP1Seeder extends Seeder
                 ],
             ],
             [
-                "title" => "Medical History - Part 1", // 3 questions
+                "title" => "Medical History - Part 1",
                 "questions" => [
                     [
                         "text" =>
@@ -198,28 +196,28 @@ class GLP1Seeder extends Seeder
                         "text" =>
                             "Have you had any bariatric (weight loss) surgery?",
                         "type" => "yes_no",
-                        "required" => false,
+                        "required" => true,
                     ],
                 ],
             ],
             [
-                "title" => "Medical History - Part 2", // 1 question
+                "title" => "Medical History - Part 2",
                 "questions" => [
                     [
                         "text" => "Have you had your gallbladder removed?",
                         "type" => "yes_no",
-                        "required" => false,
+                        "required" => true,
                     ],
                     [
                         "text" =>
                             "Have you undergone any other surgeries in the past 12 months?",
                         "type" => "yes_no",
-                        "required" => false,
+                        "required" => true,
                     ],
                 ],
             ],
             [
-                "title" => "Medication History - Part 1", // 3 questions
+                "title" => "Medication History - Part 1",
                 "questions" => [
                     [
                         "text" =>
@@ -237,34 +235,44 @@ class GLP1Seeder extends Seeder
                         "text" =>
                             "Do you have any known allergies (e.g., medications, food, or other substances)?",
                         "type" => "yes_no",
-                        "required" => false,
+                        "required" => true,
+                    ],
+                    [
+                        "text" => "Please specify your allergies",
+                        "type" => "textarea",
+                        "required" => true,
+                        "display_conditions" => [
+                            "question_number" => 13,
+                            "operator" => "equals",
+                            "value" => "yes",
+                        ],
                     ],
                 ],
             ],
             [
-                "title" => "Medication History - Part 2", // 3 questions
+                "title" => "Medication History - Part 2",
                 "questions" => [
-                    [
-                        "text" => "Please specify any allergies",
-                        "type" => "textarea",
-                        "required" => false,
-                    ],
                     [
                         "text" =>
                             "Have you previously used weight loss medications (e.g., Saxenda, Orlistat)?",
                         "type" => "yes_no",
-                        "required" => false,
+                        "required" => true,
                     ],
                     [
                         "text" =>
                             "Please specify the medication, dosage, and outcomes",
                         "type" => "textarea",
-                        "required" => false,
+                        "required" => true,
+                        "display_conditions" => [
+                            "question_number" => 15,
+                            "operator" => "equals",
+                            "value" => "yes",
+                        ],
                     ],
                 ],
             ],
             [
-                "title" => "Lifestyle and Weight Management - Part 1", // 3 questions
+                "title" => "Lifestyle and Weight Management - Part 1",
                 "questions" => [
                     [
                         "text" =>
@@ -301,25 +309,24 @@ class GLP1Seeder extends Seeder
                             "Swimming",
                             "Cycling",
                             "Other",
-                            "None of the above",
                         ],
                     ],
                 ],
             ],
             [
-                "title" => "Lifestyle and Weight Management - Part 2", // 2 questions
+                "title" => "Lifestyle and Weight Management - Part 2",
                 "questions" => [
                     [
                         "text" =>
                             "Are you willing to make long-term lifestyle changes, including diet and exercise, alongside medication?",
                         "type" => "yes_no",
                         "required" => true,
+                        "required_answer" => "yes",
                     ],
                     [
                         "text" =>
                             "What are your main reasons for wanting to lose weight?",
                         "type" => "multi-select",
-                        "required" => true,
                         "options" => [
                             "Improving my overall health",
                             "Avoiding or managing a specific health condition",
@@ -333,77 +340,91 @@ class GLP1Seeder extends Seeder
                 ],
             ],
             [
-                "title" => "Risk Assessment and Exclusions - Part 1", // 3 questions
+                "title" => "Risk Assessment and Exclusions - Part 1",
                 "questions" => [
                     [
                         "text" =>
                             "Are you pregnant, planning to become pregnant, or currently breastfeeding?",
                         "type" => "yes_no",
-                        "required" => false,
+                        "required" => true,
                         "required_answer" => "no",
                     ],
                     [
                         "text" =>
                             "Do you drink alcohol more than 3-4 times per week?",
                         "type" => "yes_no",
-                        "required" => false,
+                        "required" => true,
                     ],
                     [
                         "text" => "Do you smoke or use tobacco products?",
                         "type" => "yes_no",
-                        "required" => false,
+                        "required" => true,
                     ],
                 ],
             ],
             [
-                "title" => "Risk Assessment and Exclusions - Part 2", // 3 questions
+                "title" => "Risk Assessment and Exclusions - Part 2",
                 "questions" => [
                     [
                         "text" => "Do you use recreational drugs?",
                         "type" => "yes_no",
-                        "required" => false,
+                        "required" => true,
+                    ],
+                    [
+                        "text" =>
+                            "Please specify which recreational drugs you use.",
+                        "type" => "textarea",
+                        "required" => true,
+                        "display_conditions" => [
+                            "question_number" => 25,
+                            "operator" => "equals",
+                            "value" => "yes",
+                        ],
                     ],
                     [
                         "text" =>
                             "Do you have a personal or family history of medullary thyroid carcinoma (MTC) or multiple endocrine neoplasia syndrome type 2 (MEN 2)?",
                         "type" => "yes_no",
-                        "required" => false,
+                        "required" => true,
                         "required_answer" => "no",
                     ],
                     [
                         "text" =>
                             "Have you experienced any hypersensitivity to GLP-1 receptor agonists?",
                         "type" => "yes_no",
-                        "required" => false,
+                        "required" => true,
                         "required_answer" => "no",
                     ],
                 ],
             ],
             [
-                "title" => "Understanding and Follow-Up", // 3 questions
+                "title" => "Understanding and Follow-Up",
                 "questions" => [
                     [
                         "text" =>
                             "Are you aware of common side effects such as nausea, vomiting, diarrhea, and constipation?",
                         "type" => "yes_no",
                         "required" => true,
+                        "required_answer" => "yes",
                     ],
                     [
                         "text" =>
                             "Do you understand that rare but serious side effects include pancreatitis and gallbladder issues?",
                         "type" => "yes_no",
                         "required" => true,
+                        "required_answer" => "yes",
                     ],
                     [
                         "text" =>
                             "Do you consent to regular follow-up appointments to monitor progress, including weight, side effects, and blood tests if required?",
                         "type" => "yes_no",
                         "required" => true,
+                        "required_answer" => "yes",
                     ],
                 ],
             ],
             [
-                "title" => "Treatment Selection", // 1 question
+                "title" => "Treatment Selection",
                 "questions" => [
                     [
                         "text" => "Please select your preferred medication",
@@ -418,24 +439,26 @@ class GLP1Seeder extends Seeder
                 ],
             ],
             [
-                "title" => "Consent and Data Handling", // 1 question
+                "title" => "Consent and Data Handling",
                 "questions" => [
                     [
                         "text" =>
                             "Do you consent to the collection, processing, and GDPR-compliant storage of your personal and medical data for weight loss medication prescription, with information shared only with relevant healthcare professionals and in accordance with our terms and conditions?",
                         "type" => "yes_no",
                         "required" => true,
+                        "required_answer" => "yes",
                     ],
                 ],
             ],
             [
-                "title" => "Declaration", // 1 question
+                "title" => "Declaration",
                 "questions" => [
                     [
                         "text" =>
                             "Do you confirm that all information provided is accurate and truthful to the best of your knowledge?",
                         "type" => "yes_no",
                         "required" => true,
+                        "required_answer" => "yes",
                     ],
                 ],
             ],
@@ -458,6 +481,11 @@ class GLP1Seeder extends Seeder
                         : null,
                     "validation" => isset($question["validation"])
                         ? json_encode($question["validation"])
+                        : null,
+                    "display_conditions" => isset(
+                        $question["display_conditions"]
+                    )
+                        ? json_encode($question["display_conditions"])
                         : null,
                     "created_at" => now(),
                     "updated_at" => now(),
