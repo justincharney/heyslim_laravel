@@ -227,4 +227,13 @@ class User extends Authenticatable
     ): string {
         return $this->phone_number;
     }
+
+    /**
+     * Route notifications for the Twilio channel.
+     */
+    public function routeNotificationForTwilio(
+        Notification $notification
+    ): string {
+        return $this->phone_number;
+    }
 }

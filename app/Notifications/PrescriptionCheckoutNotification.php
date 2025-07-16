@@ -8,6 +8,8 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Messages\VonageMessage;
 use Illuminate\Notifications\Notification;
+use NotificationChannels\Twilio\TwilioChannel;
+use NotificationChannels\Twilio\TwilioSmsMessage;
 
 class PrescriptionCheckoutNotification extends Notification implements
     ShouldQueue
@@ -36,7 +38,8 @@ class PrescriptionCheckoutNotification extends Notification implements
         $channels = ["mail"];
 
         if (!empty($notifiable->phone_number)) {
-            $channels[] = "vonage";
+            // $channels[] = "vonage";
+            $channels[] = TwilioChannel::class;
         }
 
         return $channels;
@@ -81,6 +84,18 @@ class PrescriptionCheckoutNotification extends Notification implements
             "Your heySlim prescription is ready for payment. Check your email to complete your order.";
 
         return (new VonageMessage())->content($message);
+    }
+
+    /**
+     * Get the Twilio / SMS representation of the notification.
+     */
+    public function toTwilio(object $notifiable): TwilioSmsMessage
+    {
+        $message =
+            "heySlim: Your prescription is ready for payment. Complete your order by visiting " .
+            $this->checkoutUrl;
+
+        return (new TwilioSmsMessage())->content($message);
     }
 
     /**
