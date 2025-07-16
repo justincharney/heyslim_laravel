@@ -220,15 +220,6 @@ class User extends Authenticatable
     }
 
     /**
-     * Route notifications for the Vonage channel.
-     */
-    public function routeNotificationForVonage(
-        Notification $notification
-    ): string {
-        return $this->phone_number;
-    }
-
-    /**
      * Route notifications for the Twilio channel.
      */
     public function routeNotificationForTwilio(
