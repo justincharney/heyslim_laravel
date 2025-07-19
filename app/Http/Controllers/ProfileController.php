@@ -8,9 +8,18 @@ use Illuminate\Validation\Rules;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use App\Services\ShopifyService;
 
 class ProfileController extends Controller
 {
+    protected $shopifyService;
+
+    public function __construct(ShopifyService $shopifyService)
+    {
+        $this->shopifyService = $shopifyService;
+    }
     /**
      * Get the user's profile information.
      */
@@ -93,14 +102,83 @@ class ProfileController extends Controller
             "affiliate_id" => "nullable|string|max:255",
         ]);
 
-        $user->update($validated);
+        DB::beginTransaction();
 
-        // Set profile_completed flag
-        $user->profile_completed = true;
-        $user->save();
+        try {
+            $user->update($validated);
 
-        return response()->json([
-            "message" => "Profile updated successfully",
-        ]);
+            // Create Shopify customer if they don't have one
+            if (!$user->shopify_customer_id) {
+                $shopifyCustomerId = null;
+                $shopifyPassword = Str::random(12);
+
+                // Try to find existing customer by email first
+                $shopifyCustomerId = $this->shopifyService->findCustomerByEmail(
+                    $user->email
+                );
+
+                // Create new customer if not found
+                if (is_null($shopifyCustomerId)) {
+                    // Parse name into first and last name components
+                    $nameParts = explode(" ", $validated["name"]);
+                    $firstName = array_shift($nameParts);
+                    $lastName = implode(" ", $nameParts);
+
+                    $shopifyCustomerId = $this->shopifyService->createCustomer(
+                        $firstName,
+                        $lastName,
+                        $user->email,
+                        $shopifyPassword
+                    );
+
+                    if (!$shopifyCustomerId) {
+                        throw new \Exception(
+                            "Failed to create Shopify customer"
+                        );
+                    }
+
+                    // Add "authorized" tag to user
+                    $tagsAdded = $this->shopifyService->addTagsToCustomer(
+                        $shopifyCustomerId,
+                        ["authorized"]
+                    );
+                    if (!$tagsAdded) {
+                        throw new \Exception(
+                            "Failed to add authorized tag to Shopify customer"
+                        );
+                    }
+                }
+
+                // Update user with Shopify customer info
+                $user->shopify_customer_id = $shopifyCustomerId;
+                $user->shopify_password = encrypt($shopifyPassword);
+            }
+
+            // Set profile_completed flag
+            $user->profile_completed = true;
+            $user->save();
+
+            DB::commit();
+
+            return response()->json([
+                "message" => "Profile updated successfully",
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            Log::error("Profile update failed", [
+                "user_id" => $user->id,
+                "email" => $user->email,
+                "error" => $e->getMessage(),
+            ]);
+
+            return response()->json(
+                [
+                    "message" => "Profile update failed. Please try again.",
+                    "error" => $e->getMessage(),
+                ],
+                500
+            );
+        }
     }
 }
