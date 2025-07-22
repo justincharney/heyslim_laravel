@@ -47,27 +47,28 @@ class ScheduleConsultationNotification extends Notification implements
      */
     public function toMail(object $notifiable): MailMessage
     {
-        $mail = new MailMessage()
+        return (new MailMessage())
             ->subject("Schedule Your Consultation")
-            ->greeting("Hello " . $notifiable->name);
-
-        if ($this->submission && $this->submission->questionnaire) {
-            $mail
-                ->line(
-                    'Thank you for submitting your questionnaire for "' .
-                        $this->submission->questionnaire->title .
-                        '"'
-                )
-                ->line(
-                    "Your submission is being reviewed by our medical team. The next step is to schedule a consultation with one of our healthcare providers."
-                );
-        } else {
-            $mail->line(
-                "You or your provider have requested a consultation. Please use the link below to schedule your appointment."
-            );
-        }
-
-        $mail
+            ->greeting("Hello " . $notifiable->name)
+            ->when(
+                $this->submission && $this->submission->questionnaire,
+                function ($mail) {
+                    $mail
+                        ->line(
+                            'Thank you for submitting your questionnaire for "' .
+                                $this->submission->questionnaire->title .
+                                '"'
+                        )
+                        ->line(
+                            "Your submission is being reviewed by our medical team. The next step is to schedule a consultation with one of our healthcare providers."
+                        );
+                },
+                function ($mail) {
+                    $mail->line(
+                        "You or your provider have requested a consultation. Please use the link below to schedule your appointment."
+                    );
+                }
+            )
             ->line(
                 "Dr. " .
                     StringUtils::removeTitles($this->provider->name) .
@@ -80,8 +81,6 @@ class ScheduleConsultationNotification extends Notification implements
             ->line(
                 "If you have any questions, please contact our support team."
             );
-
-        return $mail;
     }
 
     /**
