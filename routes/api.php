@@ -351,5 +351,11 @@ Route::middleware(["auth:sanctum", "role:provider|pharmacist"])->group(
             CheckInController::class,
             "review",
         ]);
-    }
+
+        // Appointment management
+        Route::post("/appointments/{patient}/send-calendly-link", [
+            AppointmentController::class,
+            "sendCalendlyLink",
+        ]);
+    },
 );
