@@ -25,7 +25,7 @@ class ScheduleConsultationNotification extends Notification implements
     public function __construct(
         ?QuestionnaireSubmission $submission,
         User $provider,
-        string $bookingUrl
+        string $bookingUrl,
     ) {
         $this->submission = $submission;
         $this->provider = $provider;
@@ -47,7 +47,7 @@ class ScheduleConsultationNotification extends Notification implements
      */
     public function toMail(object $notifiable): MailMessage
     {
-        $mail = (new MailMessage())
+        $mail = new MailMessage()
             ->subject("Schedule Your Consultation")
             ->greeting("Hello " . $notifiable->name);
 
@@ -56,14 +56,14 @@ class ScheduleConsultationNotification extends Notification implements
                 ->line(
                     'Thank you for submitting your questionnaire for "' .
                         $this->submission->questionnaire->title .
-                        '".'
+                        '".',
                 )
                 ->line(
-                    "Your submission is being reviewed by our medical team. The next step is to schedule a consultation with one of our healthcare providers."
+                    "Your submission is being reviewed by our medical team. The next step is to schedule a consultation with one of our healthcare providers.",
                 );
         } else {
             $mail->line(
-                "Thank you for your interest in a consultation. Please use the link below to schedule your appointment."
+                "You or your provider have requested a consultation. Please use the link below to schedule your appointment.",
             );
         }
 
@@ -71,14 +71,14 @@ class ScheduleConsultationNotification extends Notification implements
             ->line(
                 "Dr. " .
                     StringUtils::removeTitles($this->provider->name) .
-                    " is available to discuss your health goals and treatment options."
+                    " is available to discuss your health goals and treatment options.",
             )
             ->action("Schedule Your Consultation", $this->bookingUrl)
             ->line(
-                "This scheduling link is for one-time use only and will expire after booking."
+                "This scheduling link is for one-time use only and will expire after booking.",
             )
             ->line(
-                "If you have any questions, please contact our support team."
+                "If you have any questions, please contact our support team.",
             );
 
         return $mail;
