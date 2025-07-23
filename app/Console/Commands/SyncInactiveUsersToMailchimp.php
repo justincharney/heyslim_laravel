@@ -30,7 +30,6 @@ class SyncInactiveUsersToMailchimp extends Command
     {
         // Define the cutoff time (e.g., users who registered more than 1 hour ago)
         $cutoff = Carbon::now()->subHours(1);
-
         // Find users who registered before the cutoff and haven't completed their profile OR haven't submitted a questionnaire
         $inactiveUsers = User::where("created_at", "<=", $cutoff)
             ->where(function ($query) {
@@ -45,10 +44,22 @@ class SyncInactiveUsersToMailchimp extends Command
             return 0;
         }
 
-        $this->info("Found {$inactiveUsers->count()} inactive users to sync.");
+        $this->info(
+            "Found {$inactiveUsers->count()} potential inactive users to sync (depending on role).",
+        );
         $syncedCount = 0;
 
         foreach ($inactiveUsers as $user) {
+            // Set the team context for this user and check if they have the patient role
+            if ($user->current_team_id) {
+                setPermissionsTeamId($user->current_team_id);
+            }
+
+            // Skip if user is not a patient
+            if (!$user->hasRole("patient")) {
+                continue;
+            }
+
             if (Newsletter::isSubscribed($user->email)) {
                 continue;
             }
