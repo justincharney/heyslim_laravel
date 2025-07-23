@@ -74,6 +74,7 @@ class SyncInactiveUsersToMailchimp extends Command
                 $user->email,
                 $mergeFields,
                 config("newsletter.default_list_name"),
+                ["tags" => ["inactive-user"]],
             );
 
             if (Newsletter::lastActionSucceeded()) {
