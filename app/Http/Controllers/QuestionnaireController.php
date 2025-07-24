@@ -21,6 +21,7 @@ use App\Models\Prescription;
 use App\Jobs\ProcessRejectedQuestionnaireJob;
 use App\Services\QuestionnaireValidationService;
 use App\Models\WeightLog;
+use Spatie\Newsletter\Facades\Newsletter;
 
 class QuestionnaireController extends Controller
 {
@@ -33,7 +34,7 @@ class QuestionnaireController extends Controller
             ->get();
 
         $formattedQuestionnaires = $questionnaires->map(function (
-            $questionnaire
+            $questionnaire,
         ) {
             return [
                 "id" => $questionnaire->id,
@@ -41,7 +42,7 @@ class QuestionnaireController extends Controller
                 "description" => $questionnaire->description,
                 "type" => "questionnaire",
                 "created_at" => $questionnaire->created_at->format(
-                    "Y-m-d H:i:s"
+                    "Y-m-d H:i:s",
                 ),
             ];
         });
@@ -75,7 +76,7 @@ class QuestionnaireController extends Controller
                     "message" =>
                         "Submission not found or you do not have permission to cancel it.",
                 ],
-                404
+                404,
             );
         }
 
@@ -92,7 +93,7 @@ class QuestionnaireController extends Controller
                     "message" =>
                         "Only submissions in draft, pending payment, or rejected status can be cancelled.",
                 ],
-                403
+                403,
             );
         }
 
@@ -112,14 +113,15 @@ class QuestionnaireController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error(
-                "Failed to cancel questionnaire submission: " . $e->getMessage()
+                "Failed to cancel questionnaire submission: " .
+                    $e->getMessage(),
             );
 
             return response()->json(
                 [
                     "message" => "Failed to cancel questionnaire submission.",
                 ],
-                500
+                500,
             );
         }
     }
@@ -143,7 +145,7 @@ class QuestionnaireController extends Controller
                     ],
                     "status" => $submission->status,
                     "submitted_at" => $submission->submitted_at?->format(
-                        "Y-m-d H:i:s"
+                        "Y-m-d H:i:s",
                     ),
                 ];
             }),
@@ -166,7 +168,7 @@ class QuestionnaireController extends Controller
                 [
                     "error" => "Submission not found",
                 ],
-                404
+                404,
             );
         }
 
@@ -175,7 +177,7 @@ class QuestionnaireController extends Controller
                 "id" => $submission->id,
                 "status" => $submission->status,
                 "submitted_at" => $submission->submitted_at?->format(
-                    "Y-m-d H:i:s"
+                    "Y-m-d H:i:s",
                 ),
                 "questionnaire" => [
                     "id" => $submission->questionnaire->id,
@@ -185,7 +187,7 @@ class QuestionnaireController extends Controller
                         function ($question) use ($submission) {
                             $answer = $submission->answers->first(
                                 fn($answer) => $answer->question_id ===
-                                    $question->id
+                                    $question->id,
                             );
 
                             return [
@@ -203,7 +205,7 @@ class QuestionnaireController extends Controller
                                     ? $answer->answer_text
                                     : null,
                                 "options" => $question->options->map(function (
-                                    $option
+                                    $option,
                                 ) {
                                     return [
                                         "number" => $option->option_number,
@@ -213,7 +215,7 @@ class QuestionnaireController extends Controller
                                 "display_conditions" =>
                                     $question->display_conditions,
                             ];
-                        }
+                        },
                     ),
                 ],
             ],
@@ -239,10 +241,10 @@ class QuestionnaireController extends Controller
         // Check 1: Is there any 'draft', 'submitted', or 'pending_payment' submission for this questionnaire TITLE by this user?
         $activeSubmissionForTitle = QuestionnaireSubmission::where(
             "user_id",
-            $userId
+            $userId,
         )
             ->whereHas("questionnaire", function ($query) use (
-                $questionnaireTitle
+                $questionnaireTitle,
             ) {
                 $query->where("title", $questionnaireTitle);
             })
@@ -279,7 +281,7 @@ class QuestionnaireController extends Controller
                             $activeSubmissionForTitle->questionnaire_id,
                         "status" => $activeSubmissionForTitle->status,
                     ],
-                    403
+                    403,
                 );
             }
             // Scenario 1.3: It's 'pending_payment'.
@@ -295,7 +297,7 @@ class QuestionnaireController extends Controller
                             $activeSubmissionForTitle->questionnaire_id,
                         "status" => $activeSubmissionForTitle->status,
                     ],
-                    403
+                    403,
                 );
             }
             // Scenario 1.4: It's 'submitted'.
@@ -311,7 +313,7 @@ class QuestionnaireController extends Controller
                             $activeSubmissionForTitle->questionnaire_id,
                         "status" => $activeSubmissionForTitle->status,
                     ],
-                    403
+                    403,
                 );
             }
         }
@@ -321,15 +323,15 @@ class QuestionnaireController extends Controller
         // related to ANY submission (e.g. an older 'approved' one) for this questionnaire TITLE by this user.
         $submissionWithActiveTreatment = QuestionnaireSubmission::where(
             "user_id",
-            $userId
+            $userId,
         )
             ->whereHas("questionnaire", function ($query) use (
-                $questionnaireTitle
+                $questionnaireTitle,
             ) {
                 $query->where("title", $questionnaireTitle);
             })
             ->whereHas("clinicalPlan.prescriptions", function (
-                $prescriptionQuery
+                $prescriptionQuery,
             ) {
                 // Active/pending prescription statuses
                 $prescriptionQuery->whereNotIn("status", [
@@ -353,7 +355,7 @@ class QuestionnaireController extends Controller
                         $submissionWithActiveTreatment->questionnaire_id,
                     "status" => $submissionWithActiveTreatment->status, // Status of that submission
                 ],
-                403
+                403,
             );
         }
 
@@ -374,7 +376,7 @@ class QuestionnaireController extends Controller
                 "message" => "Draft questionnaire created",
                 "submission_id" => $newSubmission->id,
             ],
-            201
+            201,
         );
     }
 
@@ -424,7 +426,7 @@ class QuestionnaireController extends Controller
             $submission,
             $questionsToUpdate,
             $insertData,
-            $isFinal
+            $isFinal,
         ) {
             // Update timestamp without triggering events
             $submission->timestamps = false;
@@ -463,7 +465,7 @@ class QuestionnaireController extends Controller
 
         $submission = $this->processAnswers(
             $validated["submission_id"],
-            $validated["answers"]
+            $validated["answers"],
         );
 
         return response()->json(
@@ -471,7 +473,7 @@ class QuestionnaireController extends Controller
                 "message" => "Answers saved successfully",
                 "submission_id" => $submission->id,
             ],
-            200
+            200,
         );
     }
 
@@ -486,7 +488,7 @@ class QuestionnaireController extends Controller
 
         // Load with questionnaire for required question check
         $submission = QuestionnaireSubmission::with(
-            "questionnaire.questions"
+            "questionnaire.questions",
         )->findOrFail($validated["submission_id"]);
 
         if ($submission->user_id !== auth()->id()) {
@@ -494,7 +496,7 @@ class QuestionnaireController extends Controller
                 [
                     "message" => "Unauthorized to access submission",
                 ],
-                403
+                403,
             );
         }
 
@@ -502,13 +504,13 @@ class QuestionnaireController extends Controller
         $this->processAnswers(
             $validated["submission_id"],
             $validated["answers"],
-            true // This is a final submission
+            true, // This is a final submission
         );
 
         // Efficiently check for missing required questions using a single query
         $answeredQuestionIds = QuestionAnswer::where(
             "submission_id",
-            $submission->id
+            $submission->id,
         )
             ->pluck("question_id")
             ->toArray();
@@ -520,7 +522,7 @@ class QuestionnaireController extends Controller
 
         $missingRequired = array_diff(
             $requiredQuestionIds,
-            $answeredQuestionIds
+            $answeredQuestionIds,
         );
 
         if (!empty($missingRequired)) {
@@ -529,7 +531,7 @@ class QuestionnaireController extends Controller
                     "message" => "Required questions are not answered",
                     "missing_questions" => $missingRequired,
                 ],
-                422
+                422,
             );
         }
 
@@ -543,7 +545,7 @@ class QuestionnaireController extends Controller
                     "message" => "Questionnaire submission failed validation",
                     "validation_errors" => $validationResult["errors"],
                 ],
-                422
+                422,
             );
         }
 
@@ -555,7 +557,7 @@ class QuestionnaireController extends Controller
         if ($weightQuestion) {
             $weightAnswer = QuestionAnswer::where(
                 "submission_id",
-                $submission->id
+                $submission->id,
             )
                 ->where("question_id", $weightQuestion->id)
                 ->first();
@@ -569,13 +571,34 @@ class QuestionnaireController extends Controller
                     [
                         "weight" => (float) $weightAnswer->answer_text,
                         "unit" => "kg",
-                    ]
+                    ],
                 );
             }
         }
         // Send the patient the notification
         $patient = auth()->user();
         $patient->notify(new QuestionnaireSubmittedNotification($submission));
+
+        // If they have submitted the questionnaire, remove them from the inactive-user drip campaign
+        if (Newsletter::isSubscribed($patient->email)) {
+            // Remove specific tag(s) using the raw Mailchimp API
+            $api = Newsletter::getApi();
+            $listId = config(
+                "newsletter.lists." .
+                    config("newsletter.default_list_name") .
+                    ".id",
+            ); // Get your Mailchimp list ID from config
+            $subscriberHash = md5(strtolower($patient->email)); // Mailchimp requires the subscriber hash (lowercase MD5 of email)
+
+            $api->post("lists/{$listId}/members/{$subscriberHash}/tags", [
+                "tags" => [
+                    [
+                        "name" => "inactive-user",
+                        "status" => "inactive", // This removes the tag
+                    ],
+                ],
+            ]);
+        }
 
         // Simply mark the questionnaire as submitted
         $submission->update([
@@ -589,8 +612,8 @@ class QuestionnaireController extends Controller
             if ($team) {
                 $team->notify(
                     new QuestionnaireSubmittedForProviderNotification(
-                        $submission
-                    )
+                        $submission,
+                    ),
                 );
             }
         }
@@ -644,7 +667,7 @@ class QuestionnaireController extends Controller
         ) {
             return response()->json(
                 ["message" => "You can only reject submissions from your team"],
-                403
+                403,
             );
         }
 
@@ -677,7 +700,7 @@ class QuestionnaireController extends Controller
                 [
                     "message" => "Failed to reject questionnaire submission",
                 ],
-                500
+                500,
             );
         }
 
@@ -685,10 +708,10 @@ class QuestionnaireController extends Controller
         ProcessRejectedQuestionnaireJob::dispatch(
             $submission->id,
             $providerId,
-            $reviewNotes
+            $reviewNotes,
         );
         Log::info(
-            "Dispatched ProcessRejectedQuestionnaireJob for submission #{$submission->id}"
+            "Dispatched ProcessRejectedQuestionnaireJob for submission #{$submission->id}",
         );
 
         // --- Return Success Response to User ---
@@ -714,7 +737,7 @@ class QuestionnaireController extends Controller
                 [
                     "error" => "Questionnaire template not found",
                 ],
-                404
+                404,
             );
         }
 
@@ -725,7 +748,7 @@ class QuestionnaireController extends Controller
                 "title" => $questionnaire->title,
                 "description" => $questionnaire->description,
                 "questions" => $questionnaire->questions->map(function (
-                    $question
+                    $question,
                 ) {
                     // Note: No answers are included here as this is just the template structure
                     return [
@@ -740,7 +763,7 @@ class QuestionnaireController extends Controller
                         "calculated" => $question->calculated,
                         "validation" => $question->validation,
                         "options" => $question->options->map(function (
-                            $option
+                            $option,
                         ) {
                             return [
                                 "number" => $option->option_number,
@@ -777,7 +800,7 @@ class QuestionnaireController extends Controller
                         "Questionnaire template not found with title: " .
                         $decodedTitle,
                 ],
-                404
+                404,
             );
         }
 
@@ -788,7 +811,7 @@ class QuestionnaireController extends Controller
                 "title" => $questionnaire->title,
                 "description" => $questionnaire->description,
                 "questions" => $questionnaire->questions->map(function (
-                    $question
+                    $question,
                 ) {
                     // Note: No answers are included here as this is just the template structure
                     return [
@@ -803,7 +826,7 @@ class QuestionnaireController extends Controller
                         "calculated" => $question->calculated,
                         "validation" => $question->validation,
                         "options" => $question->options->map(function (
-                            $option
+                            $option,
                         ) {
                             return [
                                 "number" => $option->option_number,

@@ -19,7 +19,7 @@ class Team extends Model
             User::class,
             config("permission.table_names.model_has_roles"),
             "team_id", // foreign key on the pivot table for the team
-            "model_id" // related key on the pivot table for the user
+            "model_id", // related key on the pivot table for the user
         );
     }
 
