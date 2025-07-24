@@ -35,7 +35,16 @@ class SyncInactiveUsersToMailchimp extends Command
             ->where(function ($query) {
                 $query
                     ->where("profile_completed", false)
-                    ->orWhereDoesntHave("questionnaireSubmissions");
+                    ->orWhereDoesntHave("questionnaireSubmissions", function (
+                        $subQuery,
+                    ) {
+                        $subQuery->whereIn("status", [
+                            "submitted",
+                            "approved",
+                            "pending_payment",
+                            "rejected",
+                        ]);
+                    });
             })
             ->get();
 
