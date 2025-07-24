@@ -72,7 +72,7 @@ class User extends Authenticatable
             Team::class,
             config("permission.table_names.model_has_roles"),
             "model_id", // foreign key on the pivot table for the user
-            "team_id" // related key on the pivot table for the team
+            "team_id", // related key on the pivot table for the team
         );
     }
 
@@ -188,6 +188,32 @@ class User extends Authenticatable
     }
 
     /**
+     * Check if the user needs to upload a photo.
+     * Only required for patients with questionnaire submissions.
+     */
+    public function needsPhotoUpload(): bool
+    {
+        setPermissionsTeamId($this->team_id);
+
+        // Only patients need photo uploads
+        if (!$this->hasRole("patient")) {
+            return false;
+        }
+
+        // Only if they have non-draft questionnaire submissions
+        if (
+            !$this->questionnaireSubmissions()
+                ->where("status", "!=", "draft")
+                ->exists()
+        ) {
+            return false;
+        }
+
+        // Check if they've already uploaded a photo
+        return !$this->userFiles()->exists();
+    }
+
+    /**
      * Get the weight logs for the user.
      */
     public function weightLogs(): HasMany
@@ -223,7 +249,7 @@ class User extends Authenticatable
      * Route notifications for the Twilio channel.
      */
     public function routeNotificationForTwilio(
-        Notification $notification
+        Notification $notification,
     ): string {
         return $this->phone_number;
     }

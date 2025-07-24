@@ -22,20 +22,17 @@ class ProfileCompletedMiddleware
         // Set team context
         setPermissionsTeamId($user->team_id);
 
-        // Photo upload requirement - only for patients
-        if ($user && $user->hasRole("patient")) {
-            $hasUploadedPhoto = UserFile::where("user_id", $user->id)->exists();
-            if (!$hasUploadedPhoto) {
-                return response()->json(
-                    [
-                        "message" =>
-                            "Please upload your required photo to continue",
-                        "error" => "photo_upload_required",
-                        "photo_uploaded" => false,
-                    ],
-                    403
-                );
-            }
+        // Photo upload requirement - only for patients with questionnaire submissions
+        if ($user && $user->needsPhotoUpload()) {
+            return response()->json(
+                [
+                    "message" =>
+                        "Please upload your required photo to continue",
+                    "error" => "photo_upload_required",
+                    "photo_uploaded" => false,
+                ],
+                403,
+            );
         }
 
         // Skip the profile check if not a patient
@@ -52,7 +49,7 @@ class ProfileCompletedMiddleware
                     "error" => "incomplete_profile",
                     "profile_completed" => false,
                 ],
-                403
+                403,
             );
         }
 

@@ -114,7 +114,7 @@ class ProfileController extends Controller
 
                 // Try to find existing customer by email first
                 $shopifyCustomerId = $this->shopifyService->findCustomerByEmail(
-                    $user->email
+                    $user->email,
                 );
 
                 // Create new customer if not found
@@ -128,23 +128,23 @@ class ProfileController extends Controller
                         $firstName,
                         $lastName,
                         $user->email,
-                        $shopifyPassword
+                        $shopifyPassword,
                     );
 
                     if (!$shopifyCustomerId) {
                         throw new \Exception(
-                            "Failed to create Shopify customer"
+                            "Failed to create Shopify customer",
                         );
                     }
 
                     // Add "authorized" tag to user
                     $tagsAdded = $this->shopifyService->addTagsToCustomer(
                         $shopifyCustomerId,
-                        ["authorized"]
+                        ["authorized"],
                     );
                     if (!$tagsAdded) {
                         throw new \Exception(
-                            "Failed to add authorized tag to Shopify customer"
+                            "Failed to add authorized tag to Shopify customer",
                         );
                     }
                 }
@@ -177,7 +177,7 @@ class ProfileController extends Controller
                     "message" => "Profile update failed. Please try again.",
                     "error" => $e->getMessage(),
                 ],
-                500
+                500,
             );
         }
     }
