@@ -42,6 +42,7 @@ class User extends Authenticatable
         "gender",
         "ethnicity",
         "affiliate_id",
+        "zendesk_lead_created_at",
     ];
 
     /**

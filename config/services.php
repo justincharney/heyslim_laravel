@@ -75,4 +75,8 @@ return [
         "service_key" => env("SUPABASE_SERVICE_KEY"),
         "bucket" => env("SUPABASE_BUCKET"),
     ],
+    "zendesk" => [
+        "sell_api_url" => env("ZENDESK_SELL_API_URL"),
+        "sell_access_token" => env("ZENDESK_SELL_ACCESS_TOKEN"),
+    ],
 ];

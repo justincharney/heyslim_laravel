@@ -17,4 +17,4 @@ Schedule::command("app:generate-and-notify-check-ins")->daily();
 Schedule::command("app:mark-overdue-check-ins-as-skipped")->daily();
 // Schedule::command("horizon:snapshot")->everyFiveMinutes();
 Schedule::command("app:cancel-overdue-pending-payment-prescriptions")->daily();
-Schedule::command("app:sync-inactive-users-to-mailchimp")->hourly();
+Schedule::command("app:process-inactive-users")->hourly();
