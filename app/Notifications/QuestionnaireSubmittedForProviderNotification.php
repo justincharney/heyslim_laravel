@@ -58,24 +58,24 @@ class QuestionnaireSubmittedForProviderNotification
         $providerUrl = config("app.front_end_url", "https://app.heyslim.co.uk");
         $submissionUrl =
             rtrim($providerUrl, "/") .
-            "provider/patients/{$patient->id}/questionnaires/{$this->submission->id}";
+            "/provider/patients/{$patient->id}/questionnaires/{$this->submission->id}";
 
-        return (new SlackMessage())
+        return new SlackMessage()
             ->text(
-                "A new questionnaire has been submitted by {$patient->name} and requires review."
+                "A new questionnaire has been submitted by {$patient->name} and requires review.",
             ) // This is fallback text for notifications
             ->headerBlock("New Questionnaire Submission")
             ->contextBlock(function (ContextBlock $block) {
                 $block->text(
                     "Submitted at: " .
                         ($this->submission->submitted_at ?? now())->format(
-                            "Y-m-d H:i T"
-                        )
+                            "Y-m-d H:i T",
+                        ),
                 );
             })
             ->sectionBlock(function (SectionBlock $block) use (
                 $patient,
-                $questionnaire
+                $questionnaire,
             ) {
                 $block
                     ->field("*Patient:*\n{$patient->name} ({$patient->email})")
