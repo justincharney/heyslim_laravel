@@ -52,7 +52,7 @@ class PatientController extends Controller
                     "message" =>
                         "You must be associated with a team to view patient details",
                 ],
-                403
+                403,
             );
         }
 
@@ -89,6 +89,14 @@ class PatientController extends Controller
             "userFiles" => function ($query) {
                 $query->orderBy("created_at", "desc");
             },
+            "soapChartsAsPatient" => function ($query) use ($teamId) {
+                $query
+                    ->with("provider")
+                    ->whereHas("provider", function ($q) use ($teamId) {
+                        $q->where("current_team_id", $teamId);
+                    })
+                    ->orderBy("created_at", "desc");
+            },
         ])->findOrFail($patientId);
 
         // Check if the user has the patient role and belongs to the same team
@@ -100,7 +108,7 @@ class PatientController extends Controller
                 [
                     "message" => "Patient not found in your team",
                 ],
-                404
+                404,
             );
         }
 
@@ -108,7 +116,7 @@ class PatientController extends Controller
         $userFilesWithUrls = $patient->userFiles->map(function ($file) {
             $file->url = $this->supabaseService->createSignedUrl(
                 $file->supabase_path,
-                3600
+                3600,
             );
             return $file;
         });
@@ -120,6 +128,7 @@ class PatientController extends Controller
             "prescriptions" => $patient->prescriptionsAsPatient,
             "checkIns" => $patient->checkIns,
             "user_files" => $userFilesWithUrls,
+            "soap_charts" => $patient->soapChartsAsPatient,
         ]);
     }
 
@@ -137,7 +146,7 @@ class PatientController extends Controller
                     "message" =>
                         "You must be associated with a team to view patient questionnaires",
                 ],
-                403
+                403,
             );
         }
 
@@ -155,7 +164,7 @@ class PatientController extends Controller
                 [
                     "message" => "Patient not found in your team",
                 ],
-                404
+                404,
             );
         }
 
@@ -171,7 +180,7 @@ class PatientController extends Controller
         // Check if there's a clinical plan associated with this questionnaire submission
         $clinicalPlan = ClinicalPlan::where(
             "questionnaire_submission_id",
-            $submissionId
+            $submissionId,
         )->first();
 
         return response()->json([
@@ -195,7 +204,7 @@ class PatientController extends Controller
                     "message" =>
                         "You must be associated with a team to view patients",
                 ],
-                403
+                403,
             );
         }
 
@@ -209,14 +218,14 @@ class PatientController extends Controller
                     "message" =>
                         "You don't have permission to access this endpoint",
                 ],
-                403
+                403,
             );
         }
 
         // Find submitted questionnaires that don't have clinical plans
         $pendingSubmissions = QuestionnaireSubmission::where(
             "status",
-            "submitted"
+            "submitted",
         )
             ->whereDoesntHave("clinicalPlan")
             ->with("user")

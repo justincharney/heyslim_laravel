@@ -126,6 +126,22 @@ class User extends Authenticatable
     }
 
     /**
+     * Get the SOAP charts where the user is the patient.
+     */
+    public function soapChartsAsPatient()
+    {
+        return $this->hasMany(SoapChart::class, "patient_id");
+    }
+
+    /**
+     * Get the SOAP charts where the user is the provider.
+     */
+    public function soapChartsAsProvider()
+    {
+        return $this->hasMany(SoapChart::class, "provider_id");
+    }
+
+    /**
      * Get the questionnaire submissions for this user.
      */
     public function questionnaireSubmissions()

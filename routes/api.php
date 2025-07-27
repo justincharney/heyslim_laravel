@@ -13,6 +13,7 @@ use App\Http\Controllers\PatientController;
 use App\Http\Controllers\PrescriptionController;
 use App\Http\Controllers\ClinicalPlanController;
 use App\Http\Controllers\TemplateController;
+use App\Http\Controllers\SoapChartController;
 use App\Http\Middleware\ProfileCompletedMiddleware;
 use App\Http\Middleware\SetTeamContextMiddleware;
 use App\Models\User;
@@ -303,6 +304,20 @@ Route::middleware(["auth:sanctum", "role:provider|pharmacist"])->group(
         Route::get("/clinical-plans/{clinicalPlan}", [
             ClinicalPlanController::class,
             "show",
+        ]);
+
+        // SOAP Charts
+        Route::get("/soap-charts", [SoapChartController::class, "index"]);
+        Route::post("/soap-charts", [SoapChartController::class, "store"]);
+        Route::get("/soap-charts/{id}", [SoapChartController::class, "show"]);
+        Route::put("/soap-charts/{id}", [SoapChartController::class, "update"]);
+        Route::delete("/soap-charts/{id}", [
+            SoapChartController::class,
+            "destroy",
+        ]);
+        Route::get("/patients/{patient}/soap-charts", [
+            SoapChartController::class,
+            "getForPatient",
         ]);
 
         // Chat actions
