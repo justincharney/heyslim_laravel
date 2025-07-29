@@ -184,13 +184,8 @@ class YousignWebhookController extends Controller
                 "signed_at" => now(),
                 "yousign_document_id" => $documentId,
                 "signed_prescription_supabase_path" => $uploadedPath,
+                "status" => "active",
             ];
-
-            // Only set the status to 'active' if there's a linked subscription
-            if ($prescription->subscription) {
-                $updateData["status"] = "active";
-            }
-
             $prescription->update($updateData);
             DB::commit();
         } catch (\Exception $e) {
