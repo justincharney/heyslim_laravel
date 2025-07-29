@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\ProcessSignedPrescriptionJob;
+use App\Jobs\CreateInitialShopifyOrderJob;
 use App\Models\Prescription;
 use App\Services\SupabaseStorageService;
 use Illuminate\Http\Request;
@@ -23,7 +24,7 @@ class YousignWebhookController extends Controller
     public function __construct(
         ShopifyService $shopifyService,
         YousignService $yousignService,
-        SupabaseStorageService $supabaseService
+        SupabaseStorageService $supabaseService,
     ) {
         $this->shopifyService = $shopifyService;
         $this->yousignService = $yousignService;
@@ -80,19 +81,19 @@ class YousignWebhookController extends Controller
             Log::error("Missing signature request ID in Yousign webhook");
             return response()->json(
                 ["error" => "Missing signature request ID"],
-                400
+                400,
             );
         }
 
         // Find the prescription with this signature request ID
         $prescription = Prescription::where(
             "yousign_signature_request_id",
-            $signatureRequestId
+            $signatureRequestId,
         )->first();
 
         if (!$prescription) {
             Log::error(
-                "No prescription found for Yousign signature request ID: $signatureRequestId"
+                "No prescription found for Yousign signature request ID: $signatureRequestId",
             );
             return response()->json(["error" => "Prescription not found"], 404);
         }
@@ -103,11 +104,11 @@ class YousignWebhookController extends Controller
             $prescription->signed_at !== null
         ) {
             Log::info(
-                "Prescription #{$prescription->id} is already signed, ignoring duplicate webhook"
+                "Prescription #{$prescription->id} is already signed, ignoring duplicate webhook",
             );
             return response()->json(
                 ["message" => "Prescription already signed"],
-                200
+                200,
             );
         }
 
@@ -116,7 +117,7 @@ class YousignWebhookController extends Controller
 
         if (!$documentId) {
             Log::error(
-                "No document ID found for signature request: $signatureRequestId"
+                "No document ID found for signature request: $signatureRequestId",
             );
             return response()->json(["error" => "No document ID found"], 400);
         }
@@ -124,16 +125,16 @@ class YousignWebhookController extends Controller
         // Download the signed document from YouSign
         $signedDocument = $this->yousignService->downloadSignedDocument(
             $signatureRequestId,
-            $documentId
+            $documentId,
         );
 
         if (!$signedDocument) {
             Log::error(
-                "Failed to download signed document for signature request: $signatureRequestId"
+                "Failed to download signed document for signature request: $signatureRequestId",
             );
             return response()->json(
                 ["error" => "Failed to download signed document"],
-                500
+                500,
             );
         }
 
@@ -148,16 +149,16 @@ class YousignWebhookController extends Controller
             $uploadedPath = $this->supabaseService->uploadFile(
                 $supabasePath,
                 $signedDocument,
-                $uploadOptions
+                $uploadOptions,
             );
 
             if (!$uploadedPath) {
                 Log::error(
-                    "Failed to upload signed prescription to Supabase for prescription #{$prescription->id}"
+                    "Failed to upload signed prescription to Supabase for prescription #{$prescription->id}",
                 );
                 return response()->json(
                     ["error" => "Failed to upload signed document"],
-                    500
+                    500,
                 );
             }
 
@@ -172,7 +173,7 @@ class YousignWebhookController extends Controller
             ]);
             return response()->json(
                 ["error" => "Exception during document upload"],
-                500
+                500,
             );
         }
 
@@ -188,9 +189,6 @@ class YousignWebhookController extends Controller
             // Only set the status to 'active' if there's a linked subscription
             if ($prescription->subscription) {
                 $updateData["status"] = "active";
-            } else {
-                // Signature is ready, but no subscription so it's pending payment
-                $updateData["status"] = "pending_payment";
             }
 
             $prescription->update($updateData);
@@ -199,46 +197,73 @@ class YousignWebhookController extends Controller
             DB::rollBack();
             Log::error(
                 "Failed to update prescription status for signature request: $signatureRequestId",
-                ["error" => $e->getMessage()]
+                ["error" => $e->getMessage()],
             );
             return response()->json(
                 ["error" => "Failed to update prescription status"],
-                500
+                500,
             );
         }
 
         $prescription->refresh();
+
+        // Link prescription to subscription when signed
+        try {
+            $subscription =
+                $prescription->clinicalPlan?->questionnaireSubmission
+                    ?->subscription;
+            if ($subscription && !$subscription->prescription_id) {
+                $subscription->update(["prescription_id" => $prescription->id]);
+                Log::info("Linked prescription to subscription", [
+                    "prescription_id" => $prescription->id,
+                    "subscription_id" => $subscription->id,
+                ]);
+            } else {
+                Log::error(
+                    "Prescription already linked to subscription. Can't link again.",
+                    [
+                        "prescription_id" => $prescription->id,
+                        "subscription_id" => $subscription->id,
+                    ],
+                );
+                return response()->json(
+                    ["error" => "Prescription already linked to subscription"],
+                    400,
+                );
+            }
+        } catch (\Exception $e) {
+            Log::error("Failed to link prescription to subscription", [
+                "prescription_id" => $prescription->id,
+                "error" => $e->getMessage(),
+            ]);
+            return response()->json(
+                ["error" => "Failed to link prescription to subscription"],
+                500,
+            );
+        }
+
         // Dispatch the job to generate and send the GP letter
         SendGpLetterJob::dispatch($prescription->id);
 
         // Conditionally dispatch job based on prescription type
         $isReplacement = !is_null($prescription->replaces_prescription_id);
-        $shopifyOrderId =
-            $prescription->subscription?->original_shopify_order_id;
 
-        if (!$isReplacement && $shopifyOrderId) {
-            // This is an initial prescription with an associated original order
-            ProcessSignedPrescriptionJob::dispatch(
-                $prescription->id,
-                $shopifyOrderId
-            );
-            Log::info(
-                "Dispatched ProcessSignedPrescriptionJob for initial prescription #{$prescription->id} to original order {$shopifyOrderId}"
-            );
-        } elseif ($isReplacement) {
+        if ($isReplacement) {
             // This is a replacement prescription - do NOT dispatch job here
             Log::info(
-                "Prescription #{$prescription->id} is a replacement. Signed document uploaded but no job dispatched. RechargeWebhookController will handle attachment to future orders."
+                "Prescription #{$prescription->id} is a replacement. Signed document uploaded but no job dispatched. ChargebeeWebhookController will handle attachment to future orders.",
             );
         } else {
-            Log::warning(
-                "Cannot dispatch job for prescription #{$prescription->id}: Missing Shopify Order ID or unclear prescription type."
+            // This is an initial prescription that needs a Shopify order created
+            CreateInitialShopifyOrderJob::dispatch($prescription->id);
+            Log::info(
+                "Dispatched CreateInitialShopifyOrderJob for initial prescription #{$prescription->id}",
             );
         }
 
         return response()->json(
             ["message" => "Webhook received, processing completed"],
-            200
+            200,
         );
     }
 
@@ -251,7 +276,7 @@ class YousignWebhookController extends Controller
 
         if (empty($secretKey)) {
             Log::warning(
-                "Yousign webhook secret not configured, failing verification"
+                "Yousign webhook secret not configured, failing verification",
             );
             return false;
         }
@@ -286,14 +311,14 @@ class YousignWebhookController extends Controller
      */
     private function attachDocumentToShopifyOrder(
         Prescription $prescription,
-        string $documentContent
+        string $documentContent,
     ): bool {
         // Check if this prescription is associated with a subscription that has an order ID
         $subscription = $prescription->subscription;
 
         if (!$subscription || !$subscription->original_shopify_order_id) {
             Log::info(
-                "No Shopify order ID found for prescription #{$prescription->id}, skipping document attachment"
+                "No Shopify order ID found for prescription #{$prescription->id}, skipping document attachment",
             );
             return false;
         }
@@ -312,7 +337,7 @@ class YousignWebhookController extends Controller
             $success = $this->shopifyService->attachPrescriptionToOrder(
                 $orderId,
                 $fullPath,
-                "Signed prescription #{$prescription->id}"
+                "Signed prescription #{$prescription->id}",
             );
 
             // Clean up the temporary file

@@ -231,7 +231,7 @@ class ChargebeeService
 
             if ($response->successful()) {
                 $data = $response->json();
-                return $data["subscription"] ?? null;
+                return $data ?? null;
             }
 
             Log::error("Failed to get Chargebee subscription", [
@@ -310,15 +310,17 @@ class ChargebeeService
      */
     public function updateSubscriptionPlan(
         string $subscriptionId,
-        string $newPlanId,
+        string $newItemPriceId,
         array $additionalParams = [],
     ): bool {
         try {
             $params = array_merge(
                 [
-                    "plan_id" => $newPlanId,
-                    "replace_addon_list" => "true",
-                    "prorate" => "true",
+                    "subscription_items[item_price_id][0]" => $newItemPriceId,
+                    "subscription_items[quantity][0]" => 1,
+                    "replace_items_list" => "true",
+                    "prorate" => "false",
+                    "invoice_immediately" => "false",
                 ],
                 $additionalParams,
             );
@@ -326,21 +328,21 @@ class ChargebeeService
             $response = Http::withBasicAuth($this->apiKey, "")
                 ->asForm()
                 ->post(
-                    "{$this->baseUrl}/subscriptions/{$subscriptionId}/change_plan",
+                    "{$this->baseUrl}/subscriptions/{$subscriptionId}/update_for_items",
                     $params,
                 );
 
             if ($response->successful()) {
-                Log::info("Successfully updated Chargebee subscription plan", [
-                    "subscription_id" => $subscriptionId,
-                    "new_plan_id" => $newPlanId,
-                ]);
+                // Log::info("Successfully updated Chargebee subscription plan", [
+                //     "subscription_id" => $subscriptionId,
+                //     "new_item_price_id" => $newItemPriceId,
+                // ]);
                 return true;
             }
 
             Log::error("Failed to update Chargebee subscription plan", [
                 "subscription_id" => $subscriptionId,
-                "new_plan_id" => $newPlanId,
+                "new_item_price_id" => $newItemPriceId,
                 "status" => $response->status(),
                 "response" => $response->json(),
             ]);
@@ -349,7 +351,7 @@ class ChargebeeService
         } catch (\Exception $e) {
             Log::error("Exception updating Chargebee subscription plan", [
                 "subscription_id" => $subscriptionId,
-                "new_plan_id" => $newPlanId,
+                "new_item_price_id" => $newItemPriceId,
                 "error" => $e->getMessage(),
             ]);
             return false;
