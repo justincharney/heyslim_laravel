@@ -589,11 +589,11 @@ class QuestionnaireController extends Controller
             $checkoutData = [
                 "subscription[cf_questionnaire_submission_id]" =>
                     $submission->id,
-                "subscription[cf_user_id]" => $patient->id,
+                "subscription[cf_user_id]" => $user->id,
             ];
 
             $hostedPage = $this->chargebeeService->createConsultationCheckout(
-                $patient,
+                $user,
                 $glp1PlanId,
                 $checkoutData,
             );
@@ -603,7 +603,7 @@ class QuestionnaireController extends Controller
                     "Failed to create Chargebee checkout for questionnaire",
                     [
                         "submission_id" => $submission->id,
-                        "user_id" => $patient->id,
+                        "user_id" => $user->id,
                     ],
                 );
                 return response()->json(
@@ -621,8 +621,8 @@ class QuestionnaireController extends Controller
             ]);
 
             // Notify the providers on the patient's team
-            if ($patient->current_team_id) {
-                $team = Team::find($patient->current_team_id);
+            if ($user->current_team_id) {
+                $team = Team::find($user->current_team_id);
                 if ($team) {
                     $team->notify(
                         new QuestionnaireSubmittedForProviderNotification(
