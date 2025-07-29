@@ -9,7 +9,6 @@ use App\Notifications\QuestionnaireRejectedNotification;
 use App\Notifications\QuestionnaireSubmittedNotification;
 use App\Notifications\QuestionnaireSubmittedForProviderNotification;
 use App\Models\Team;
-use App\Services\RechargeService;
 use App\Services\ShopifyService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
@@ -22,9 +21,16 @@ use App\Jobs\ProcessRejectedQuestionnaireJob;
 use App\Services\QuestionnaireValidationService;
 use App\Models\WeightLog;
 use Spatie\Newsletter\Facades\Newsletter;
+use App\Services\ChargebeeService;
 
 class QuestionnaireController extends Controller
 {
+    protected $chargebeeService;
+
+    public function __construct(ChargebeeService $chargebeeService)
+    {
+        $this->chargebeeService = $chargebeeService;
+    }
     public function index(Request $request)
     {
         // Get all questionnaires
@@ -575,52 +581,78 @@ class QuestionnaireController extends Controller
                 );
             }
         }
-        // Send the patient the notification
-        $patient = auth()->user();
-        $patient->notify(new QuestionnaireSubmittedNotification($submission));
 
-        // If they have submitted the questionnaire, remove them from the inactive-user drip campaign
-        if (Newsletter::isSubscribed($patient->email)) {
-            // Remove specific tag(s) using the raw Mailchimp API
-            $api = Newsletter::getApi();
-            $listId = config(
-                "newsletter.lists." .
-                    config("newsletter.default_list_name") .
-                    ".id",
-            ); // Get your Mailchimp list ID from config
-            $subscriberHash = md5(strtolower($patient->email)); // Mailchimp requires the subscriber hash (lowercase MD5 of email)
+        // Create Chargebee checkout for GLP-1 Introductory Offer
+        try {
+            $glp1PlanId = "7465388179552-GBP-Monthly"; // GLP-1 Introductory Offer item price ID
 
-            $api->post("lists/{$listId}/members/{$subscriberHash}/tags", [
-                "tags" => [
+            $checkoutData = [
+                "subscription[cf_questionnaire_submission_id]" =>
+                    $submission->id,
+                "subscription[cf_user_id]" => $patient->id,
+            ];
+
+            $hostedPage = $this->chargebeeService->createConsultationCheckout(
+                $patient,
+                $glp1PlanId,
+                $checkoutData,
+            );
+
+            if (!$hostedPage || !isset($hostedPage["url"])) {
+                Log::error(
+                    "Failed to create Chargebee checkout for questionnaire",
                     [
-                        "name" => "inactive-user",
-                        "status" => "inactive", // This removes the tag
+                        "submission_id" => $submission->id,
+                        "user_id" => $patient->id,
                     ],
-                ],
-            ]);
-        }
-
-        // Simply mark the questionnaire as submitted
-        $submission->update([
-            "status" => "submitted",
-            "submitted_at" => now(),
-        ]);
-
-        // Notify the providers on the patient's team
-        if ($patient->current_team_id) {
-            $team = Team::find($patient->current_team_id);
-            if ($team) {
-                $team->notify(
-                    new QuestionnaireSubmittedForProviderNotification(
-                        $submission,
-                    ),
+                );
+                return response()->json(
+                    [
+                        "message" => "Failed to create checkout session",
+                    ],
+                    500,
                 );
             }
-        }
 
-        return response()->json([
-            "message" => "Questionnaire submitted successfully.",
-        ]);
+            // Mark the questionnaire as pending payment
+            $submission->update([
+                "status" => "pending_payment",
+                "submitted_at" => now(),
+            ]);
+
+            // Notify the providers on the patient's team
+            if ($patient->current_team_id) {
+                $team = Team::find($patient->current_team_id);
+                if ($team) {
+                    $team->notify(
+                        new QuestionnaireSubmittedForProviderNotification(
+                            $submission,
+                        ),
+                    );
+                }
+            }
+
+            return response()->json([
+                "message" => "Questionnaire requires payment to complete.",
+                "checkout_url" => $hostedPage["url"],
+            ]);
+        } catch (\Exception $e) {
+            Log::error(
+                "Exception creating Chargebee checkout for questionnaire",
+                [
+                    "submission_id" => $submission->id,
+                    "user_id" => $patient->id,
+                    "error" => $e->getMessage(),
+                ],
+            );
+
+            return response()->json(
+                [
+                    "message" => "Failed to create checkout session",
+                ],
+                500,
+            );
+        }
 
         // Now, create a checkout for the consultation product.
         // $consultationProductId = ShopifyProductMapping::getConsultationProductId();
