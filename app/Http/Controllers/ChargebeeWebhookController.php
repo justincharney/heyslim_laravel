@@ -177,6 +177,20 @@ class ChargebeeWebhookController extends Controller
         try {
             DB::beginTransaction();
 
+            // Check if this is a one-time charge (consultation payment)
+            $isOneTimeCharge =
+                !$subscriptionData ||
+                (isset($invoiceData["recurring"]) &&
+                    $invoiceData["recurring"] === false);
+
+            if ($isOneTimeCharge) {
+                $this->handleOneTimeCharge($customerData, $invoiceData);
+                DB::commit();
+                return response()->json([
+                    "message" => "One-time payment processed successfully",
+                ]);
+            }
+
             $localSubscription = null;
             if ($subscriptionData) {
                 $localSubscription = Subscription::where(
@@ -518,5 +532,72 @@ class ChargebeeWebhookController extends Controller
             "subscription_id" => $localSubscription->id,
             "has_prescription" => $localSubscription->prescription_id !== null,
         ]);
+    }
+
+    /**
+     * Handle one-time charge payments (like consultations)
+     */
+    private function handleOneTimeCharge(
+        ?array $customerData,
+        array $invoiceData,
+    ): void {
+        if (!$customerData || !isset($customerData["email"])) {
+            Log::error("One-time charge missing customer data", [
+                "invoice_id" => $invoiceData["id"] ?? null,
+            ]);
+            throw new \Exception("Missing customer data for one-time charge");
+        }
+
+        $user = User::where("email", $customerData["email"])->first();
+        if (!$user) {
+            Log::error("User not found for one-time charge", [
+                "email" => $customerData["email"],
+                "invoice_id" => $invoiceData["id"] ?? null,
+            ]);
+            throw new \Exception("User not found for one-time charge");
+        }
+
+        // Generate Calendly link and send consultation notification
+        $calendlyService = app(\App\Services\CalendlyService::class);
+        try {
+            $calendlyResult = $calendlyService->selectProviderAndGenerateLink(
+                $user,
+            );
+
+            if ($calendlyResult) {
+                $user->notify(
+                    new \App\Notifications\ScheduleConsultationNotification(
+                        null, // no questionnaire submission for direct consultation purchase
+                        $calendlyResult["provider"],
+                        $calendlyResult["booking_url"],
+                    ),
+                );
+
+                Log::info(
+                    "One-time consultation payment processed successfully",
+                    [
+                        "user_id" => $user->id,
+                        "invoice_id" => $invoiceData["id"] ?? null,
+                        "provider" => $calendlyResult["provider"] ?? null,
+                    ],
+                );
+            } else {
+                Log::error(
+                    "Failed to generate Calendly link for one-time charge",
+                    [
+                        "user_id" => $user->id,
+                        "invoice_id" => $invoiceData["id"] ?? null,
+                    ],
+                );
+                throw new \Exception("Failed to generate consultation link");
+            }
+        } catch (\Exception $e) {
+            Log::error("Exception processing one-time consultation charge", [
+                "user_id" => $user->id,
+                "invoice_id" => $invoiceData["id"] ?? null,
+                "error" => $e->getMessage(),
+            ]);
+            throw $e;
+        }
     }
 }

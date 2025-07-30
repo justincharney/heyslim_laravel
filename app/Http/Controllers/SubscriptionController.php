@@ -91,9 +91,7 @@ class SubscriptionController extends Controller
             );
 
             if ($chargebeeSubscription) {
-                return response()->json([
-                    "subscription" => $chargebeeSubscription,
-                ]);
+                return response()->json($chargebeeSubscription);
             }
         }
 
