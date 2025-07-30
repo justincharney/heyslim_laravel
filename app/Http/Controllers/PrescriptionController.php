@@ -8,19 +8,13 @@ use App\Models\Prescription;
 use App\Models\PrescriptionTemplate;
 use App\Models\User;
 use App\Models\ClinicalPlan;
-use App\Services\RechargeService;
-use App\Services\YousignService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use App\Enums\Permission;
-use App\Models\Subscription;
 use App\Models\QuestionnaireSubmission;
-use App\Services\ShopifyService;
-use App\Services\PrescriptionLabelService;
 use App\Jobs\InitiateYousignSignatureJob;
 use Illuminate\Support\Facades\Log;
-use App\Notifications\PrescriptionCheckoutNotification;
 
 class PrescriptionController extends Controller
 {
@@ -40,7 +34,7 @@ class PrescriptionController extends Controller
                     "message" =>
                         "You must be associated with a team to view prescriptions",
                 ],
-                403
+                403,
             );
         }
 
@@ -61,7 +55,7 @@ class PrescriptionController extends Controller
         // For admin, get all prescriptions for the team
         elseif ($user->hasRole("admin")) {
             $prescriptions = Prescription::whereHas("patient", function (
-                $query
+                $query,
             ) use ($teamId) {
                 $query->where("current_team_id", $teamId);
             })
@@ -107,7 +101,7 @@ class PrescriptionController extends Controller
                     "message" =>
                         "You must be associated with a team to create prescriptions",
                 ],
-                403
+                403,
             );
         }
 
@@ -161,7 +155,7 @@ class PrescriptionController extends Controller
                     "message" =>
                         "You can only create prescriptions for patients in your team",
                 ],
-                403
+                403,
             );
         }
 
@@ -177,7 +171,7 @@ class PrescriptionController extends Controller
                         "message" =>
                             "Cannot prescribe from an inactive clinical management plan",
                     ],
-                    400
+                    400,
                 );
             }
 
@@ -188,7 +182,7 @@ class PrescriptionController extends Controller
                         "message" =>
                             "Clinical management plan is for a different patient",
                     ],
-                    400
+                    400,
                 );
             }
 
@@ -200,7 +194,7 @@ class PrescriptionController extends Controller
                         "message" =>
                             "Cannot prescribe from a clinical management plan created by a provider outside your team",
                     ],
-                    403
+                    403,
                 );
             }
 
@@ -222,16 +216,14 @@ class PrescriptionController extends Controller
             // }
         }
 
-        // Set initial status to pending_payment
-        $validated["status"] = "pending_payment";
+        // Set initial status to pending_signature
+        $validated["status"] = "pending_signature";
 
         // Add the authenticated user as the prescriber
         $validated["prescriber_id"] = auth()->id();
 
         $prescription = null;
         $chat = null;
-        $checkoutUrl = null;
-        $discountCode = null; // "CONSULTATION_DISCOUNT";
 
         DB::beginTransaction();
         try {
@@ -250,7 +242,7 @@ class PrescriptionController extends Controller
             // 2. Approve the questionnaire submission if not already approved
             if ($plan->questionnaire_submission_id) {
                 $submission = QuestionnaireSubmission::find(
-                    $plan->questionnaire_submission_id
+                    $plan->questionnaire_submission_id,
                 );
                 if ($submission && $submission->status !== "approved") {
                     $submission->update([
@@ -261,31 +253,7 @@ class PrescriptionController extends Controller
                 }
             }
 
-            // 4. Create Shopify Subscription Checkout for the first dose
-            $initialDoseInfo = $doseScheduleData[0];
-            $shopifyVariantGid = $initialDoseInfo["shopify_variant_gid"];
-            $sellingPlanId = $initialDoseInfo["selling_plan_id"];
-
-            $shopifyService = app(ShopifyService::class);
-
-            $cartData = $shopifyService->createCheckout(
-                $shopifyVariantGid,
-                null,
-                1, // quantity
-                true, // isSubscription flag,
-                $sellingPlanId,
-                $discountCode,
-                $prescription->id // Added to the cart attribute
-            );
-
-            if (!$cartData || !isset($cartData["checkoutUrl"])) {
-                throw new \Exception(
-                    "Failed to create Shopify subscription checkout for the patient."
-                );
-            }
-            $checkoutUrl = $cartData["checkoutUrl"];
-
-            // 5. Create the chat for the prescription
+            // 4. Create the chat for the prescription
             $chat = Chat::create([
                 "prescription_id" => $prescription->id,
                 "patient_id" => $validated["patient_id"],
@@ -293,7 +261,7 @@ class PrescriptionController extends Controller
                 "status" => "active",
             ]);
 
-            // 6. Add an initial message from the provider
+            // 5. Add an initial message from the provider
             Message::create([
                 "chat_id" => $chat->id,
                 "user_id" => $validated["prescriber_id"],
@@ -314,42 +282,42 @@ class PrescriptionController extends Controller
                     "message" => "Failed to create prescription",
                     "error" => $e->getMessage(),
                 ],
-                500
+                500,
             );
         }
 
         // --- Dispatch jobs AFTER successful commit ---
-        if ($prescription && $checkoutUrl) {
+        if ($prescription) {
             // JOB 1: Initiate Yousign signature
             InitiateYousignSignatureJob::dispatch($prescription->id);
 
             // Send checkout link notification email to patient
-            try {
-                // Retrieve the patient model (needed for the notify method)
-                $patientUser = User::find($validated["patient_id"]);
-                if ($patientUser) {
-                    $patientUser->notify(
-                        new PrescriptionCheckoutNotification(
-                            $prescription,
-                            $checkoutUrl
-                        )
-                    );
-                } else {
-                    Log::error(
-                        "Patient user not found for notification dispatch",
-                        ["patient_id" => $validated["patient_id"]]
-                    );
-                }
-            } catch (\Exception $notifyError) {
-                Log::error(
-                    "Failed to dispatch PrescriptionCheckoutNotification",
-                    [
-                        "prescription_id" => $prescription->id,
-                        "error" => $notifyError->getMessage(),
-                        "trace" => $notifyError->getTraceAsString(),
-                    ]
-                );
-            }
+            // try {
+            //     // Retrieve the patient model (needed for the notify method)
+            //     $patientUser = User::find($validated["patient_id"]);
+            //     if ($patientUser) {
+            //         $patientUser->notify(
+            //             new PrescriptionCheckoutNotification(
+            //                 $prescription,
+            //                 $checkoutUrl,
+            //             ),
+            //         );
+            //     } else {
+            //         Log::error(
+            //             "Patient user not found for notification dispatch",
+            //             ["patient_id" => $validated["patient_id"]],
+            //         );
+            //     }
+            // } catch (\Exception $notifyError) {
+            //     Log::error(
+            //         "Failed to dispatch PrescriptionCheckoutNotification",
+            //         [
+            //             "prescription_id" => $prescription->id,
+            //             "error" => $notifyError->getMessage(),
+            //             "trace" => $notifyError->getTraceAsString(),
+            //         ],
+            //     );
+            // }
 
             // // JOB 2: Generate and attach prescription label to Shopify order
             //  Now needs to be done after the order is created
@@ -364,7 +332,7 @@ class PrescriptionController extends Controller
                 "prescription" => $prescription,
                 "chat" => $chat,
             ],
-            201
+            201,
         );
     }
 
@@ -382,7 +350,7 @@ class PrescriptionController extends Controller
                     "message" =>
                         "You must be associated with a team to view prescriptions",
                 ],
-                403
+                403,
             );
         }
 
@@ -406,7 +374,7 @@ class PrescriptionController extends Controller
                 [
                     "message" => "You can only view your own prescriptions",
                 ],
-                403
+                403,
             );
         }
 
@@ -420,7 +388,7 @@ class PrescriptionController extends Controller
                 [
                     "message" => "Prescription not found in your team",
                 ],
-                404
+                404,
             );
         }
 
@@ -445,7 +413,7 @@ class PrescriptionController extends Controller
                     "message" =>
                         "You must be associated with a team to update prescriptions",
                 ],
-                403
+                403,
             );
         }
 
@@ -464,7 +432,7 @@ class PrescriptionController extends Controller
                     "message" =>
                         "You can only update prescriptions in your team",
                 ],
-                403
+                403,
             );
         }
 
@@ -478,7 +446,7 @@ class PrescriptionController extends Controller
                     "message" =>
                         "Only the original prescriber or an admin can update this prescription",
                 ],
-                403
+                403,
             );
         }
 
@@ -514,7 +482,7 @@ class PrescriptionController extends Controller
                     "message" =>
                         "You must be associated with a team to view patient prescriptions",
                 ],
-                403
+                403,
             );
         }
 
@@ -531,7 +499,7 @@ class PrescriptionController extends Controller
                 [
                     "message" => "Patient not found in your team",
                 ],
-                404
+                404,
             );
         }
 
@@ -540,7 +508,7 @@ class PrescriptionController extends Controller
                 [
                     "message" => "User is not a patient",
                 ],
-                400
+                400,
             );
         }
 
@@ -570,7 +538,7 @@ class PrescriptionController extends Controller
                 [
                     "message" => "Template not found in your team",
                 ],
-                404
+                404,
             );
         }
 
@@ -598,7 +566,7 @@ class PrescriptionController extends Controller
                     "message" =>
                         "Users can only access chats for their prescriptions",
                 ],
-                404
+                404,
             );
         }
 
@@ -621,7 +589,7 @@ class PrescriptionController extends Controller
                     "message" =>
                         "You must be associated with a team to view prescriptions",
                 ],
-                403
+                403,
             );
         }
 
@@ -651,7 +619,6 @@ class PrescriptionController extends Controller
     public function issueReplacementPrescription(
         Request $request,
         Prescription $prescription,
-        RechargeService $rechargeService
     ) {
         $user = auth()->user(); // This is the provider performing the action
         $teamId = $user->current_team_id;
@@ -659,7 +626,7 @@ class PrescriptionController extends Controller
         if (!$teamId) {
             return response()->json(
                 ["message" => "You must be associated with a team."],
-                403
+                403,
             );
         }
         setPermissionsTeamId($teamId);
@@ -715,7 +682,7 @@ class PrescriptionController extends Controller
                     "message" =>
                         "Cannot manage prescriptions for patients outside your team.",
                 ],
-                403
+                403,
             );
         }
 
@@ -726,7 +693,7 @@ class PrescriptionController extends Controller
                     "message" =>
                         "Patient ID mismatch with original prescription.",
                 ],
-                422
+                422,
             );
         }
 
@@ -739,7 +706,7 @@ class PrescriptionController extends Controller
                     "message" =>
                         "Clinical Plan ID should match the original prescription.",
                 ],
-                422
+                422,
             );
         }
 
@@ -757,7 +724,7 @@ class PrescriptionController extends Controller
             // Always recalculate end_date based on new dose schedule
             $doseScheduleArray = json_decode(
                 $newPrescriptionData["dose_schedule"],
-                true
+                true,
             );
             if (is_array($doseScheduleArray) && !empty($doseScheduleArray)) {
                 $startDate = new \DateTime($newPrescriptionData["start_date"]);
@@ -772,7 +739,7 @@ class PrescriptionController extends Controller
                         "message" =>
                             "Invalid dose schedule format for new prescription.",
                     ],
-                    422
+                    422,
                 );
             }
             $newPrescription = new Prescription($newPrescriptionData);
@@ -792,13 +759,13 @@ class PrescriptionController extends Controller
 
             // 4. Update the Subscription
             $subscription->prescription_id = $newPrescription->id;
-            $subscription->product_name = $newPrescription->medication_name;
+            $subscription->chargebee_item_price_id = null;
             $subscription->save();
 
             // 5. Handle Chats (Update existing)
             $chat = Chat::where(
                 "prescription_id",
-                $oldPrescription->id
+                $oldPrescription->id,
             )->first();
 
             // Update the chat to the new prescription
@@ -814,7 +781,7 @@ class PrescriptionController extends Controller
                 [
                     "old_prescription_id" => $oldPrescription->id,
                     "trace" => $e->getTraceAsString(),
-                ]
+                ],
             );
             return response()->json(
                 [
@@ -822,78 +789,17 @@ class PrescriptionController extends Controller
                         "Failed to issue replacement prescription. " .
                         $e->getMessage(),
                 ],
-                500
+                500,
             );
         }
 
         // --- Post-Commit Actions ---
-        // 6. Update Recharge Subscription Variant (SKU Swap)
-        try {
-            $doseScheduleArray = json_decode(
-                $newPrescription->dose_schedule,
-                true
-            );
-            if (
-                is_array($doseScheduleArray) &&
-                !empty($doseScheduleArray) &&
-                isset($doseScheduleArray[0]["shopify_variant_gid"])
-            ) {
-                $firstDoseInfo = $doseScheduleArray[0];
-                $newShopifyVariantGid = $firstDoseInfo["shopify_variant_gid"];
-                $newShopifyVariantIdNumeric = preg_replace(
-                    "/[^0-9]/",
-                    "",
-                    $newShopifyVariantGid
-                );
-
-                if (
-                    $subscription->recharge_subscription_id &&
-                    $newShopifyVariantIdNumeric
-                ) {
-                    $rechargeService->updateSubscriptionVariant(
-                        $subscription->recharge_subscription_id,
-                        $newShopifyVariantIdNumeric
-                    );
-                    Log::info(
-                        "SKU Swap initiated for subscription {$subscription->recharge_subscription_id} to variant {$newShopifyVariantIdNumeric}"
-                    );
-                } else {
-                    Log::warning(
-                        "Could not perform SKU swap: Missing Recharge subscription ID or new variant GID for replacement.",
-                        [
-                            "recharge_sub_id" =>
-                                $subscription->recharge_subscription_id,
-                            "new_variant_gid_numeric" =>
-                                $newShopifyVariantIdNumeric ?? null,
-                        ]
-                    );
-                }
-            } else {
-                Log::warning(
-                    "Dose schedule or Shopify variant GID missing for SKU swap in replacement.",
-                    [
-                        "prescription_id" => $newPrescription->id,
-                        "dose_schedule" => $newPrescription->dose_schedule,
-                    ]
-                );
-            }
-        } catch (\Exception $e) {
-            Log::error(
-                "Failed to update Recharge subscription variant during replacement: " .
-                    $e->getMessage(),
-                [
-                    "recharge_subscription_id" =>
-                        $subscription->recharge_subscription_id ?? null,
-                ]
-            );
-        }
-
-        // 7. Initiate YouSign for the new prescription
+        // 6. Initiate YouSign for the new prescription
         if ($newPrescription) {
             InitiateYousignSignatureJob::dispatch($newPrescription->id);
         }
 
-        // 8. TODO: Send Notifications (e.g., to patient about the updated prescription)
+        // 7. TODO: Send Notifications (e.g., to patient about the updated prescription)
 
         return response()->json(
             [
@@ -901,7 +807,7 @@ class PrescriptionController extends Controller
                     "Prescription replaced successfully. Check-in updated and signature process initiated.",
                 "new_prescription" => $newPrescription->fresh(),
             ],
-            200
+            200,
         );
     }
 }
