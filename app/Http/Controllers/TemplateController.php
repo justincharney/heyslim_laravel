@@ -20,7 +20,7 @@ class TemplateController extends Controller
 
         // Get templates: global ones + team-specific ones
         $templates = ClinicalPlanTemplate::where(function ($query) use (
-            $teamId
+            $teamId,
         ) {
             $query->where("is_global", true)->orWhere("team_id", $teamId);
         })->get();
@@ -37,7 +37,7 @@ class TemplateController extends Controller
 
         // Get templates: global ones + team-specific ones
         $templates = PrescriptionTemplate::where(function ($query) use (
-            $teamId
+            $teamId,
         ) {
             $query->where("is_global", true)->orWhere("team_id", $teamId);
         })->get();
@@ -57,6 +57,9 @@ class TemplateController extends Controller
             $medicationOptions[] = [
                 "name" => $nameKey,
                 "gid" => $gid,
+                "chargebee_item_price_id" => ShopifyProductMapping::getChargebeeItemPriceByProductGid(
+                    $gid,
+                ),
             ];
         }
 
@@ -76,7 +79,7 @@ class TemplateController extends Controller
                         "Medication product or variants not found for GID: " .
                         $productGid,
                 ],
-                404
+                404,
             );
         }
 

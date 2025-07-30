@@ -9,6 +9,10 @@ class ShopifyProductMapping
         "Wegovy" => "gid://shopify/Product/7348538310752",
     ];
 
+    // Chargebee item price ID for initial order
+    public static $chargebeeGLP1IntroOfferPriceId = "7465388179552-GBP-Monthly";
+    public static $chargebeeConsultationPriceId = "7396602249312-GBP";
+
     public static $mounjaroSellingPlanId = "gid://shopify/SellingPlan/1215725664";
     public static $wegovySellingPlanId = "gid://shopify/SellingPlan/1215791200";
 
@@ -21,36 +25,42 @@ class ShopifyProductMapping
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41902912897120",
                     "selling_plan_id" => "gid://shopify/SellingPlan/1215725664",
+                    "chargebee_item_price_id" => "41902912897120-GBP-Monthly",
                 ],
                 [
                     "dose" => "5mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41902912929888",
                     "selling_plan_id" => "gid://shopify/SellingPlan/1215725664",
+                    "chargebee_item_price_id" => "41902912929888-GBP-Monthly",
                 ],
                 [
                     "dose" => "7.5mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41902912962656",
                     "selling_plan_id" => "gid://shopify/SellingPlan/1215725664",
+                    "chargebee_item_price_id" => "41902912962656-GBP-Monthly",
                 ],
                 [
                     "dose" => "10mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41902912995424",
                     "selling_plan_id" => "gid://shopify/SellingPlan/1215725664",
+                    "chargebee_item_price_id" => "41902912995424-GBP-Monthly",
                 ],
                 [
                     "dose" => "12.5mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41902913028192",
                     "selling_plan_id" => "gid://shopify/SellingPlan/1215725664",
+                    "chargebee_item_price_id" => "41902913028192-GBP-Monthly",
                 ],
                 [
                     "dose" => "15mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41902913060960",
                     "selling_plan_id" => "gid://shopify/SellingPlan/1215725664",
+                    "chargebee_item_price_id" => "41902913060960-GBP-Monthly",
                 ],
             ],
         ],
@@ -62,30 +72,35 @@ class ShopifyProductMapping
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41891531292768",
                     "selling_plan_id" => "gid://shopify/SellingPlan/1215791200",
+                    "chargebee_item_price_id" => "41891531292768-GBP-Monthly",
                 ],
                 [
                     "dose" => "0.5mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41891531325536",
                     "selling_plan_id" => "gid://shopify/SellingPlan/1215791200",
+                    "chargebee_item_price_id" => "41891531325536-GBP-Monthly",
                 ],
                 [
                     "dose" => "1.0mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41891531358304",
                     "selling_plan_id" => "gid://shopify/SellingPlan/1215791200",
+                    "chargebee_item_price_id" => "41891531358304-GBP-Monthly",
                 ],
                 [
                     "dose" => "1.7mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41891531391072",
                     "selling_plan_id" => "gid://shopify/SellingPlan/1215791200",
+                    "chargebee_item_price_id" => "41891531391072-GBP-Monthly",
                 ],
                 [
                     "dose" => "2.4mg",
                     "shopify_variant_gid" =>
                         "gid://shopify/ProductVariant/41891531423840",
                     "selling_plan_id" => "gid://shopify/SellingPlan/1215791200",
+                    "chargebee_item_price_id" => "41891531423840-GBP-Monthly",
                 ],
             ],
         ],
@@ -145,5 +160,33 @@ class ShopifyProductMapping
         return self::$medicationProductDetails[$productGid]["variants"][0][
             "selling_plan_id"
         ] ?? null;
+    }
+
+    public static function getChargebeeItemPriceByProductGid($productGid)
+    {
+        $details = self::$medicationProductDetails[$productGid] ?? null;
+        if (
+            $details &&
+            isset($details["variants"][0]["chargebee_item_price_id"])
+        ) {
+            return $details["variants"][0]["chargebee_item_price_id"];
+        }
+        return null;
+    }
+
+    public static function getShopifyVariantByChargebeeItemPrice(
+        $chargebeeItemPriceId,
+    ) {
+        foreach (self::$medicationProductDetails as $productGid => $details) {
+            foreach ($details["variants"] as $variant) {
+                if (
+                    ($variant["chargebee_item_price_id"] ?? null) ===
+                    $chargebeeItemPriceId
+                ) {
+                    return $variant["shopify_variant_gid"];
+                }
+            }
+        }
+        return null;
     }
 }

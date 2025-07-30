@@ -26,7 +26,7 @@ class TemplateSeeder extends Seeder
 
         if (!$admin) {
             $this->command->error(
-                "Admin user not found! Unable to create templates."
+                "Admin user not found! Unable to create templates.",
             );
             return;
         }
@@ -148,17 +148,17 @@ class TemplateSeeder extends Seeder
         $mounjaroProductGid = ShopifyProductMapping::getProductId("Mounjaro");
 
         $wegovyVariants = ShopifyProductMapping::getProductVariantsByGid(
-            $wegovyProductGid
+            $wegovyProductGid,
         );
         $mounjaroVariants = ShopifyProductMapping::getProductVariantsByGid(
-            $mounjaroProductGid
+            $mounjaroProductGid,
         );
 
         $wegovySellingPlanId = ShopifyProductMapping::getSellingPlanId(
-            $wegovyProductGid
+            $wegovyProductGid,
         );
         $mounjaroSellingPlanId = ShopifyProductMapping::getSellingPlanId(
-            $mounjaroProductGid
+            $mounjaroProductGid,
         );
 
         $templates = [
@@ -177,6 +177,8 @@ class TemplateSeeder extends Seeder
                         "shopify_variant_gid" =>
                             $wegovyVariants[0]["shopify_variant_gid"],
                         "selling_plan_id" => $wegovySellingPlanId,
+                        "chargebee_item_price_id" =>
+                            $wegovyVariants[0]["chargebee_item_price_id"],
                     ],
                     [
                         "refill_number" => 1,
@@ -184,6 +186,8 @@ class TemplateSeeder extends Seeder
                         "shopify_variant_gid" =>
                             $wegovyVariants[1]["shopify_variant_gid"],
                         "selling_plan_id" => $wegovySellingPlanId,
+                        "chargebee_item_price_id" =>
+                            $wegovyVariants[1]["chargebee_item_price_id"],
                     ],
                     [
                         "refill_number" => 2,
@@ -191,6 +195,8 @@ class TemplateSeeder extends Seeder
                         "shopify_variant_gid" =>
                             $wegovyVariants[2]["shopify_variant_gid"],
                         "selling_plan_id" => $wegovySellingPlanId,
+                        "chargebee_item_price_id" =>
+                            $wegovyVariants[2]["chargebee_item_price_id"],
                     ],
                 ],
                 "is_global" => true,
@@ -211,6 +217,8 @@ class TemplateSeeder extends Seeder
                         "shopify_variant_gid" =>
                             $mounjaroVariants[0]["shopify_variant_gid"],
                         "selling_plan_id" => $mounjaroSellingPlanId,
+                        "chargebee_item_price_id" =>
+                            $mounjaroVariants[0]["chargebee_item_price_id"],
                     ],
                     [
                         "refill_number" => 1,
@@ -218,6 +226,8 @@ class TemplateSeeder extends Seeder
                         "shopify_variant_gid" =>
                             $mounjaroVariants[1]["shopify_variant_gid"],
                         "selling_plan_id" => $mounjaroSellingPlanId,
+                        "chargebee_item_price_id" =>
+                            $mounjaroVariants[1]["chargebee_item_price_id"],
                     ],
                     [
                         "refill_number" => 2,
@@ -225,6 +235,8 @@ class TemplateSeeder extends Seeder
                         "shopify_variant_gid" =>
                             $mounjaroVariants[2]["shopify_variant_gid"],
                         "selling_plan_id" => $mounjaroSellingPlanId,
+                        "chargebee_item_price_id" =>
+                            $mounjaroVariants[2]["chargebee_item_price_id"],
                     ],
                 ],
                 "is_global" => true,

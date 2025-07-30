@@ -1,6 +1,7 @@
 <?php
 
-use App\Http\Controllers\RechargeWebhookController;
+use App\Http\Controllers\ChargebeeWebhookController;
+
 use App\Http\Controllers\ShopifyWebhookController;
 use App\Http\Controllers\YousignWebhookController;
 use Illuminate\Support\Facades\Route;
@@ -20,23 +21,21 @@ Route::post("/webhooks/shopify/orders/fulfilled", [
     "orderFulfilled",
 ]);
 
-// Recharge webhooks
-Route::post("/webhooks/recharge/subscription/cancelled", [
-    RechargeWebhookController::class,
-    "subscriptionCancelled",
-]);
-Route::post("/webhooks/recharge/order/created", [
-    RechargeWebhookController::class,
-    "orderCreated",
-]);
-Route::post("/webhooks/recharge/subscription/created", [
-    RechargeWebhookController::class,
-    "subscriptionCreated",
-]);
-Route::post("/webhooks/recharge/subscription/updated", [
-    RechargeWebhookController::class,
-    "subscriptionUpdated",
-]);
+// Chargebee webhooks (with basic authentication)
+Route::middleware("webhook.auth")->group(function () {
+    Route::post("/webhooks/chargebee/subscription/cancelled", [
+        ChargebeeWebhookController::class,
+        "subscriptionCancelled",
+    ]);
+    Route::post("/webhooks/chargebee/subscription/changed", [
+        ChargebeeWebhookController::class,
+        "subscriptionChanged",
+    ]);
+    Route::post("/webhooks/chargebee/payment/succeeded", [
+        ChargebeeWebhookController::class,
+        "paymentSucceeded",
+    ]);
+});
 
 // Yousign webhook
 Route::post("/webhooks/yousign", [

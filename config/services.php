@@ -48,10 +48,11 @@ return [
         "storefront_access_token" => env("SHOPIFY_STOREFRONT_API_TOKEN"),
     ],
 
-    "recharge" => [
-        "api_key" => env("RECHARGE_API_KEY"),
-        "endpoint" => env("RECHARGE_ENDPOINT", "https://api.rechargeapps.com"),
-        "client_secret" => env("RECHARGE_CLIENT_SECRET"),
+    "chargebee" => [
+        "api_key" => env("CHARGEBEE_API_KEY"),
+        "site" => env("CHARGEBEE_SITE"),
+        "endpoint" =>
+            "https://" . env("CHARGEBEE_SITE") . ".chargebee.com/api/v2",
     ],
 
     "workos" => [
