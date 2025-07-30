@@ -51,6 +51,8 @@ return [
     "chargebee" => [
         "api_key" => env("CHARGEBEE_API_KEY"),
         "site" => env("CHARGEBEE_SITE"),
+        "webhook_username" => env("CHARGEBEE_WEBHOOK_USERNAME"),
+        "webhook_password" => env("CHARGEBEE_WEBHOOK_PASSWORD"),
         "endpoint" =>
             "https://" . env("CHARGEBEE_SITE") . ".chargebee.com/api/v2",
     ],
