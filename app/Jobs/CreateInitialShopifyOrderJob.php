@@ -289,6 +289,20 @@ class CreateInitialShopifyOrderJob implements ShouldQueue
                         $refillNumberToOrder
                 ) {
                     $doseIndex = $refillNumberToOrder;
+                } else {
+                    // For renewals, if dose calculation is invalid (out of bounds), return null
+                    Log::warning(
+                        "Renewal order dose calculation out of bounds",
+                        [
+                            "prescription_id" => $prescription->id,
+                            "max_refill" => $maxRefill,
+                            "refills_remaining" => $refillsRemaining,
+                            "refill_number_to_order" => $refillNumberToOrder,
+                            "dose_schedule_count" => count($doseSchedule),
+                            "is_renewal" => $isRenewal,
+                        ],
+                    );
+                    return null;
                 }
 
                 Log::info("Renewal order dose calculation", [
