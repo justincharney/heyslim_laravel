@@ -11,8 +11,9 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::table("subscriptions", function (Blueprint $table) {
-            $table->dropColumn("shopify_product_id");
-            $table->string("original_shopify_order_id")->nullable();
+            if (Schema::hasColumn("subscriptions", "shopify_product_id")) {
+                $table->dropColumn("shopify_product_id");
+            }
         });
     }
 
@@ -22,8 +23,9 @@ return new class extends Migration {
     public function down(): void
     {
         Schema::table("subscriptions", function (Blueprint $table) {
-            $table->string("shopify_product_id")->nullable();
-            $table->dropColumn("original_shopify_order_id");
+            if (!Schema::hasColumn("subscriptions", "shopify_product_id")) {
+                $table->string("shopify_product_id")->nullable();
+            }
         });
     }
 };
