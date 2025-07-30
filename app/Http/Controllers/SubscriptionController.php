@@ -9,22 +9,22 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
 use App\Models\Subscription;
-use App\Services\RechargeService;
+use App\Services\ChargebeeService;
 
 class SubscriptionController extends Controller
 {
     protected $cacheDuration = 60 * 10; // 10 minutes
-    protected $rechargeService;
+    protected $chargebeeService;
 
-    public function __construct(RechargeService $rechargeService)
+    public function __construct(ChargebeeService $chargebeeService)
     {
-        $this->rechargeService = $rechargeService;
+        $this->chargebeeService = $chargebeeService;
     }
 
     protected function getCacheKey($type = "subscriptions", $identifier = null)
     {
         $userId = auth()->id();
-        $key = "recharge_{$type}_{$userId}";
+        $key = "chargebee_{$type}_{$userId}";
 
         if ($identifier) {
             $key .= "_{$identifier}";
@@ -57,8 +57,8 @@ class SubscriptionController extends Controller
             ]);
         }
 
-        // If not in our database, fetch from Recharge API
-        $subscriptions = $this->fetchSubscriptionsFromRecharge($user);
+        // If not in our database, fetch from Chargebee API
+        $subscriptions = $this->fetchSubscriptionsFromChargebee($user);
 
         Cache::put($cacheKey, $subscriptions, $this->cacheDuration);
 
@@ -79,20 +79,20 @@ class SubscriptionController extends Controller
         // First check if we have the subscription in our database
         $subscription = Subscription::where(
             "prescription_id",
-            $prescriptionId
+            $prescriptionId,
         )->first();
 
-        if ($subscription && $subscription->recharge_subscription_id) {
-            $rechargeSubscriptionId = $subscription->recharge_subscription_id;
+        if ($subscription && $subscription->chargebee_subscription_id) {
+            $chargebeeSubscriptionId = $subscription->chargebee_subscription_id;
 
-            // Get the latest data from Recharge API
-            $rechargeSubscription = $this->rechargeService->getSubscriptionByRechargeId(
-                $rechargeSubscriptionId
+            // Get the latest data from Chargebee API
+            $chargebeeSubscription = $this->chargebeeService->getSubscription(
+                $chargebeeSubscriptionId,
             );
 
-            if ($rechargeSubscription) {
+            if ($chargebeeSubscription) {
                 return response()->json([
-                    "subscription" => $rechargeSubscription,
+                    "subscription" => $chargebeeSubscription,
                 ]);
             }
         }
@@ -120,21 +120,20 @@ class SubscriptionController extends Controller
         // First check if we have the subscription in our database
         $subscription = Subscription::where(
             "prescription_id",
-            $prescriptionId
+            $prescriptionId,
         )->first();
 
-        if ($subscription && $subscription->recharge_subscription_id) {
-            $rechargeSubscriptionId = $subscription->recharge_subscription_id;
+        if ($subscription && $subscription->chargebee_subscription_id) {
+            $chargebeeSubscriptionId = $subscription->chargebee_subscription_id;
 
             // Begin DB transaction
             DB::beginTransaction();
 
             try {
                 // Cancel using the service
-                $success = $this->rechargeService->cancelSubscription(
-                    $rechargeSubscriptionId,
+                $success = $this->chargebeeService->cancelSubscription(
+                    $chargebeeSubscriptionId,
                     $validated["reason"],
-                    $validated["notes"]
                 );
 
                 if (!$success) {
@@ -159,13 +158,13 @@ class SubscriptionController extends Controller
             } catch (\Exception $e) {
                 DB::rollBack();
                 Log::error(
-                    "Error cancelling subscription: " . $e->getMessage()
+                    "Error cancelling subscription: " . $e->getMessage(),
                 );
                 return response()->json(
                     [
                         "message" => "Failed to cancel subscription",
                     ],
-                    500
+                    500,
                 );
             }
         } else {
@@ -175,66 +174,32 @@ class SubscriptionController extends Controller
                     "message" =>
                         "No active subscription found for this prescription",
                 ],
-                404
+                404,
             );
         }
     }
 
     /**
-     * Fetch subscriptions from Recharge API
+     * Fetch subscriptions from Chargebee API
      *
      * @param \App\Models\User $user The user to fetch subscriptions for
      * @return array Array of subscription data
      */
-    private function fetchSubscriptionsFromRecharge($user)
+    private function fetchSubscriptionsFromChargebee($user)
     {
         $result = [];
-        $shopifyCustomerId = $user->shopify_customer_id;
-
-        if (!$shopifyCustomerId) {
-            return $result;
-        }
-
-        // Use recharge_customer_id to optimize the API call
-        // if ($user->recharge_customer_id) {
-        //     // Get all subscriptions for this customer using recharge_customer_id
-        //     $subscriptionsResponse = $this->rechargeService->getSubscriptionsForCustomerId(
-        //         $user->recharge_customer_id
-        //     );
-        //     if (!empty($subscriptionsResponse)) {
-        //         return $this->formatSubscriptions(
-        //             $subscriptionsResponse,
-        //             $user->id
-        //         );
-        //     }
-        // }
-
-        // Extract just the numeric part from the Shopify GID
-        if (strpos($shopifyCustomerId, "gid://") === 0) {
-            $parts = explode("/", $shopifyCustomerId);
-            $shopifyCustomerId = end($parts);
-        }
 
         try {
-            // Get the recharge customer based on the shopify customer
-            $customerResponse = $this->rechargeService->getCustomerByShopifyId(
-                $shopifyCustomerId
-            );
+            // Get the Chargebee customer ID based on user email
+            $customerId = $this->getChargebeeCustomerId($user);
 
-            if (empty($customerResponse)) {
+            if (!$customerId) {
                 return $result;
             }
 
-            $customerId = $customerResponse["id"];
-
-            // Store the Recharge customer ID for future use
-            // if (!$user->recharge_customer_id) {
-            //     $user->update(["recharge_customer_id" => $customerId]);
-            // }
-
             // Get all subscriptions for this customer
-            $subscriptions = $this->rechargeService->getSubscriptionsForCustomerId(
-                $customerId
+            $subscriptions = $this->chargebeeService->getSubscriptionsForCustomer(
+                $customerId,
             );
 
             if (empty($subscriptions)) {
@@ -243,11 +208,27 @@ class SubscriptionController extends Controller
 
             return $subscriptions;
         } catch (\Exception $e) {
-            Log::error("Exception while fetching subscriptions from Recharge", [
-                "error" => $e->getMessage(),
-                "trace" => $e->getTraceAsString(),
-            ]);
+            Log::error(
+                "Exception while fetching subscriptions from Chargebee",
+                [
+                    "error" => $e->getMessage(),
+                    "trace" => $e->getTraceAsString(),
+                ],
+            );
             return $result;
         }
+    }
+
+    /**
+     * Generate a Chargebee customer ID from user email
+     *
+     * @param \App\Models\User $user
+     * @return string
+     */
+    private function getChargebeeCustomerId($user): string
+    {
+        // Use email as base for customer ID, making it Chargebee-friendly
+        $customerId = preg_replace("/[^a-zA-Z0-9_-]/", "_", $user->email);
+        return substr($customerId, 0, 50); // Chargebee has length limits
     }
 }

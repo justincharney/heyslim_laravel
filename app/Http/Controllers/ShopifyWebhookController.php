@@ -9,9 +9,9 @@ use App\Notifications\ScheduleConsultationNotification;
 use App\Services\CalendlyService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use App\Services\RechargeService;
 use App\Models\Subscription;
 use App\Models\ProcessedRecurringOrder;
+use App\Services\ChargebeeService;
 
 class ShopifyWebhookController extends Controller
 {
@@ -41,7 +41,7 @@ class ShopifyWebhookController extends Controller
 
         // Calculate the HMAC on the request data using the shared secret
         $calculatedHmac = base64_encode(
-            hash_hmac("sha256", $data, $secret, true)
+            hash_hmac("sha256", $data, $secret, true),
         );
 
         // Verify that the calculated HMAC matches the header provided by Shopify
@@ -54,7 +54,7 @@ class ShopifyWebhookController extends Controller
             ]);
             return response()->json(
                 ["message" => "Invalid webhook signature"],
-                401
+                401,
             );
         }
 
@@ -90,7 +90,7 @@ class ShopifyWebhookController extends Controller
                     [
                         "message" => "User not found for consultation order",
                     ],
-                    404
+                    404,
                 );
             }
 
@@ -98,7 +98,7 @@ class ShopifyWebhookController extends Controller
             $calendlyService = app(CalendlyService::class);
             try {
                 $calendlyResult = $calendlyService->selectProviderAndGenerateLink(
-                    $user
+                    $user,
                 );
 
                 if ($calendlyResult) {
@@ -106,8 +106,8 @@ class ShopifyWebhookController extends Controller
                         new ScheduleConsultationNotification(
                             null, // no  questionnaire submission for direct consultation purchase
                             $calendlyResult["provider"],
-                            $calendlyResult["booking_url"]
-                        )
+                            $calendlyResult["booking_url"],
+                        ),
                     );
                 } else {
                     Log::error("Failed to generate calendly link", [
@@ -119,7 +119,7 @@ class ShopifyWebhookController extends Controller
                         [
                             "message" => "Failed to generate calendly link",
                         ],
-                        500
+                        500,
                     );
                 }
             } catch (\Exception $e) {
@@ -129,7 +129,7 @@ class ShopifyWebhookController extends Controller
                     [
                         "user_id" => $user->id,
                         "trace" => $e->getTraceAsString(),
-                    ]
+                    ],
                 );
 
                 // Return a failure response for webhook retrying
@@ -137,7 +137,7 @@ class ShopifyWebhookController extends Controller
                     [
                         "message" => "Failed to process consultation order",
                     ],
-                    500
+                    500,
                 );
             }
             // Return success response after processing consultation order
@@ -176,7 +176,7 @@ class ShopifyWebhookController extends Controller
                         "message" =>
                             "Submission record referenced in webhook payload not found",
                     ],
-                    400
+                    400,
                 );
             }
 
@@ -201,16 +201,16 @@ class ShopifyWebhookController extends Controller
         $hmacHeader = $request->header("X-Shopify-Hmac-Sha256");
         $secret = config("services.shopify.webhook_secret");
         $calculatedHmac = base64_encode(
-            hash_hmac("sha256", $data, $secret, true)
+            hash_hmac("sha256", $data, $secret, true),
         );
 
         if (!hash_equals($hmacHeader, $calculatedHmac)) {
             Log::error(
-                "Shopify orderFulfilled webhook HMAC verification failed"
+                "Shopify orderFulfilled webhook HMAC verification failed",
             );
             return response()->json(
                 ["message" => "Invalid webhook signature"],
-                401
+                401,
             );
         }
 
@@ -228,103 +228,81 @@ class ShopifyWebhookController extends Controller
             ]);
         }
 
-        $rechargeSubscriptionId = null;
+        $chargebeeSubscriptionId = null;
 
-        // Strategy 1: Check if this Shopify Order ID is an original_shopify_order_id in our Subscription model
+        // Find subscription by Shopify order ID
         $subscription = Subscription::where(
             "original_shopify_order_id",
-            $shopifyOrderId
+            $shopifyOrderId,
         )->first();
+
         if ($subscription) {
-            $rechargeSubscriptionId = $subscription->recharge_subscription_id;
+            $chargebeeSubscriptionId = $subscription->chargebee_subscription_id;
             Log::info(
-                "Found Recharge subscription ID via original_shopify_order_id.",
+                "Found Chargebee subscription ID via original_shopify_order_id.",
                 [
                     "shopify_order_id" => $shopifyOrderId,
-                    "recharge_subscription_id" => $rechargeSubscriptionId,
-                ]
+                    "chargebee_subscription_id" => $chargebeeSubscriptionId,
+                ],
             );
         } else {
-            // Strategy 2: Check ProcessedRecurringOrder table (for recurring orders)
-            // The $shopifyOrderId here is the Shopify numeric ID of the *current* transaction.
+            // Check recurring orders
             $processedOrder = ProcessedRecurringOrder::where(
                 "shopify_order_id",
-                $shopifyOrderId
+                $shopifyOrderId,
             )->first();
             if ($processedOrder && $processedOrder->prescription_id) {
                 $relatedSubscription = Subscription::where(
                     "prescription_id",
-                    $processedOrder->prescription_id
+                    $processedOrder->prescription_id,
                 )->first();
                 if ($relatedSubscription) {
-                    $rechargeSubscriptionId =
-                        $relatedSubscription->recharge_subscription_id;
+                    $chargebeeSubscriptionId =
+                        $relatedSubscription->chargebee_subscription_id;
                     Log::info(
-                        "Found Recharge subscription ID via ProcessedRecurringOrder.",
+                        "Found Chargebee subscription ID via ProcessedRecurringOrder.",
                         [
                             "shopify_order_id" => $shopifyOrderId,
                             "prescription_id" =>
                                 $processedOrder->prescription_id,
-                            "recharge_subscription_id" => $rechargeSubscriptionId,
-                        ]
+                            "chargebee_subscription_id" => $chargebeeSubscriptionId,
+                        ],
                     );
                 }
             }
         }
 
-        if (!$rechargeSubscriptionId) {
+        if (!$chargebeeSubscriptionId) {
             Log::warning(
-                "Could not determine Recharge Subscription ID for fulfilled Shopify Order ID.",
-                ["shopify_order_id" => $shopifyOrderId]
+                "Could not determine Chargebee Subscription ID for fulfilled Shopify Order ID.",
+                ["shopify_order_id" => $shopifyOrderId],
             );
-            // Decide if this is an error or just an order not linked to a Recharge sub we manage this way.
-            // For now, we'll return success as the webhook was valid, but no action taken on Recharge.
             return response()->json(
                 [
                     "message" =>
-                        "Fulfilled order processed, but no linked Recharge subscription found to update next charge date.",
+                        "Fulfilled order processed, but no linked Chargebee subscription found.",
                 ],
-                200
+                200,
             );
         }
 
-        // Calculate the next order date (e.g., 28 days from fulfillment)
+        // The logic to update the next charge date will be handled by Chargebee's dunning and renewal settings.
+        // We can, however, update the local subscription record with the fulfillment date if needed.
         $fulfillmentDate = isset($payload["fulfillments"][0]["created_at"])
             ? new \DateTime($payload["fulfillments"][0]["created_at"])
-            : new \DateTime(); // Fallback to now if created_at is missing
+            : new \DateTime();
 
-        $nextOrderDate = clone $fulfillmentDate;
-        $nextOrderDate->modify("+28 days");
-        $nextOrderDateStr = $nextOrderDate->format("Y-m-d");
+        $subscription->update([
+            "last_fulfilled_at" => $fulfillmentDate,
+        ]);
 
-        $rechargeService = app(RechargeService::class);
-        $updated = $rechargeService->updateNextOrderDate(
-            $rechargeSubscriptionId,
-            $nextOrderDateStr
-        );
-
-        if (!$updated) {
-            Log::error(
-                "Failed to update next_charge_scheduled_at in Recharge.",
-                [
-                    "recharge_subscription_id" => $rechargeSubscriptionId,
-                    "next_date_calculated" => $nextOrderDateStr,
-                ]
-            );
-            return response()->json(
-                [
-                    "message" =>
-                        "Failed to update subscription next charge date in Recharge",
-                ],
-                500
-            );
-        }
+        Log::info("Shopify order fulfillment webhook processed successfully.", [
+            "shopify_order_id" => $shopifyOrderId,
+            "chargebee_subscription_id" => $chargebeeSubscriptionId,
+        ]);
 
         return response()->json([
-            "message" =>
-                "Order fulfillment processed successfully, Recharge next charge date updated.",
-            "recharge_subscription_id" => $rechargeSubscriptionId,
-            "next_charge_scheduled_at" => $nextOrderDateStr,
+            "message" => "Order fulfillment processed successfully.",
         ]);
     }
 }

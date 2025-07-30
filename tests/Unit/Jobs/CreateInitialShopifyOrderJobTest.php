@@ -85,11 +85,11 @@ class CreateInitialShopifyOrderJobTest extends TestCase
     }
 
     /** @test */
-    public function it_orders_correct_dose_for_renewal_with_2_refills_remaining()
+    public function it_orders_correct_dose_for_renewal_with_1_refill_remaining()
     {
-        // With 2 refills remaining, should order dose index 1 (5.0mg)
-        // maxRefill = 2, refillsRemaining = 2, refillNumberToOrder = 2 - 2 + 1 = 1
-        $prescription = $this->createMockPrescription(2);
+        // Started with 2 refills, decremented to 1, should order dose index 1 (5.0mg)
+        // maxRefill = 2, refillsRemaining = 1, refillNumberToOrder = 2 - 1 = 1
+        $prescription = $this->createMockPrescription(1);
 
         $variantId = $this->getProductVariantMethod->invoke(
             $this->job,
@@ -100,16 +100,16 @@ class CreateInitialShopifyOrderJobTest extends TestCase
         $this->assertEquals(
             "gid://shopify/ProductVariant/41902912929888",
             $variantId,
-            "Renewal with 2 refills remaining should order dose index 1 (5.0mg)",
+            "Renewal with 1 refill remaining should order dose index 1 (5.0mg)",
         );
     }
 
     /** @test */
-    public function it_orders_correct_dose_for_renewal_with_1_refill_remaining()
+    public function it_orders_correct_dose_for_renewal_with_0_refills_remaining()
     {
-        // With 1 refill remaining, should order dose index 2 (7.5mg)
-        // maxRefill = 2, refillsRemaining = 1, refillNumberToOrder = 2 - 1 + 1 = 2
-        $prescription = $this->createMockPrescription(1);
+        // Started with 1 refill, decremented to 0, should order dose index 2 (7.5mg)
+        // maxRefill = 2, refillsRemaining = 0, refillNumberToOrder = 2 - 0 = 2
+        $prescription = $this->createMockPrescription(0);
 
         $variantId = $this->getProductVariantMethod->invoke(
             $this->job,
@@ -120,16 +120,26 @@ class CreateInitialShopifyOrderJobTest extends TestCase
         $this->assertEquals(
             "gid://shopify/ProductVariant/41902912962656",
             $variantId,
-            "Renewal with 1 refill remaining should order dose index 2 (7.5mg)",
+            "Renewal with 0 refills remaining should order dose index 2 (7.5mg)",
         );
     }
 
     /** @test */
-    public function it_returns_null_for_renewal_with_0_refills_remaining()
+    public function it_handles_edge_case_with_negative_refills()
     {
-        // With 0 refills remaining, should be out of bounds
-        // maxRefill = 2, refillsRemaining = 0, refillNumberToOrder = 2 - 0 + 1 = 3 (out of bounds)
-        $prescription = $this->createMockPrescription(0);
+        // Edge case: if somehow refills went negative or beyond schedule
+        // Create a prescription with a shorter schedule to force out of bounds
+        $shortSchedule = [
+            [
+                "refill_number" => 0,
+                "dose" => "2.5mg",
+                "shopify_variant_gid" =>
+                    "gid://shopify/ProductVariant/41902912897120",
+                "chargebee_item_price_id" => "41902912897120-GBP-Monthly",
+            ],
+        ];
+
+        $prescription = $this->createMockPrescription(2, $shortSchedule);
 
         $variantId = $this->getProductVariantMethod->invoke(
             $this->job,
@@ -139,7 +149,7 @@ class CreateInitialShopifyOrderJobTest extends TestCase
 
         $this->assertNull(
             $variantId,
-            "Renewal with 0 refills remaining should return null (out of bounds)",
+            "Should return null when calculated dose index is out of bounds",
         );
     }
 
@@ -176,12 +186,11 @@ class CreateInitialShopifyOrderJobTest extends TestCase
     {
         // Test the complete workflow described by the user:
 
-        // Scenario 1: refills = 2
+        // Scenario 1: Started with refills = 2, decremented to 1
         // - Order should be for 5.0mg (dose index 1)
         // - After ordering, dose will progress to 7.5mg (dose index 2)
-        // - Refills will be decremented to 1
 
-        $prescription1 = $this->createMockPrescription(2);
+        $prescription1 = $this->createMockPrescription(1);
         $variantForOrder1 = $this->getProductVariantMethod->invoke(
             $this->job,
             $prescription1,
@@ -191,15 +200,14 @@ class CreateInitialShopifyOrderJobTest extends TestCase
         $this->assertEquals(
             "gid://shopify/ProductVariant/41902912929888",
             $variantForOrder1,
-            "Should order 5.0mg when refills = 2",
+            "Should order 5.0mg when refills = 1 (after decrementing from 2)",
         );
 
-        // Scenario 2: refills = 1 (after decrementing from scenario 1)
+        // Scenario 2: Started with refills = 1, decremented to 0
         // - Order should be for 7.5mg (dose index 2)
         // - No next dose to progress to
-        // - Refills will be decremented to 0
 
-        $prescription2 = $this->createMockPrescription(1);
+        $prescription2 = $this->createMockPrescription(0);
         $variantForOrder2 = $this->getProductVariantMethod->invoke(
             $this->job,
             $prescription2,
@@ -209,7 +217,7 @@ class CreateInitialShopifyOrderJobTest extends TestCase
         $this->assertEquals(
             "gid://shopify/ProductVariant/41902912962656",
             $variantForOrder2,
-            "Should order 7.5mg when refills = 1",
+            "Should order 7.5mg when refills = 0 (after decrementing from 1)",
         );
     }
 

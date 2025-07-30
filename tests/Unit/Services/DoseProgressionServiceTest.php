@@ -58,11 +58,11 @@ class DoseProgressionServiceTest extends TestCase
     }
 
     /** @test */
-    public function it_calculates_current_dose_index_correctly_with_2_refills_remaining()
+    public function it_calculates_current_dose_index_correctly_with_1_refill_remaining()
     {
-        // When refills = 2, we should be on dose index 1 (5.0mg)
-        // maxRefill = 2, refillsRemaining = 2, refillNumberCurrent = 2 - 2 + 1 = 1
-        $prescription = $this->createMockPrescription(2);
+        // Started with 2 refills, decremented to 1, we just ordered dose index 1 (5.0mg)
+        // maxRefill = 2, refillsRemaining = 1, refillNumberCurrent = 2 - 1 = 1
+        $prescription = $this->createMockPrescription(1);
 
         $currentDoseIndex = $this->service->calculateCurrentDoseIndex(
             $prescription,
@@ -71,34 +71,43 @@ class DoseProgressionServiceTest extends TestCase
         $this->assertEquals(
             1,
             $currentDoseIndex,
-            "With 2 refills remaining, current dose index should be 1 (5.0mg)",
-        );
-    }
-
-    /** @test */
-    public function it_calculates_current_dose_index_correctly_with_1_refill_remaining()
-    {
-        // When refills = 1, we should be on dose index 2 (7.5mg)
-        // maxRefill = 2, refillsRemaining = 1, refillNumberCurrent = 2 - 1 + 1 = 2
-        $prescription = $this->createMockPrescription(1);
-
-        $currentDoseIndex = $this->service->calculateCurrentDoseIndex(
-            $prescription,
-        );
-
-        $this->assertEquals(
-            2,
-            $currentDoseIndex,
-            "With 1 refill remaining, current dose index should be 2 (7.5mg)",
+            "With 1 refill remaining, current dose index should be 1 (5.0mg)",
         );
     }
 
     /** @test */
     public function it_calculates_current_dose_index_correctly_with_0_refills_remaining()
     {
-        // When refills = 0, we should be past the end of the schedule
-        // maxRefill = 2, refillsRemaining = 0, refillNumberCurrent = 2 - 0 + 1 = 3 (out of bounds)
+        // Started with 1 refill, decremented to 0, we just ordered dose index 2 (7.5mg)
+        // maxRefill = 2, refillsRemaining = 0, refillNumberCurrent = 2 - 0 = 2
         $prescription = $this->createMockPrescription(0);
+
+        $currentDoseIndex = $this->service->calculateCurrentDoseIndex(
+            $prescription,
+        );
+
+        $this->assertEquals(
+            2,
+            $currentDoseIndex,
+            "With 0 refills remaining, current dose index should be 2 (7.5mg)",
+        );
+    }
+
+    /** @test */
+    public function it_handles_out_of_bounds_refills()
+    {
+        // Edge case: if refills somehow goes beyond the schedule
+        // Create a prescription with only 1 dose but 2 refills
+        $shortSchedule = [
+            [
+                "refill_number" => 0,
+                "dose" => "2.5mg",
+                "shopify_variant_gid" =>
+                    "gid://shopify/ProductVariant/41902912897120",
+                "chargebee_item_price_id" => "41902912897120-GBP-Monthly",
+            ],
+        ];
+        $prescription = $this->createMockPrescription(2, $shortSchedule);
 
         $currentDoseIndex = $this->service->calculateCurrentDoseIndex(
             $prescription,
@@ -106,43 +115,43 @@ class DoseProgressionServiceTest extends TestCase
 
         $this->assertNull(
             $currentDoseIndex,
-            "With 0 refills remaining, current dose index should be null (past end of schedule)",
-        );
-    }
-
-    /** @test */
-    public function it_calculates_next_dose_index_correctly_with_2_refills_remaining()
-    {
-        // Current dose index = 1, next should be 2
-        $prescription = $this->createMockPrescription(2);
-
-        $nextDoseIndex = $this->service->calculateNextDoseIndex($prescription);
-
-        $this->assertEquals(
-            2,
-            $nextDoseIndex,
-            "With 2 refills remaining, next dose index should be 2 (7.5mg)",
+            "Should return null when calculated dose index is out of bounds",
         );
     }
 
     /** @test */
     public function it_calculates_next_dose_index_correctly_with_1_refill_remaining()
     {
-        // Current dose index = 2, next should be null (end of schedule)
+        // Current dose index = 1, next should be 2
         $prescription = $this->createMockPrescription(1);
+
+        $nextDoseIndex = $this->service->calculateNextDoseIndex($prescription);
+
+        $this->assertEquals(
+            2,
+            $nextDoseIndex,
+            "With 1 refill remaining, next dose index should be 2 (7.5mg)",
+        );
+    }
+
+    /** @test */
+    public function it_calculates_next_dose_index_correctly_with_0_refills_remaining()
+    {
+        // Current dose index = 2, next should be null (end of schedule)
+        $prescription = $this->createMockPrescription(0);
 
         $nextDoseIndex = $this->service->calculateNextDoseIndex($prescription);
 
         $this->assertNull(
             $nextDoseIndex,
-            "With 1 refill remaining, next dose index should be null (end of schedule)",
+            "With 0 refills remaining, next dose index should be null (end of schedule)",
         );
     }
 
     /** @test */
-    public function it_returns_correct_next_dose_info_with_2_refills_remaining()
+    public function it_returns_correct_next_dose_info_with_1_refill_remaining()
     {
-        $prescription = $this->createMockPrescription(2);
+        $prescription = $this->createMockPrescription(1);
 
         $nextDoseInfo = $this->service->getNextDoseInfo($prescription);
 
@@ -157,15 +166,15 @@ class DoseProgressionServiceTest extends TestCase
     }
 
     /** @test */
-    public function it_returns_null_next_dose_info_with_1_refill_remaining()
+    public function it_returns_null_next_dose_info_with_0_refills_remaining()
     {
-        $prescription = $this->createMockPrescription(1);
+        $prescription = $this->createMockPrescription(0);
 
         $nextDoseInfo = $this->service->getNextDoseInfo($prescription);
 
         $this->assertNull(
             $nextDoseInfo,
-            "With 1 refill remaining, there should be no next dose",
+            "With 0 refills remaining, there should be no next dose",
         );
     }
 
@@ -227,19 +236,18 @@ class DoseProgressionServiceTest extends TestCase
     /** @test */
     public function it_calculates_dose_progression_scenario_refills_2_to_1()
     {
-        // Scenario: refills = 2
-        // - Current dose index should be 1 (5.0mg) - this is what we order
+        // Scenario: Started with refills = 2, decremented to 1
+        // - Current dose index should be 1 (5.0mg) - this is what we just ordered
         // - Next dose index should be 2 (7.5mg) - this is what we progress to
-        // - After ordering, refills will be decremented to 1
 
-        $prescription = $this->createMockPrescription(2);
+        $prescription = $this->createMockPrescription(1);
 
         $currentDoseIndex = $this->service->calculateCurrentDoseIndex(
             $prescription,
         );
         $nextDoseInfo = $this->service->getNextDoseInfo($prescription);
 
-        // We should order dose index 1 (5.0mg)
+        // We just ordered dose index 1 (5.0mg)
         $this->assertEquals(1, $currentDoseIndex);
 
         // We should progress to dose index 2 (7.5mg)
@@ -251,19 +259,18 @@ class DoseProgressionServiceTest extends TestCase
     /** @test */
     public function it_calculates_dose_progression_scenario_refills_1_to_0()
     {
-        // Scenario: refills = 1
-        // - Current dose index should be 2 (7.5mg) - this is what we order
+        // Scenario: Started with refills = 1, decremented to 0
+        // - Current dose index should be 2 (7.5mg) - this is what we just ordered
         // - Next dose index should be null - no progression
-        // - After ordering, refills will be decremented to 0
 
-        $prescription = $this->createMockPrescription(1);
+        $prescription = $this->createMockPrescription(0);
 
         $currentDoseIndex = $this->service->calculateCurrentDoseIndex(
             $prescription,
         );
         $nextDoseInfo = $this->service->getNextDoseInfo($prescription);
 
-        // We should order dose index 2 (7.5mg)
+        // We just ordered dose index 2 (7.5mg)
         $this->assertEquals(2, $currentDoseIndex);
 
         // No next dose to progress to

@@ -169,7 +169,11 @@ class DoseProgressionService
 
         $maxRefill = collect($schedule)->max("refill_number") ?? 0;
         $refillsRemaining = $prescription->refills ?? 0;
-        $refillNumberCurrent = $maxRefill - $refillsRemaining + 1;
+
+        // Calculate the dose that was just ordered
+        // Since refills are now decremented BEFORE order creation and dose progression,
+        // the formula directly reflects the dose that was ordered
+        $refillNumberCurrent = $maxRefill - $refillsRemaining;
 
         // Try direct access first (refill_number = array index)
         // Since refill_number corresponds directly to array index, we can access directly

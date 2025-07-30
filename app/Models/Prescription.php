@@ -48,7 +48,7 @@ class Prescription extends Model implements AuditableContract
     {
         return $this->belongsTo(
             Prescription::class,
-            "replaces_prescription_id"
+            "replaces_prescription_id",
         );
     }
 
@@ -59,40 +59,8 @@ class Prescription extends Model implements AuditableContract
     {
         return $this->belongsTo(
             Prescription::class,
-            "replaced_by_prescription_id"
+            "replaced_by_prescription_id",
         );
-    }
-
-    /**
-     * Get the initial dose from the dose schedule
-     */
-    public function getInitialDoseAttribute()
-    {
-        if (
-            empty($this->dose_schedule) ||
-            !isset($this->dose_schedule["doses"][0])
-        ) {
-            return null;
-        }
-
-        return $this->dose_schedule["doses"][0];
-    }
-
-    /**
-     * Get the maintenance/refill doses
-     */
-    public function getRefillDosesAttribute()
-    {
-        if (
-            empty($this->dose_schedule) ||
-            !isset($this->dose_schedule["doses"]) ||
-            count($this->dose_schedule["doses"]) <= 1
-        ) {
-            return [];
-        }
-
-        // Return all doses except the first one
-        return array_slice($this->dose_schedule["doses"], 1);
     }
 
     /**

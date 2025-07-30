@@ -401,17 +401,17 @@ class ChargebeeWebhookController extends Controller
 
         // Only dispatch the job if we actually created a new record (not if it already existed)
         if ($processedOrder->wasRecentlyCreated) {
-            CreateInitialShopifyOrderJob::dispatch(
-                $prescription->id,
-                $invoiceId,
-            );
-
-            // Decrement refills AFTER creating the order so the order uses the correct dose
+            // Decrement refills BEFORE creating the order so the order uses the correct dose
             // Note: Initial orders never decrement refills because
             // the refills count represents the number of ADDITIONAL refills beyond the initial prescription
             if ($shouldDecrementRefills && $prescription->refills > 0) {
                 $prescription->decrement("refills");
             }
+
+            CreateInitialShopifyOrderJob::dispatch(
+                $prescription->id,
+                $invoiceId,
+            );
 
             // Log::info(
             //     "Dispatched CreateRenewalShopifyOrderJob for new recurring order",

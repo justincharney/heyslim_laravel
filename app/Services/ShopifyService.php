@@ -18,32 +18,32 @@ class ShopifyService
         $this->endpoint = config("services.shopify.endpoint");
         $this->accessToken = config("services.shopify.access_token");
         $this->storefrontEndpoint = config(
-            "services.shopify.storefront_endpoint"
+            "services.shopify.storefront_endpoint",
         );
         $this->storefrontAccessToken = config(
-            "services.shopify.storefront_access_token"
+            "services.shopify.storefront_access_token",
         );
     }
 
     // MetafieldsSet mutation
     private const MUTATION_METAFIELDS_SET = <<<GRAPHQL
-mutation metafieldsSet(\$metafields: [MetafieldsSetInput!]!) {
-  metafieldsSet(metafields: \$metafields) {
-    metafields {
-      id
-      key
-      namespace
-      type
-      value
+    mutation metafieldsSet(\$metafields: [MetafieldsSetInput!]!) {
+      metafieldsSet(metafields: \$metafields) {
+        metafields {
+          id
+          key
+          namespace
+          type
+          value
+        }
+        userErrors {
+          field
+          message
+          code
+        }
+      }
     }
-    userErrors {
-      field
-      message
-      code
-    }
-  }
-}
-GRAPHQL;
+    GRAPHQL;
 
     /**
      * Helper function to set multiple metafields on an object (e.g., Order).
@@ -55,7 +55,7 @@ GRAPHQL;
      */
     private function _setMetafields(
         string $ownerGid,
-        array $metafieldsToSet
+        array $metafieldsToSet,
     ): bool {
         if (empty($metafieldsToSet)) {
             return true; // Nothing to set
@@ -138,7 +138,7 @@ GRAPHQL;
      */
     public function setOrderMetafields(
         string $orderGid,
-        array $metafieldsInput
+        array $metafieldsInput,
     ): bool {
         if (strpos($orderGid, "gid://shopify/Order/") !== 0) {
             Log::error("Invalid Order GID provided to setOrderMetafields", [
@@ -158,12 +158,12 @@ GRAPHQL;
      */
     public function uploadGenericFileAndGetUrl(
         string $localFilePath,
-        string $filenameForUpload
+        string $filenameForUpload,
     ): ?string {
         try {
             $uploadResult = $this->stageAndUpload(
                 $localFilePath,
-                $filenameForUpload
+                $filenameForUpload,
             );
             if (isset($uploadResult["resourceUrl"])) {
                 Log::info("File uploaded successfully to Shopify.", [
@@ -177,7 +177,7 @@ GRAPHQL;
                     [
                         "filename" => $filenameForUpload,
                         "result" => $uploadResult,
-                    ]
+                    ],
                 );
                 return null;
             }
@@ -199,17 +199,17 @@ GRAPHQL;
     public function findCustomerByEmail(string $email): ?string
     {
         $query = <<<'GRAPHQL'
-query findCustomerByEmail($emailQuery: String!) {
-  customers(first: 1, query: $emailQuery) {
-    edges {
-      node {
-        id
-        email
-      }
-    }
-  }
-}
-GRAPHQL;
+        query findCustomerByEmail($emailQuery: String!) {
+          customers(first: 1, query: $emailQuery) {
+            edges {
+              node {
+                id
+                email
+              }
+            }
+          }
+        }
+        GRAPHQL;
 
         // Construct the query string for exact email match
         $emailQueryString = "email:'{$email}'";
@@ -265,27 +265,27 @@ GRAPHQL;
         string $firstName,
         string $lastName,
         string $email,
-        string $password
+        string $password,
     ): ?string {
         // Get the client's IP address
         $clientIp = request()->ip();
 
         $mutation = <<<'GRAPHQL'
-mutation customerCreate($input: CustomerCreateInput!) {
-  customerCreate(input: $input) {
-    customer {
-      id
-      email
-      firstName
-      lastName
-    }
-    customerUserErrors {
-      field
-      message
-    }
-  }
-}
-GRAPHQL;
+        mutation customerCreate($input: CustomerCreateInput!) {
+          customerCreate(input: $input) {
+            customer {
+              id
+              email
+              firstName
+              lastName
+            }
+            customerUserErrors {
+              field
+              message
+            }
+          }
+        }
+        GRAPHQL;
 
         $customerInput = [
             "firstName" => $firstName,
@@ -316,7 +316,7 @@ GRAPHQL;
             ) {
                 Log::error(
                     "Shopify customer creation returned errors",
-                    $data["data"]["customerCreate"]["customerUserErrors"]
+                    $data["data"]["customerCreate"]["customerUserErrors"],
                 );
                 return null;
             }
@@ -329,7 +329,7 @@ GRAPHQL;
         } else {
             Log::error(
                 "Shopify API call failed (create customer)",
-                $response->json()
+                $response->json(),
             );
         }
 
@@ -351,17 +351,17 @@ GRAPHQL;
         }
 
         $mutation = <<<'GRAPHQL'
-mutation addTags($id: ID!, $tags: [String!]!) {
-  tagsAdd(id: $id, tags: $tags) {
-    node {
-      id
-    }
-    userErrors {
-      message
-    }
-  }
-}
-GRAPHQL;
+        mutation addTags($id: ID!, $tags: [String!]!) {
+          tagsAdd(id: $id, tags: $tags) {
+            node {
+              id
+            }
+            userErrors {
+              message
+            }
+          }
+        }
+        GRAPHQL;
 
         $response = Http::withHeaders([
             "Content-Type" => "application/json",
@@ -383,7 +383,7 @@ GRAPHQL;
             ) {
                 Log::error(
                     "Shopify tagsAdd mutation returned errors",
-                    $data["data"]["tagsAdd"]["userErrors"]
+                    $data["data"]["tagsAdd"]["userErrors"],
                 );
                 return false;
             }
@@ -397,14 +397,14 @@ GRAPHQL;
             } else {
                 Log::error(
                     "Shopify tagsAdd mutation did not return expected data",
-                    $data
+                    $data,
                 );
                 return false;
             }
         } else {
             Log::error(
                 "Shopify API call failed (tagsAdd mutation)",
-                $response->json()
+                $response->json(),
             );
             return false;
         }
@@ -419,16 +419,16 @@ GRAPHQL;
     public function deleteCustomer(string $customerId): bool
     {
         $mutation = <<<'GRAPHQL'
-mutation customerDelete($input: CustomerDeleteInput!) {
-  customerDelete(input: $input) {
-    deletedCustomerId
-    userErrors {
-      field
-      message
-    }
-  }
-}
-GRAPHQL;
+        mutation customerDelete($input: CustomerDeleteInput!) {
+          customerDelete(input: $input) {
+            deletedCustomerId
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+        GRAPHQL;
 
         $response = Http::withHeaders([
             "Content-Type" => "application/json",
@@ -451,7 +451,7 @@ GRAPHQL;
             ) {
                 Log::error(
                     "Shopify customer deletion returned errors",
-                    $data["data"]["customerDelete"]["userErrors"]
+                    $data["data"]["customerDelete"]["userErrors"],
                 );
                 return false;
             }
@@ -464,14 +464,14 @@ GRAPHQL;
             } else {
                 Log::error(
                     "Shopify customer deletion did not return expected data",
-                    $data
+                    $data,
                 );
                 return false;
             }
         } else {
             Log::error(
                 "Shopify API call failed (customer deletion)",
-                $response->json()
+                $response->json(),
             );
             return false;
         }
@@ -497,7 +497,7 @@ GRAPHQL;
         bool $isSubscription = false,
         ?string $explicitSellingPlanId = null, // Will be used if $isSubscription is true
         ?string $discountCode = null,
-        ?int $prescriptionId = null
+        ?int $prescriptionId = null,
     ): ?array {
         $clientIp = request()->ip();
         $finalVariantId = $merchandiseId; // By default, merchandiseId is the variant for subscriptions or a product GID for one-time
@@ -511,7 +511,7 @@ GRAPHQL;
                     "Failed to get variant ID for product (one-time purchase)",
                     [
                         "product_id" => $merchandiseId,
-                    ]
+                    ],
                 );
                 return null;
             }
@@ -538,7 +538,7 @@ GRAPHQL;
             $clientIp,
             $quantity,
             $discountCode,
-            $prescriptionId
+            $prescriptionId,
         );
     }
 
@@ -552,22 +552,22 @@ GRAPHQL;
     public function getCustomerAccessToken(
         string $email,
         string $password,
-        string $clientIp
+        string $clientIp,
     ): ?string {
         $mutation = <<<'GRAPHQL'
-mutation customerAccessTokenCreate($input: CustomerAccessTokenCreateInput!) {
-  customerAccessTokenCreate(input: $input) {
-    customerAccessToken {
-      accessToken
-      expiresAt
-    }
-    customerUserErrors {
-      field
-      message
-    }
-  }
-}
-GRAPHQL;
+        mutation customerAccessTokenCreate($input: CustomerAccessTokenCreateInput!) {
+          customerAccessTokenCreate(input: $input) {
+            customerAccessToken {
+              accessToken
+              expiresAt
+            }
+            customerUserErrors {
+              field
+              message
+            }
+          }
+        }
+        GRAPHQL;
 
         $response = Http::withHeaders([
             "Content-Type" => "application/json",
@@ -590,7 +590,7 @@ GRAPHQL;
                 isset(
                     $data["data"]["customerAccessTokenCreate"][
                         "customerUserErrors"
-                    ]
+                    ],
                 ) &&
                 !empty(
                     $data["data"]["customerAccessTokenCreate"][
@@ -602,7 +602,7 @@ GRAPHQL;
                     "Shopify customer access token creation returned errors",
                     $data["data"]["customerAccessTokenCreate"][
                         "customerUserErrors"
-                    ]
+                    ],
                 );
                 return null;
             }
@@ -611,7 +611,7 @@ GRAPHQL;
                 isset(
                     $data["data"]["customerAccessTokenCreate"][
                         "customerAccessToken"
-                    ]["accessToken"]
+                    ]["accessToken"],
                 )
             ) {
                 return $data["data"]["customerAccessTokenCreate"][
@@ -620,13 +620,13 @@ GRAPHQL;
             } else {
                 Log::error(
                     "Shopify customer access token not found in response",
-                    $data
+                    $data,
                 );
             }
         } else {
             Log::error(
                 "Shopify API call failed (customer access token creation)",
-                $response->json()
+                $response->json(),
             );
         }
 
@@ -644,24 +644,24 @@ GRAPHQL;
         string $cartId,
         string $customerAccessToken,
         string $email,
-        string $customerIp
+        string $customerIp,
     ): bool {
         $mutation = <<<'GRAPHQL'
-mutation cartBuyerIdentityUpdate($buyerIdentity: CartBuyerIdentityInput!, $cartId: ID!) {
-  cartBuyerIdentityUpdate(buyerIdentity: $buyerIdentity, cartId: $cartId) {
-    cart {
-      id
-      buyerIdentity {
-          email
-      }
-    }
-    userErrors {
-      field
-      message
-    }
-  }
-}
-GRAPHQL;
+        mutation cartBuyerIdentityUpdate($buyerIdentity: CartBuyerIdentityInput!, $cartId: ID!) {
+          cartBuyerIdentityUpdate(buyerIdentity: $buyerIdentity, cartId: $cartId) {
+            cart {
+              id
+              buyerIdentity {
+                  email
+              }
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+        GRAPHQL;
 
         $response = Http::withHeaders([
             "Content-Type" => "application/json",
@@ -688,7 +688,7 @@ GRAPHQL;
             ) {
                 Log::error(
                     "Shopify cart buyer identity update returned errors",
-                    $data["data"]["cartBuyerIdentityUpdate"]["userErrors"]
+                    $data["data"]["cartBuyerIdentityUpdate"]["userErrors"],
                 );
                 return false;
             }
@@ -697,7 +697,7 @@ GRAPHQL;
                 isset(
                     $data["data"]["cartBuyerIdentityUpdate"]["cart"][
                         "buyerIdentity"
-                    ]["email"]
+                    ]["email"],
                 )
             ) {
                 // Return true
@@ -708,7 +708,7 @@ GRAPHQL;
         } else {
             Log::error(
                 "Shopify API call failed (cart buyer identity update)",
-                $response->json()
+                $response->json(),
             );
         }
 
@@ -725,25 +725,25 @@ GRAPHQL;
         string $clientIp,
         int $quantity = 1,
         ?string $discountCode = null,
-        ?int $prescriptionId = null
+        ?int $prescriptionId = null,
     ): ?array {
         $mutation = <<<'GRAPHQL'
-mutation cartCreate($input: CartInput!) {
-  cartCreate(input: $input) {
-    cart {
-      id
-      checkoutUrl
-      discountCodes {
-        code
-      }
-    }
-    userErrors {
-      field
-      message
-    }
-  }
-}
-GRAPHQL;
+        mutation cartCreate($input: CartInput!) {
+          cartCreate(input: $input) {
+            cart {
+              id
+              checkoutUrl
+              discountCodes {
+                code
+              }
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+        GRAPHQL;
 
         $lineItem = [
             "merchandiseId" => $variantId,
@@ -811,7 +811,7 @@ GRAPHQL;
             ) {
                 Log::error(
                     "Shopify cart creation returned errors",
-                    $data["data"]["cartCreate"]["userErrors"]
+                    $data["data"]["cartCreate"]["userErrors"],
                 );
                 return null;
             }
@@ -823,28 +823,102 @@ GRAPHQL;
             } else {
                 Log::error(
                     "Shopify cart structure not found in response",
-                    $data
+                    $data,
                 );
             }
         } else {
             Log::error(
                 "Shopify API call to create cart failed",
-                $response->json()
+                $response->json(),
             );
         }
         return null;
     }
 
-    // Get the cart
+    /**
+     * Create a Shopify order directly via Admin API
+     */
+    public function createOrder(array $orderData): ?array
+    {
+        $mutation = <<<'GRAPHQL'
+        mutation orderCreate($order: OrderCreateOrderInput!) {
+          orderCreate(order: $order) {
+            order {
+              id
+              name
+              totalPriceSet {
+                shopMoney {
+                  amount
+                  currencyCode
+                }
+              }
+              customer {
+                id
+                email
+              }
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+        GRAPHQL;
+
+        $response = Http::withHeaders([
+            "Content-Type" => "application/json",
+            "X-Shopify-Access-Token" => $this->accessToken,
+        ])->post($this->endpoint, [
+            "query" => $mutation,
+            "variables" => ["order" => $orderData],
+        ]);
+
+        if ($response->successful()) {
+            $data = $response->json();
+
+            if (
+                isset($data["data"]["orderCreate"]["userErrors"]) &&
+                !empty($data["data"]["orderCreate"]["userErrors"])
+            ) {
+                Log::error(
+                    "Shopify order creation returned errors",
+                    $data["data"]["orderCreate"]["userErrors"],
+                );
+                return null;
+            }
+
+            if (isset($data["data"]["orderCreate"]["order"])) {
+                Log::info("Successfully created Shopify order", [
+                    "order_id" => $data["data"]["orderCreate"]["order"]["id"],
+                    "order_name" =>
+                        $data["data"]["orderCreate"]["order"]["name"],
+                ]);
+                return $data["data"]["orderCreate"]["order"];
+            } else {
+                Log::error(
+                    "Shopify order structure not found in response",
+                    $data,
+                );
+            }
+        } else {
+            Log::error("Shopify API call to create order failed", [
+                "status" => $response->status(),
+                "response" => $response->json(),
+            ]);
+        }
+
+        return null;
+    }
+
     private function getCart(string $cartId, string $clientIp): ?array
     {
         $query = <<<'GRAPHQL'
-query checkoutUrl($cartId: ID!) {
-    cart(id: $cartId){
-        checkoutUrl
-    }
-}
-GRAPHQL;
+        query checkoutUrl($cartId: ID!) {
+            cart(id: $cartId){
+                checkoutUrl
+            }
+        }
+        GRAPHQL;
 
         $response = Http::withHeaders([
             "Content-Type" => "application/json",
@@ -873,18 +947,18 @@ GRAPHQL;
     private function getFirstProductVariantId(string $productId): ?string
     {
         $query = <<<'GRAPHQL'
-query getProductVariants($productId: ID!) {
-  product(id: $productId) {
-    variants(first: 1) {
-      edges {
-        node {
-          id
+        query getProductVariants($productId: ID!) {
+          product(id: $productId) {
+            variants(first: 1) {
+              edges {
+                node {
+                  id
+                }
+              }
+            }
+          }
         }
-      }
-    }
-  }
-}
-GRAPHQL;
+        GRAPHQL;
 
         $response = Http::withHeaders([
             "Content-Type" => "application/json",
@@ -902,7 +976,7 @@ GRAPHQL;
                 isset(
                     $data["data"]["product"]["variants"]["edges"][0]["node"][
                         "id"
-                    ]
+                    ],
                 )
             ) {
                 return $data["data"]["product"]["variants"]["edges"][0]["node"][
@@ -920,25 +994,25 @@ GRAPHQL;
     private function getFirstSellingPlanId(string $productId): ?string
     {
         $query = <<<'GRAPHQL'
-query getSellingPlans($productId: ID!) {
-  product(id: $productId) {
-    sellingPlanGroups(first: 1) {
-      edges {
-        node {
-          sellingPlans(first: 1) {
-            edges {
-              node {
-                id
-                name
+        query getSellingPlans($productId: ID!) {
+          product(id: $productId) {
+            sellingPlanGroups(first: 1) {
+              edges {
+                node {
+                  sellingPlans(first: 1) {
+                    edges {
+                      node {
+                        id
+                        name
+                      }
+                    }
+                  }
+                }
               }
             }
           }
         }
-      }
-    }
-  }
-}
-GRAPHQL;
+        GRAPHQL;
 
         $response = Http::withHeaders([
             "Content-Type" => "application/json",
@@ -956,7 +1030,7 @@ GRAPHQL;
                 isset(
                     $data["data"]["product"]["sellingPlanGroups"]["edges"][0][
                         "node"
-                    ]["sellingPlans"]["edges"][0]["node"]["id"]
+                    ]["sellingPlans"]["edges"][0]["node"]["id"],
                 )
             ) {
                 return $data["data"]["product"]["sellingPlanGroups"][
@@ -968,7 +1042,7 @@ GRAPHQL;
                     [
                         "product_id" => $productId,
                         "response" => $data,
-                    ]
+                    ],
                 );
             }
         } else {
@@ -995,29 +1069,29 @@ GRAPHQL;
 
         try {
             $cancelMutation = <<<'GRAPHQL'
-mutation orderCancel($orderId: ID!, $reason: OrderCancelReason!, $notifyCustomer: Boolean, $refund: Boolean!, $restock: Boolean!, $staffNote: String) {
-  orderCancel(
-    orderId: $orderId,
-    reason: $reason,
-    notifyCustomer: $notifyCustomer,
-    refund: $refund,
-    restock: $restock,
-    staffNote: $staffNote
-  ) {
-    job {
-      id
-    }
-    orderCancelUserErrors {
-      field
-      message
-    }
-    userErrors {
-      field
-      message
-    }
-  }
-}
-GRAPHQL;
+            mutation orderCancel($orderId: ID!, $reason: OrderCancelReason!, $notifyCustomer: Boolean, $refund: Boolean!, $restock: Boolean!, $staffNote: String) {
+              orderCancel(
+                orderId: $orderId,
+                reason: $reason,
+                notifyCustomer: $notifyCustomer,
+                refund: $refund,
+                restock: $restock,
+                staffNote: $staffNote
+              ) {
+                job {
+                  id
+                }
+                orderCancelUserErrors {
+                  field
+                  message
+                }
+                userErrors {
+                  field
+                  message
+                }
+              }
+            }
+            GRAPHQL;
 
             $cancelResponse = Http::withHeaders([
                 "Content-Type" => "application/json",
@@ -1049,7 +1123,7 @@ GRAPHQL;
                 (isset($cancelData["data"]["orderCancel"]["userErrors"]) &&
                     !empty($cancelData["data"]["orderCancel"]["userErrors"])) ||
                 (isset(
-                    $cancelData["data"]["orderCancel"]["orderCancelUserErrors"]
+                    $cancelData["data"]["orderCancel"]["orderCancelUserErrors"],
                 ) &&
                     !empty(
                         $cancelData["data"]["orderCancel"][
@@ -1092,12 +1166,12 @@ GRAPHQL;
      */
     public function attachPrescriptionLabelToOrder(
         Prescription $prescription,
-        string $orderGid
+        string $orderGid,
     ): bool {
         if (strpos($orderGid, "gid://shopify/Order/") !== 0) {
             Log::error(
                 "Invalid Order GID provided to attachPrescriptionLabelToOrder",
-                ["order_gid" => $orderGid]
+                ["order_gid" => $orderGid],
             );
             return false;
         }
@@ -1108,7 +1182,7 @@ GRAPHQL;
         if (!$patient || !$prescriber) {
             Log::error(
                 "Patient or Prescriber data missing for prescription label.",
-                ["prescription_id" => $prescription->id]
+                ["prescription_id" => $prescription->id],
             );
             return false;
         }
@@ -1178,13 +1252,13 @@ GRAPHQL;
     public function attachPrescriptionToOrder(
         string $orderId,
         string $filePath,
-        string $note = ""
+        string $note = "",
     ): bool {
         return $this->attachFileToOrder(
             $orderId,
             $filePath,
             "prescription",
-            $note
+            $note,
         );
     }
 
@@ -1195,12 +1269,12 @@ GRAPHQL;
         string $orderId,
         string $filePath,
         string $metaKey,
-        string $note = ""
+        string $note = "",
     ): bool {
         if (empty($orderId) || !file_exists($filePath)) {
             Log::warning(
                 "Invalid params for attaching file",
-                compact("orderId", "filePath")
+                compact("orderId", "filePath"),
             );
             return false;
         }
@@ -1220,7 +1294,7 @@ GRAPHQL;
         $fileGid = $this->createShopifyFile(
             $filePath,
             $stage["resourceUrl"],
-            $note
+            $note,
         );
         if (!$fileGid) {
             return false;
@@ -1229,12 +1303,12 @@ GRAPHQL;
         // 3) orderUpdate metafield
         $formattedOrderId = $this->formatGid($orderId);
         $mutation = <<<'GRAPHQL'
-mutation updateOrderMetafields($input: OrderInput!) {
-  orderUpdate(input: $input) {
-    userErrors { field message }
-  }
-}
-GRAPHQL;
+        mutation updateOrderMetafields($input: OrderInput!) {
+          orderUpdate(input: $input) {
+            userErrors { field message }
+          }
+        }
+        GRAPHQL;
 
         $resp = Http::withHeaders([
             "Content-Type" => "application/json",
@@ -1260,7 +1334,7 @@ GRAPHQL;
         if (!empty($errors)) {
             Log::error(
                 "Shopify errors updating order metafield",
-                compact("errors")
+                compact("errors"),
             );
             return false;
         }
@@ -1277,16 +1351,16 @@ GRAPHQL;
     private function stageAndUpload(string $filePath, string $bytes): array
     {
         $stageMutation = <<<'GRAPHQL'
-mutation stagedUploadsCreate($input: [StagedUploadInput!]!) {
-  stagedUploadsCreate(input: $input) {
-    stagedTargets {
-      url
-      resourceUrl
-    }
-    userErrors { field message }
-  }
-}
-GRAPHQL;
+        mutation stagedUploadsCreate($input: [StagedUploadInput!]!) {
+          stagedUploadsCreate(input: $input) {
+            stagedTargets {
+              url
+              resourceUrl
+            }
+            userErrors { field message }
+          }
+        }
+        GRAPHQL;
 
         $filename = basename($filePath);
 
@@ -1360,16 +1434,16 @@ GRAPHQL;
     private function createShopifyFile(
         string $filePath,
         string $resourceUrl,
-        string $note
+        string $note,
     ): ?string {
         $fileCreateMutation = <<<'GRAPHQL'
-mutation fileCreate($files: [FileCreateInput!]!) {
-  fileCreate(files: $files) {
-    files { id }
-    userErrors { field message }
-  }
-}
-GRAPHQL;
+        mutation fileCreate($files: [FileCreateInput!]!) {
+          fileCreate(files: $files) {
+            files { id }
+            userErrors { field message }
+          }
+        }
+        GRAPHQL;
 
         $filename = basename($filePath);
 
@@ -1413,7 +1487,7 @@ GRAPHQL;
      */
     public function formatGid(
         string $id,
-        string $resourceType = "Order"
+        string $resourceType = "Order",
     ): string {
         // If already in gid format, return as is
         if (strpos($id, "gid://") === 0) {

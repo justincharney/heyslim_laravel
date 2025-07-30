@@ -9,5 +9,5 @@ class ProcessedRecurringOrder extends Model
 {
     use HasFactory;
 
-    protected $fillable = ["shopify_order_id", "prescription_id"];
+    protected $fillable = ["prescription_id", "chargebee_invoice_id"];
 }
