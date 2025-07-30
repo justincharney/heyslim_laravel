@@ -227,6 +227,36 @@ class ChargebeeWebhookController extends Controller
                 // Log::info("Created new local subscription from payment.", [
                 //     "subscription_id" => $localSubscription->id,
                 // ]);
+            } elseif ($localSubscription && $subscriptionData) {
+                // Update existing subscription with fresh webhook data
+                $chargebeeItemPriceId =
+                    $subscriptionData["subscription_items"][0][
+                        "item_price_id"
+                    ] ?? $localSubscription->chargebee_item_price_id;
+
+                $localSubscription->update([
+                    "chargebee_item_price_id" => $chargebeeItemPriceId,
+                    "status" => strtolower($subscriptionData["status"]),
+                    "next_charge_scheduled_at" => isset(
+                        $subscriptionData["next_billing_at"],
+                    )
+                        ? date(
+                            "Y-m-d H:i:s",
+                            $subscriptionData["next_billing_at"],
+                        )
+                        : null,
+                ]);
+
+                // Log::info(
+                //     "Updated existing subscription from payment webhook",
+                //     [
+                //         "subscription_id" => $localSubscription->id,
+                //         "chargebee_subscription_id" => $subscriptionData["id"],
+                //         "status" => $subscriptionData["status"],
+                //         "next_billing_at" =>
+                //             $subscriptionData["next_billing_at"] ?? null,
+                //     ],
+                // );
             } elseif (!$localSubscription) {
                 // If we still don't have a subscription, we can't proceed.
                 throw new \Exception(
