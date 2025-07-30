@@ -11,8 +11,8 @@ Artisan::command("inspire", function () {
 // Schedule commands
 // Schedule::command("telescope:prune --hours=48")->daily();
 Schedule::command("app:check-unread-messages")->everyFifteenMinutes();
-Schedule::command("app:validate-subscription-renewals")->twiceDaily();
-Schedule::command("app:sync-recharge-subscriptions")->daily();
+Schedule::command("app:validate-subscription-renewals --use-api")->twiceDaily();
+// Schedule::command("app:sync-recharge-subscriptions")->daily();
 Schedule::command("app:generate-and-notify-check-ins")->daily();
 Schedule::command("app:mark-overdue-check-ins-as-skipped")->daily();
 // Schedule::command("horizon:snapshot")->everyFiveMinutes();
