@@ -171,10 +171,19 @@ class DoseProgressionService
         $refillsRemaining = $prescription->refills ?? 0;
         $refillNumberCurrent = $maxRefill - $refillsRemaining + 1;
 
-        // Find the dose index that matches the current refill number (just ordered)
-        foreach ($schedule as $index => $dose) {
-            if ($dose["refill_number"] === $refillNumberCurrent) {
-                return $index;
+        // Try direct access first (refill_number = array index)
+        // Since refill_number corresponds directly to array index, we can access directly
+        if (
+            $refillNumberCurrent >= 0 &&
+            $refillNumberCurrent < count($schedule)
+        ) {
+            // Verify the refill_number matches what we expect
+            if (
+                isset($schedule[$refillNumberCurrent]) &&
+                $schedule[$refillNumberCurrent]["refill_number"] ===
+                    $refillNumberCurrent
+            ) {
+                return $refillNumberCurrent;
             }
         }
 

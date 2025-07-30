@@ -280,12 +280,15 @@ class CreateInitialShopifyOrderJob implements ShouldQueue
                 $refillsRemaining = $prescription->refills ?? 0;
                 $refillNumberToOrder = $maxRefill - $refillsRemaining + 1;
 
-                // Find the dose index that matches the refill number we're ordering
-                foreach ($doseSchedule as $index => $dose) {
-                    if ($dose["refill_number"] === $refillNumberToOrder) {
-                        $doseIndex = $index;
-                        break;
-                    }
+                // Since refill_number corresponds to array index, access directly
+                if (
+                    $refillNumberToOrder >= 0 &&
+                    $refillNumberToOrder < count($doseSchedule) &&
+                    isset($doseSchedule[$refillNumberToOrder]) &&
+                    $doseSchedule[$refillNumberToOrder]["refill_number"] ===
+                        $refillNumberToOrder
+                ) {
+                    $doseIndex = $refillNumberToOrder;
                 }
 
                 Log::info("Renewal order dose calculation", [
