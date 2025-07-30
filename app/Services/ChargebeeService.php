@@ -184,14 +184,14 @@ class ChargebeeService
     }
 
     /**
-     * Create a consultation checkout
+     * Create a GLP1 checkout
      *
      * @param User $customer
      * @param string $planId
      * @param array $additionalParams
      * @return array|null
      */
-    public function createConsultationCheckout(
+    public function createGLP1Checkout(
         User $customer,
         string $planId,
         array $additionalParams = [],
@@ -214,6 +214,81 @@ class ChargebeeService
         $params = array_merge($params, $additionalParams);
 
         return $this->createHostedCheckout($params);
+    }
+
+    /**
+     * Create a consultation checkout for one-time charge
+     *
+     * @param User $customer
+     * @param string $priceId
+     * @param array $additionalParams
+     * @return array|null
+     */
+    public function createConsultationCheckout(
+        User $customer,
+        string $priceId,
+        array $additionalParams = [],
+    ): ?array {
+        return $this->createOneTimeChargeCheckout(
+            $customer,
+            $priceId,
+            $additionalParams,
+        );
+    }
+
+    /**
+     * Create a one-time charge checkout for charges (not subscriptions)
+     *
+     * @param User $customer
+     * @param string $priceId
+     * @param array $additionalParams
+     * @return array|null
+     */
+    public function createOneTimeChargeCheckout(
+        User $customer,
+        string $priceId,
+        array $additionalParams = [],
+    ): ?array {
+        $endpoint = "{$this->baseUrl}/hosted_pages/checkout_one_time_for_items";
+
+        $params = [
+            "customer[id]" => $this->getChargebeeCustomerId($customer),
+            "customer[first_name]" => $this->getFirstName($customer->name),
+            "customer[last_name]" => $this->getLastName($customer->name),
+            "customer[email]" => $customer->email,
+            "customer[phone]" => $customer->phone_number,
+            "item_prices[item_price_id][0]" => $priceId,
+            "item_prices[quantity][0]" => 1,
+            "redirect_url" =>
+                config("app.frontend_url") . "/consultation-success",
+            "cancel_url" =>
+                config("app.frontend_url") . "/consultation-cancelled",
+        ];
+
+        $params = array_merge($params, $additionalParams);
+
+        try {
+            $response = Http::withBasicAuth($this->apiKey, "")
+                ->asForm()
+                ->post($endpoint, $params);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                return $data["hosted_page"] ?? null;
+            }
+
+            Log::error("Failed to create one-time charge checkout", [
+                "status" => $response->status(),
+                "response" => $response->body(),
+            ]);
+
+            return null;
+        } catch (\Exception $e) {
+            Log::error(
+                "Error creating one-time charge checkout: " . $e->getMessage(),
+            );
+            throw $e;
+        }
     }
 
     /**
@@ -265,14 +340,14 @@ class ChargebeeService
     ): bool {
         try {
             $params = [
-                "end_of_term" => $endOfTerm ? "true" : "false",
+                "cancel_option" => $endOfTerm ? "end_of_term" : "immediately",
                 "cancel_reason_code" => $reason,
             ];
 
             $response = Http::withBasicAuth($this->apiKey, "")
                 ->asForm()
                 ->post(
-                    "{$this->baseUrl}/subscriptions/{$subscriptionId}/cancel",
+                    "{$this->baseUrl}/subscriptions/{$subscriptionId}/cancel_for_items",
                     $params,
                 );
 
@@ -410,28 +485,41 @@ class ChargebeeService
         try {
             $startDate = Carbon::today();
             $endDate = Carbon::today()->addDays($daysOut);
+            $allRenewals = [];
+            $offset = null;
 
-            $response = Http::withBasicAuth($this->apiKey, "")->get(
-                "{$this->baseUrl}/subscriptions",
-                [
+            do {
+                $params = [
                     "status[is]" => "active",
                     "next_billing_at[after]" => $startDate->timestamp,
                     "next_billing_at[before]" => $endDate->timestamp,
                     "limit" => 100,
-                ],
-            );
+                ];
 
-            if ($response->successful()) {
-                $data = $response->json();
-                return $data["list"] ?? [];
-            }
+                if ($offset) {
+                    $params["offset"] = $offset;
+                }
 
-            Log::error("Failed to get upcoming Chargebee renewals", [
-                "status" => $response->status(),
-                "response" => $response->json(),
-            ]);
+                $response = Http::withBasicAuth($this->apiKey, "")->get(
+                    "{$this->baseUrl}/subscriptions",
+                    $params,
+                );
 
-            return [];
+                if ($response->successful()) {
+                    $data = $response->json();
+                    $renewals = $data["list"] ?? [];
+                    $allRenewals = array_merge($allRenewals, $renewals);
+                    $offset = $data["next_offset"] ?? null;
+                } else {
+                    Log::error("Failed to get upcoming Chargebee renewals", [
+                        "status" => $response->status(),
+                        "response" => $response->json(),
+                    ]);
+                    break;
+                }
+            } while ($offset);
+
+            return $allRenewals;
         } catch (\Exception $e) {
             Log::error("Exception getting upcoming Chargebee renewals", [
                 "error" => $e->getMessage(),

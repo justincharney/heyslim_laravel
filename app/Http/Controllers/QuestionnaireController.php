@@ -584,7 +584,8 @@ class QuestionnaireController extends Controller
 
         // Create Chargebee checkout for GLP-1 Introductory Offer
         try {
-            $glp1PlanId = "7465388179552-GBP-Monthly"; // GLP-1 Introductory Offer item price ID
+            $glp1PlanId =
+                ShopifyProductMapping::$chargebeeGLP1IntroOfferPriceId;
 
             $checkoutData = [
                 "subscription[cf_questionnaire_submission_id]" =>
@@ -592,7 +593,7 @@ class QuestionnaireController extends Controller
                 "subscription[cf_user_id]" => $user->id,
             ];
 
-            $hostedPage = $this->chargebeeService->createConsultationCheckout(
+            $hostedPage = $this->chargebeeService->createGLP1Checkout(
                 $user,
                 $glp1PlanId,
                 $checkoutData,
