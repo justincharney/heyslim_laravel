@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\CreateInitialShopifyOrderJob;
-use App\Jobs\CreateRenewalShopifyOrderJob;
+
 use App\Jobs\UpdateSubscriptionDoseJob;
 use App\Models\Prescription;
 use App\Models\ProcessedRecurringOrder;
@@ -29,95 +29,6 @@ class ChargebeeWebhookController extends Controller
     ) {
         $this->chargebeeService = $chargebeeService;
         $this->shopifyService = $shopifyService;
-    }
-
-    /**
-     * Handle subscription created webhook
-     */
-    public function subscriptionCreated(Request $request)
-    {
-        $data = $request->json()->all();
-        $subscription = $data["content"]["subscription"] ?? null;
-        $customer = $data["content"]["customer"] ?? null;
-
-        if (!$subscription || !$customer) {
-            Log::error(
-                "Chargebee subscription created webhook missing data",
-                $data,
-            );
-            return response()->json(
-                ["error" => "Missing subscription or customer data"],
-                400,
-            );
-        }
-
-        try {
-            DB::beginTransaction();
-
-            $user = User::where("email", $customer["email"])->first();
-
-            if (!$user) {
-                Log::error("User not found for Chargebee subscription", [
-                    "email" => $customer["email"],
-                    "subscription_id" => $subscription["id"],
-                ]);
-                DB::rollBack();
-                return response()->json(["error" => "User not found"], 404);
-            }
-
-            $questionnaireSubmissionId =
-                $subscription["cf_questionnaire_submission_id"] ?? null;
-            if (!$questionnaireSubmissionId) {
-                Log::error(
-                    "Questionnaire submission ID not found for Chargebee subscription",
-                    [
-                        "email" => $customer["email"],
-                        "subscription_id" => $subscription["id"],
-                        "webhook_data" => $data,
-                    ],
-                );
-                DB::rollBack();
-                return response()->json(
-                    ["error" => "Questionnaire submission ID not found"],
-                    400,
-                );
-            }
-
-            $chargebeeItemPriceId =
-                $subscription["subscription_items"][0]["item_price_id"] ?? null;
-
-            Subscription::updateOrCreate(
-                ["chargebee_subscription_id" => $subscription["id"]],
-                [
-                    "chargebee_customer_id" => $customer["id"],
-                    "user_id" => $user->id,
-                    "questionnaire_submission_id" => $questionnaireSubmissionId,
-                    "chargebee_item_price_id" => $chargebeeItemPriceId,
-                    "status" => strtolower($subscription["status"]),
-                    "next_charge_scheduled_at" => isset(
-                        $subscription["next_billing_at"],
-                    )
-                        ? date("Y-m-d H:i:s", $subscription["next_billing_at"])
-                        : null,
-                ],
-            );
-
-            DB::commit();
-
-            return response()->json([
-                "message" => "Subscription created successfully",
-            ]);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error("Error processing Chargebee subscription created", [
-                "subscription_id" => $subscription["id"] ?? "unknown",
-                "error" => $e->getMessage(),
-            ]);
-            return response()->json(
-                ["error" => "Error processing subscription"],
-                500,
-            );
-        }
     }
 
     /**
@@ -251,6 +162,17 @@ class ChargebeeWebhookController extends Controller
         $data = $request->json()->all();
         $subscriptionData = $data["content"]["subscription"] ?? null;
         $customerData = $data["content"]["customer"] ?? null;
+        $invoiceData = $data["content"]["invoice"] ?? null;
+
+        if (!$invoiceData || !isset($invoiceData["id"])) {
+            Log::error(
+                "Chargebee payment succeeded webhook missing invoice data",
+                $data,
+            );
+            return response()->json(["error" => "Missing invoice data"], 400);
+        }
+
+        $invoiceId = $invoiceData["id"];
 
         try {
             DB::beginTransaction();
@@ -302,9 +224,9 @@ class ChargebeeWebhookController extends Controller
                         : null,
                 ]);
 
-                Log::info("Created new local subscription from payment.", [
-                    "subscription_id" => $localSubscription->id,
-                ]);
+                // Log::info("Created new local subscription from payment.", [
+                //     "subscription_id" => $localSubscription->id,
+                // ]);
             } elseif (!$localSubscription) {
                 // If we still don't have a subscription, we can't proceed.
                 throw new \Exception(
@@ -316,32 +238,15 @@ class ChargebeeWebhookController extends Controller
                 $localSubscription->original_shopify_order_id
             );
 
-            // Log::info("Processing payment", [
-            //     "transaction_id" => $transaction["id"],
-            //     "invoice_id" => $invoice["id"],
-            //     "payment_type" => $isInitialPayment ? "initial" : "recurring",
-            //     "subscription_id" => $localSubscription->id,
-            // ]);
+            Log::info("Processing payment", [
+                "payment_type" => $isInitialPayment ? "initial" : "recurring",
+                "subscription_id" => $localSubscription->id,
+            ]);
 
             if ($isInitialPayment) {
                 $this->handleInitialPayment($localSubscription);
             } else {
-                // $existingOrder = ProcessedRecurringOrder::where(
-                //     "chargebee_invoice_id",
-                //     $invoice["id"],
-                // )->first();
-
-                // if ($existingOrder) {
-                //     Log::info("Invoice already processed, skipping", [
-                //         "invoice_id" => $invoice["id"],
-                //     ]);
-                //     DB::commit();
-                //     return response()->json([
-                //         "message" => "Invoice already processed",
-                //     ]);
-                // }
-
-                $this->handleRecurringPayment($localSubscription);
+                $this->handleRecurringPayment($localSubscription, $invoiceId);
             }
 
             DB::commit();
@@ -414,105 +319,99 @@ class ChargebeeWebhookController extends Controller
                 }
             }
         }
-
-        // Find active prescription for this subscription
-        $prescription = $subscription->prescription;
-
-        // If no direct link, find prescription through clinical plan
-        if (!$prescription && $subscription->questionnaire_submission_id) {
-            $prescription = Prescription::where("status", "active")
-                ->whereHas("clinicalPlan.questionnaireSubmission", function (
-                    $query,
-                ) use ($subscription) {
-                    $query->where(
-                        "id",
-                        $subscription->questionnaire_submission_id,
-                    );
-                })
-                ->first();
-        }
-
-        if ($prescription) {
-            // Link prescription to subscription if not already linked
-            if (!$subscription->prescription_id) {
-                $subscription->update(["prescription_id" => $prescription->id]);
-            }
-        }
     }
 
     /**
      * Handle recurring payment (renewal payment)
      */
-    private function handleRecurringPayment(Subscription $subscription): void
-    {
+    private function handleRecurringPayment(
+        Subscription $subscription,
+        string $invoiceId,
+    ): void {
         $prescription = $subscription->prescription;
 
         if (!$prescription || $prescription->status !== "active") {
-            Log::warning("No active prescription found for recurring payment", [
+            Log::error("No active prescription found for recurring payment", [
                 "subscription_id" => $subscription->id,
+                "prescription_id" => $prescription?->id,
+                "prescription_status" => $prescription?->status,
             ]);
-            return;
+            throw new \Exception(
+                "No active prescription found for recurring payment. Subscription ID: {$subscription->id}",
+            );
         }
 
-        $isReplacement = !is_null($prescription->replaces_prescription_id);
+        // For replacement prescriptions, we need to check if this is their first recurring order
+        // to avoid race conditions, we'll use a database transaction
+        $shouldDecrementRefills = true;
+        $isReplacement = $prescription->replaces_prescription_id !== null;
+
         if ($isReplacement) {
-            $hasRecurring = ProcessedRecurringOrder::where(
-                "prescription_id",
-                $prescription->id,
-            )->exists();
-            if (!$hasRecurring) {
-                Log::info(
-                    "First payment for replacement prescription. Not decrementing refills.",
-                    ["prescription_id" => $prescription->id],
-                );
-            } else {
-                if ($prescription->refills > 0) {
-                    $prescription->decrement("refills");
+            // Use a transaction to prevent race conditions when checking for existing orders
+            DB::transaction(function () use (
+                $prescription,
+                &$shouldDecrementRefills,
+            ) {
+                $hasRecurring = ProcessedRecurringOrder::where(
+                    "prescription_id",
+                    $prescription->id,
+                )
+                    ->lockForUpdate()
+                    ->exists();
+
+                if (!$hasRecurring) {
+                    // This is the first recurring order for a replacement prescription
+                    // Treat it as an "initial dose" - don't decrement refills
+                    $shouldDecrementRefills = false;
+                    Log::info(
+                        "This is the first order ever for replacement prescription #{$prescription->id}. " .
+                            "Treating this RECURRING order as initial dose - not decrementing refills.",
+                    );
                 }
-            }
-        } else {
-            if ($prescription->refills > 0) {
+            });
+        }
+
+        // Use firstOrCreate to prevent race condition where multiple webhooks
+        // could create duplicate ProcessedRecurringOrder records for the same prescription
+        $processedOrder = ProcessedRecurringOrder::firstOrCreate(
+            [
+                "prescription_id" => $prescription->id,
+                "chargebee_invoice_id" => $invoiceId,
+            ],
+            [
+                "chargebee_invoice_id" => $invoiceId,
+            ],
+        );
+
+        // Only dispatch the job if we actually created a new record (not if it already existed)
+        if ($processedOrder->wasRecentlyCreated) {
+            CreateInitialShopifyOrderJob::dispatch(
+                $prescription->id,
+                $invoiceId,
+            );
+
+            // Decrement refills AFTER creating the order so the order uses the correct dose
+            // Note: Initial orders never decrement refills because
+            // the refills count represents the number of ADDITIONAL refills beyond the initial prescription
+            if ($shouldDecrementRefills && $prescription->refills > 0) {
                 $prescription->decrement("refills");
             }
-        }
 
-        CreateRenewalShopifyOrderJob::dispatch($prescription->id);
-        ProcessedRecurringOrder::create([
-            "prescription_id" => $prescription->id,
-            "processed_at" => now(),
-        ]);
-        $this->handleDoseProgression($prescription);
-    }
-
-    /**
-     * Handle dose progression for prescriptions with dose schedules
-     */
-    private function handleDoseProgression(Prescription $prescription): void
-    {
-        $schedule = $prescription->dose_schedule;
-        if (!$schedule || count($schedule) <= 1) {
-            return;
-        }
-
-        $maxRefill = collect($schedule)->max("refill_number") ?? 0;
-        $usedSoFar = $maxRefill - ($prescription->refills ?? 0);
-
-        // We target the next dose index. Since 'usedSoFar' is 0-indexed count of used refills,
-        // it naturally points to the next dose entry in the 0-indexed schedule array.
-        $nextDoseIndex = $usedSoFar;
-        if (isset($schedule[$nextDoseIndex])) {
-            $currentDosePriceId =
-                $prescription->subscription->chargebee_item_price_id;
-            $nextDosePriceId =
-                $schedule[$nextDoseIndex]["chargebee_item_price_id"];
-
-            // Only update if the plan is actually changing
-            if ($currentDosePriceId !== $nextDosePriceId) {
-                UpdateSubscriptionDoseJob::dispatch(
-                    $prescription->id,
-                    $nextDoseIndex,
-                );
-            }
+            // Log::info(
+            //     "Dispatched CreateRenewalShopifyOrderJob for new recurring order",
+            //     [
+            //         "prescription_id" => $prescription->id,
+            //         "processed_order_id" => $processedOrder->id,
+            //     ],
+            // );
+        } else {
+            Log::info(
+                "ProcessedRecurringOrder already exists, skipping job dispatch",
+                [
+                    "prescription_id" => $prescription->id,
+                    "existing_order_id" => $processedOrder->id,
+                ],
+            );
         }
     }
 }

@@ -5,10 +5,12 @@ namespace App\Jobs;
 use App\Config\ShopifyProductMapping;
 use App\Jobs\UpdateSubscriptionDoseJob;
 use App\Jobs\ProcessSignedPrescriptionJob;
+use App\Jobs\AttachLabelToShopifyJob;
 use App\Models\Prescription;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Services\ShopifyService;
+use App\Services\DoseProgressionService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -19,13 +21,17 @@ class CreateInitialShopifyOrderJob implements ShouldQueue
     use Queueable;
 
     protected int $prescriptionId;
+    protected ?string $chargebeeInvoiceId;
 
     /**
      * Create a new job instance.
      */
-    public function __construct(int $prescriptionId)
-    {
+    public function __construct(
+        int $prescriptionId,
+        ?string $chargebeeInvoiceId = null,
+    ) {
         $this->prescriptionId = $prescriptionId;
+        $this->chargebeeInvoiceId = $chargebeeInvoiceId;
     }
 
     /**
@@ -70,8 +76,11 @@ class CreateInitialShopifyOrderJob implements ShouldQueue
                 return;
             }
 
-            // Check if order already exists
-            if ($subscription->original_shopify_order_id) {
+            // Check if order already exists for initial orders only
+            if (
+                !$this->chargebeeInvoiceId &&
+                $subscription->original_shopify_order_id
+            ) {
                 Log::info("Shopify order already exists for subscription", [
                     "prescription_id" => $this->prescriptionId,
                     "subscription_id" => $subscription->id,
@@ -86,6 +95,7 @@ class CreateInitialShopifyOrderJob implements ShouldQueue
             // Create Shopify order for the prescription
             $productVariantId = $this->getProductVariantForPrescription(
                 $prescription,
+                $this->chargebeeInvoiceId !== null,
             );
 
             if (!$productVariantId) {
@@ -101,6 +111,35 @@ class CreateInitialShopifyOrderJob implements ShouldQueue
 
             // Prepare order data
             $patient = User::find($prescription->patient_id);
+            $isRenewal = $this->chargebeeInvoiceId !== null;
+            $orderNote = $isRenewal
+                ? "Renewal order for prescription #{$prescription->id} (Invoice: {$this->chargebeeInvoiceId})"
+                : "Order created for prescription #{$prescription->id}";
+
+            $metafields = [
+                [
+                    "namespace" => "prescription",
+                    "key" => "prescription_id",
+                    "value" => (string) $prescription->id,
+                    "type" => "single_line_text_field",
+                ],
+                [
+                    "namespace" => "subscription",
+                    "key" => "chargebee_subscription_id",
+                    "value" => $subscription->chargebee_subscription_id,
+                    "type" => "single_line_text_field",
+                ],
+            ];
+
+            if ($isRenewal) {
+                $metafields[] = [
+                    "namespace" => "renewal",
+                    "key" => "chargebee_invoice_id",
+                    "value" => $this->chargebeeInvoiceId,
+                    "type" => "single_line_text_field",
+                ];
+            }
+
             $orderData = [
                 "lineItems" => [
                     [
@@ -114,21 +153,8 @@ class CreateInitialShopifyOrderJob implements ShouldQueue
                     ],
                 ],
                 "financialStatus" => "PAID", // Mark as paid since Chargebee handles payment
-                "note" => "Order created for prescription #{$prescription->id}",
-                "metafields" => [
-                    [
-                        "namespace" => "prescription",
-                        "key" => "prescription_id",
-                        "value" => (string) $prescription->id,
-                        "type" => "single_line_text_field",
-                    ],
-                    [
-                        "namespace" => "subscription",
-                        "key" => "chargebee_subscription_id",
-                        "value" => $subscription->chargebee_subscription_id,
-                        "type" => "single_line_text_field",
-                    ],
-                ],
+                "note" => $orderNote,
+                "metafields" => $metafields,
             ];
 
             // // Log order data before creating the order
@@ -161,23 +187,39 @@ class CreateInitialShopifyOrderJob implements ShouldQueue
             $shopifyOrderId = $this->extractOrderIdFromOrder($order);
 
             if ($shopifyOrderId) {
-                // Update subscription with Shopify order ID
                 DB::beginTransaction();
                 try {
-                    $subscription->update([
-                        "original_shopify_order_id" => $shopifyOrderId,
-                    ]);
+                    if ($this->chargebeeInvoiceId) {
+                        // This is a renewal
+                        Log::info(
+                            "Successfully created renewal Shopify order for prescription",
+                            [
+                                "prescription_id" => $this->prescriptionId,
+                                "shopify_order_id" => $shopifyOrderId,
+                                "chargebee_invoice_id" =>
+                                    $this->chargebeeInvoiceId,
+                            ],
+                        );
+                    } else {
+                        // This is an initial order - update subscription
+                        $subscription->update([
+                            "original_shopify_order_id" => $shopifyOrderId,
+                        ]);
+
+                        Log::info(
+                            "Successfully created initial Shopify order for prescription",
+                            [
+                                "prescription_id" => $this->prescriptionId,
+                                "shopify_order_id" => $shopifyOrderId,
+                                "subscription_id" => $subscription->id,
+                            ],
+                        );
+                    }
+
+                    // Schedule dose progression if prescription has multiple doses
+                    $this->scheduleDoseProgression($prescription);
 
                     DB::commit();
-
-                    // Log::info(
-                    //     "Successfully created initial Shopify order for prescription",
-                    //     [
-                    //         "prescription_id" => $this->prescriptionId,
-                    //         "shopify_order_id" => $shopifyOrderId,
-                    //         "subscription_id" => $subscription->id,
-                    //     ],
-                    // );
 
                     // Dispatch job to attach prescription label to the order
                     AttachLabelToShopifyJob::dispatch(
@@ -190,19 +232,14 @@ class CreateInitialShopifyOrderJob implements ShouldQueue
                         $this->prescriptionId,
                         $shopifyOrderId,
                     );
-
-                    // Schedule dose progression if prescription has multiple doses
-                    $this->scheduleDoseProgression($prescription);
                 } catch (\Exception $e) {
                     DB::rollBack();
-                    Log::error(
-                        "Failed to update subscription with Shopify order ID",
-                        [
-                            "prescription_id" => $this->prescriptionId,
-                            "shopify_order_id" => $shopifyOrderId,
-                            "error" => $e->getMessage(),
-                        ],
-                    );
+                    Log::error("Failed to process Shopify order creation", [
+                        "prescription_id" => $this->prescriptionId,
+                        "shopify_order_id" => $shopifyOrderId,
+                        "is_renewal" => $this->chargebeeInvoiceId !== null,
+                        "error" => $e->getMessage(),
+                    ]);
                 }
             } else {
                 Log::error(
@@ -225,58 +262,91 @@ class CreateInitialShopifyOrderJob implements ShouldQueue
     /**
      * Get the appropriate Shopify product variant for the prescription
      * Uses the FIRST dose from the dose schedule for initial order
+     * Uses the CURRENT dose for renewal orders
      */
     private function getProductVariantForPrescription(
         Prescription $prescription,
+        bool $isRenewal = false,
     ): ?string {
-        // First, try to get variant based on the first dose in the schedule
+        // For renewals, calculate current dose based on refills used
+        // For initial orders, use the first dose in the schedule
         $doseSchedule = $prescription->dose_schedule;
-        if ($doseSchedule && isset($doseSchedule[0])) {
-            $firstDose = $doseSchedule[0];
-            $medicationName = $prescription->medication_name;
+        if ($doseSchedule) {
+            $doseIndex = 0;
 
-            $variantId = $this->getVariantForMedicationAndDose(
-                $medicationName,
-                $firstDose["dose"],
-            );
+            if ($isRenewal) {
+                // For renewals, calculate which refill_number to order based on remaining refills
+                $maxRefill = collect($doseSchedule)->max("refill_number") ?? 0;
+                $refillsRemaining = $prescription->refills ?? 0;
+                $refillNumberToOrder = $maxRefill - $refillsRemaining;
 
-            if ($variantId) {
-                Log::info(
-                    "Found Shopify variant using first dose from schedule",
-                    [
-                        "prescription_id" => $prescription->id,
-                        "medication_name" => $medicationName,
-                        "first_dose" => $firstDose["dose"],
-                        "shopify_variant_id" => $variantId,
-                    ],
-                );
-                return $variantId;
+                // Find the dose index that matches the refill number we're ordering
+                foreach ($doseSchedule as $index => $dose) {
+                    if ($dose["refill_number"] === $refillNumberToOrder) {
+                        $doseIndex = $index;
+                        break;
+                    }
+                }
+
+                Log::info("Renewal order dose calculation", [
+                    "prescription_id" => $prescription->id,
+                    "max_refill" => $maxRefill,
+                    "refills_remaining" => $refillsRemaining,
+                    "refill_number_to_order" => $refillNumberToOrder,
+                    "dose_index" => $doseIndex,
+                    "is_renewal" => $isRenewal,
+                ]);
             }
-        }
 
-        // Fallback: Get the subscription to find the Chargebee item price
-        $subscription =
-            $prescription->clinicalPlan?->questionnaireSubmission
-                ?->subscription;
+            if (isset($doseSchedule[$doseIndex])) {
+                $dose = $doseSchedule[$doseIndex];
+                $medicationName = $prescription->medication_name;
 
-        if ($subscription) {
-            // Get product variant by Chargebee item price from subscription
-            $chargebeeItemPriceId = $subscription->chargebee_item_price_id;
+                Log::info("Attempting to find Shopify variant", [
+                    "prescription_id" => $prescription->id,
+                    "medication_name" => $medicationName,
+                    "dose_from_schedule" => $dose["dose"],
+                    "dose_index" => $doseIndex,
+                    "full_dose_info" => $dose,
+                    "is_renewal" => $isRenewal,
+                ]);
 
-            if ($chargebeeItemPriceId) {
-                $variantId = ShopifyProductMapping::getShopifyVariantByChargebeeItemPrice(
-                    $chargebeeItemPriceId,
+                // First check if shopify_variant_gid is directly available in the dose schedule
+                if (isset($dose["shopify_variant_gid"])) {
+                    $variantId = $dose["shopify_variant_gid"];
+
+                    Log::info(
+                        "Found Shopify variant directly from dose schedule",
+                        [
+                            "prescription_id" => $prescription->id,
+                            "medication_name" => $medicationName,
+                            "dose" => $dose["dose"],
+                            "dose_index" => $doseIndex,
+                            "is_renewal" => $isRenewal,
+                            "shopify_variant_id" => $variantId,
+                        ],
+                    );
+                    return $variantId;
+                }
+
+                // Fallback: try to find variant using medication mapping
+                $variantId = $this->getVariantForMedicationAndDose(
+                    $medicationName,
+                    $dose["dose"],
                 );
 
                 if ($variantId) {
-                    // Log::info(
-                    //     "Found Shopify variant using Chargebee item price mapping",
-                    //     [
-                    //         "prescription_id" => $prescription->id,
-                    //         "chargebee_item_price_id" => $chargebeeItemPriceId,
-                    //         "shopify_variant_id" => $variantId,
-                    //     ],
-                    // );
+                    Log::info(
+                        "Found Shopify variant using dose from schedule",
+                        [
+                            "prescription_id" => $prescription->id,
+                            "medication_name" => $medicationName,
+                            "dose" => $dose["dose"],
+                            "dose_index" => $doseIndex,
+                            "is_renewal" => $isRenewal,
+                            "shopify_variant_id" => $variantId,
+                        ],
+                    );
                     return $variantId;
                 }
             }
@@ -350,21 +420,7 @@ class CreateInitialShopifyOrderJob implements ShouldQueue
      */
     private function scheduleDoseProgression(Prescription $prescription): void
     {
-        $doseSchedule = $prescription->dose_schedule;
-
-        if (!$doseSchedule || count($doseSchedule) <= 1) {
-            Log::info("No dose progression needed for prescription", [
-                "prescription_id" => $prescription->id,
-                "dose_count" => count($doseSchedule),
-            ]);
-            return;
-        }
-
-        UpdateSubscriptionDoseJob::dispatch($prescription->id, 1);
-
-        Log::info("Scheduled next dose", [
-            "prescription_id" => $prescription->id,
-            "next_dose" => $doseSchedule[1]["dose"] ?? "unknown",
-        ]);
+        $doseProgressionService = app(DoseProgressionService::class);
+        $doseProgressionService->progressDose($prescription);
     }
 }
