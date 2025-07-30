@@ -11,8 +11,10 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::table("subscriptions", function (Blueprint $table) {
-            $table->string("chargebee_subscription_id")->nullable();
-            $table->string("chargebee_customer_id")->nullable();
+            $table->renameColumn(
+                "original_shopify_order_id",
+                "latest_shopify_order_id",
+            );
         });
     }
 
@@ -22,8 +24,10 @@ return new class extends Migration {
     public function down(): void
     {
         Schema::table("subscriptions", function (Blueprint $table) {
-            $table->dropColumn("chargebee_subscription_id");
-            $table->dropColumn("chargebee_customer_id");
+            $table->renameColumn(
+                "latest_shopify_order_id",
+                "original_shopify_order_id",
+            );
         });
     }
 };

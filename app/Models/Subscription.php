@@ -13,7 +13,7 @@ class Subscription extends Model
         "chargebee_subscription_id",
         "chargebee_customer_id",
         "chargebee_item_price_id",
-        "original_shopify_order_id",
+        "latest_shopify_order_id",
         "status",
         "questionnaire_submission_id",
         "prescription_id",

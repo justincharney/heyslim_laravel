@@ -291,7 +291,7 @@ class ChargebeeWebhookController extends Controller
                 );
             } else {
                 $isInitialPayment = empty(
-                    $localSubscription->original_shopify_order_id
+                    $localSubscription->latest_shopify_order_id
                 );
 
                 // Log::info("Processing payment", [

@@ -79,13 +79,13 @@ class CreateInitialShopifyOrderJob implements ShouldQueue
             // Check if order already exists for initial orders only
             if (
                 !$this->chargebeeInvoiceId &&
-                $subscription->original_shopify_order_id
+                $subscription->latest_shopify_order_id
             ) {
                 Log::info("Shopify order already exists for subscription", [
                     "prescription_id" => $this->prescriptionId,
                     "subscription_id" => $subscription->id,
                     "shopify_order_id" =>
-                        $subscription->original_shopify_order_id,
+                        $subscription->latest_shopify_order_id,
                 ]);
                 return;
             }
@@ -189,6 +189,11 @@ class CreateInitialShopifyOrderJob implements ShouldQueue
             if ($shopifyOrderId) {
                 DB::beginTransaction();
                 try {
+                    // Update subscription with latest order ID for both initial and recurring orders
+                    $subscription->update([
+                        "latest_shopify_order_id" => $shopifyOrderId,
+                    ]);
+
                     if ($this->chargebeeInvoiceId) {
                         // This is a renewal
                         Log::info(
@@ -201,11 +206,7 @@ class CreateInitialShopifyOrderJob implements ShouldQueue
                             ],
                         );
                     } else {
-                        // This is an initial order - update subscription
-                        $subscription->update([
-                            "original_shopify_order_id" => $shopifyOrderId,
-                        ]);
-
+                        // This is an initial order
                         Log::info(
                             "Successfully created initial Shopify order for prescription",
                             [

@@ -311,14 +311,14 @@ class YousignWebhookController extends Controller
         // Check if this prescription is associated with a subscription that has an order ID
         $subscription = $prescription->subscription;
 
-        if (!$subscription || !$subscription->original_shopify_order_id) {
+        if (!$subscription || !$subscription->latest_shopify_order_id) {
             Log::info(
                 "No Shopify order ID found for prescription #{$prescription->id}, skipping document attachment",
             );
             return false;
         }
 
-        $orderId = $subscription->original_shopify_order_id;
+        $orderId = $subscription->latest_shopify_order_id;
 
         try {
             // Store the document temporarily

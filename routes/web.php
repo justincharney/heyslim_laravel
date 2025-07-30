@@ -11,10 +11,10 @@ Route::get("/", function () {
 });
 
 // For the consultation checkout order
-Route::post("/webhooks/shopify/orders/paid", [
-    ShopifyWebhookController::class,
-    "orderPaid",
-]);
+// Route::post("/webhooks/shopify/orders/paid", [
+//     ShopifyWebhookController::class,
+//     "orderPaid",
+// ]);
 
 Route::post("/webhooks/shopify/orders/fulfilled", [
     ShopifyWebhookController::class,

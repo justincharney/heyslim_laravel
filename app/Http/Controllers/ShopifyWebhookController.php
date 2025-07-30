@@ -232,74 +232,75 @@ class ShopifyWebhookController extends Controller
 
         // Find subscription by Shopify order ID
         $subscription = Subscription::where(
-            "original_shopify_order_id",
+            "latest_shopify_order_id",
             $shopifyOrderId,
         )->first();
 
-        if ($subscription) {
-            $chargebeeSubscriptionId = $subscription->chargebee_subscription_id;
-            Log::info(
-                "Found Chargebee subscription ID via original_shopify_order_id.",
+        if (!$subscription) {
+            Log::error("Subscription in order fulfilled webhook handler.", [
+                "shopify_order_id" => $shopifyOrderId,
+            ]);
+            return response()->json(
                 [
-                    "shopify_order_id" => $shopifyOrderId,
-                    "chargebee_subscription_id" => $chargebeeSubscriptionId,
+                    "message" => "Subscription not found",
                 ],
+                404,
             );
-        } else {
-            // Check recurring orders
-            $processedOrder = ProcessedRecurringOrder::where(
-                "shopify_order_id",
-                $shopifyOrderId,
-            )->first();
-            if ($processedOrder && $processedOrder->prescription_id) {
-                $relatedSubscription = Subscription::where(
-                    "prescription_id",
-                    $processedOrder->prescription_id,
-                )->first();
-                if ($relatedSubscription) {
-                    $chargebeeSubscriptionId =
-                        $relatedSubscription->chargebee_subscription_id;
-                    Log::info(
-                        "Found Chargebee subscription ID via ProcessedRecurringOrder.",
-                        [
-                            "shopify_order_id" => $shopifyOrderId,
-                            "prescription_id" =>
-                                $processedOrder->prescription_id,
-                            "chargebee_subscription_id" => $chargebeeSubscriptionId,
-                        ],
-                    );
-                }
-            }
         }
 
+        $chargebeeSubscriptionId = $subscription->chargebee_subscription_id;
+
         if (!$chargebeeSubscriptionId) {
-            Log::warning(
+            Log::error(
                 "Could not determine Chargebee Subscription ID for fulfilled Shopify Order ID.",
                 ["shopify_order_id" => $shopifyOrderId],
             );
             return response()->json(
                 [
                     "message" =>
-                        "Fulfilled order processed, but no linked Chargebee subscription found.",
+                        "No linked Chargebee subscription found. Can't update Chargebee subscription's next billing date.",
                 ],
-                200,
+                404,
             );
         }
 
-        // The logic to update the next charge date will be handled by Chargebee's dunning and renewal settings.
-        // We can, however, update the local subscription record with the fulfillment date if needed.
         $fulfillmentDate = isset($payload["fulfillments"][0]["created_at"])
             ? new \DateTime($payload["fulfillments"][0]["created_at"])
             : new \DateTime();
 
-        $subscription->update([
-            "last_fulfilled_at" => $fulfillmentDate,
-        ]);
+        // Update Chargebee subscription's next billing date to 28 days from fulfillment
+        try {
+            $chargebeeService = app(ChargebeeService::class);
+            $nextBillingDate = $fulfillmentDate->modify("+28 days");
 
-        Log::info("Shopify order fulfillment webhook processed successfully.", [
-            "shopify_order_id" => $shopifyOrderId,
-            "chargebee_subscription_id" => $chargebeeSubscriptionId,
-        ]);
+            $updateResult = $chargebeeService->changeSubscriptionTermEnd(
+                $chargebeeSubscriptionId,
+                $nextBillingDate->getTimestamp(),
+            );
+
+            if (!$updateResult) {
+                Log::error("Failed to change Chargebee subscription term end", [
+                    "shopify_order_id" => $shopifyOrderId,
+                    "chargebee_subscription_id" => $chargebeeSubscriptionId,
+                    "next_billing_date" => $nextBillingDate->format(
+                        "Y-m-d H:i:s",
+                    ),
+                ]);
+                return response()->json(
+                    [
+                        "error" =>
+                            "Failed to change Chargebee subscription term end",
+                    ],
+                    500,
+                );
+            }
+        } catch (\Exception $e) {
+            Log::error("Failed to change Chargebee subscription term end", [
+                "shopify_order_id" => $shopifyOrderId,
+                "chargebee_subscription_id" => $chargebeeSubscriptionId,
+                "error" => $e->getMessage(),
+            ]);
+        }
 
         return response()->json([
             "message" => "Order fulfillment processed successfully.",

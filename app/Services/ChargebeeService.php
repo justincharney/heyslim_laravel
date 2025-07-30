@@ -475,6 +475,54 @@ class ChargebeeService
     }
 
     /**
+     * Change subscription term end for Product Catalog 2.0
+     */
+    public function changeSubscriptionTermEnd(
+        string $subscriptionId,
+        int $termEndsAt,
+        bool $prorate = false,
+        bool $invoiceImmediately = false,
+    ): ?array {
+        $endpoint = "{$this->baseUrl}/subscriptions/{$subscriptionId}/change_term_end";
+
+        $params = [
+            "term_ends_at" => $termEndsAt,
+            "prorate" => $prorate ? "true" : "false",
+            "invoice_immediately" => $invoiceImmediately ? "true" : "false",
+        ];
+
+        // Debug logging for timestamp
+        // Log::info("Sending change term end request to Chargebee", [
+        //     "subscription_id" => $subscriptionId,
+        //     "term_ends_at_timestamp" => $termEndsAt,
+        //     "term_ends_at_formatted" => date("Y-m-d H:i:s", $termEndsAt),
+        //     "term_ends_at_iso" => date("c", $termEndsAt),
+        //     "params" => $params,
+        // ]);
+
+        $response = Http::withBasicAuth($this->apiKey, "")
+            ->asForm()
+            ->post($endpoint, $params);
+
+        if ($response->successful()) {
+            $data = $response->json();
+            // Log::info("Successfully changed Chargebee subscription term end", [
+            //     "subscription_id" => $subscriptionId,
+            //     "term_ends_at" => date("Y-m-d H:i:s", $termEndsAt),
+            // ]);
+            return $data;
+        } else {
+            Log::error("Failed to change Chargebee subscription term end", [
+                "subscription_id" => $subscriptionId,
+                "term_ends_at" => date("Y-m-d H:i:s", $termEndsAt),
+                "status" => $response->status(),
+                "body" => $response->body(),
+            ]);
+            return null;
+        }
+    }
+
+    /**
      * Get upcoming renewals
      *
      * @param int $daysOut
