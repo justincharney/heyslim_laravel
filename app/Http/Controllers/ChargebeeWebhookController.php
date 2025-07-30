@@ -234,19 +234,35 @@ class ChargebeeWebhookController extends Controller
                 );
             }
 
-            $isInitialPayment = empty(
-                $localSubscription->original_shopify_order_id
+            // Check if this is a reactivation (subscription was previously cancelled/inactive)
+            $isReactivation = $this->isSubscriptionReactivation(
+                $localSubscription,
+                $subscriptionData,
             );
 
-            // Log::info("Processing payment", [
-            //     "payment_type" => $isInitialPayment ? "initial" : "recurring",
-            //     "subscription_id" => $localSubscription->id,
-            // ]);
-
-            if ($isInitialPayment) {
-                $this->handleInitialPayment($localSubscription);
+            if ($isReactivation) {
+                $this->handleSubscriptionReactivation(
+                    $localSubscription,
+                    $subscriptionData,
+                );
             } else {
-                $this->handleRecurringPayment($localSubscription, $invoiceId);
+                $isInitialPayment = empty(
+                    $localSubscription->original_shopify_order_id
+                );
+
+                // Log::info("Processing payment", [
+                //     "payment_type" => $isInitialPayment ? "initial" : "recurring",
+                //     "subscription_id" => $localSubscription->id,
+                // ]);
+
+                if ($isInitialPayment) {
+                    $this->handleInitialPayment($localSubscription);
+                } else {
+                    $this->handleRecurringPayment(
+                        $localSubscription,
+                        $invoiceId,
+                    );
+                }
             }
 
             DB::commit();
@@ -413,5 +429,64 @@ class ChargebeeWebhookController extends Controller
                 ],
             );
         }
+    }
+
+    /**
+     * Check if this payment represents a subscription reactivation
+     */
+    private function isSubscriptionReactivation(
+        Subscription $localSubscription,
+        array $subscriptionData,
+    ): bool {
+        // If the subscription is currently cancelled/inactive locally but active in Chargebee,
+        $subscriptionIsActive =
+            strtolower($subscriptionData["status"]) === "active";
+        $localSubscriptionWasInactive = in_array($localSubscription->status, [
+            "cancelled",
+            "paused",
+        ]);
+
+        return $subscriptionIsActive && $localSubscriptionWasInactive;
+    }
+
+    /**
+     * Handle subscription reactivation
+     */
+    private function handleSubscriptionReactivation(
+        Subscription $localSubscription,
+        array $subscriptionData,
+    ): void {
+        // Update subscription status and billing information
+        $localSubscription->update([
+            "status" => strtolower($subscriptionData["status"]),
+            "next_charge_scheduled_at" => isset(
+                $subscriptionData["next_billing_at"],
+            )
+                ? date("Y-m-d H:i:s", $subscriptionData["next_billing_at"])
+                : null,
+        ]);
+
+        // If there's an associated prescription, reactivate it as well
+        if ($localSubscription->prescription_id) {
+            $prescription = Prescription::find(
+                $localSubscription->prescription_id,
+            );
+            if ($prescription && $prescription->status === "cancelled") {
+                $prescription->update(["status" => "active"]);
+
+                Log::info(
+                    "Reactivated prescription during subscription reactivation",
+                    [
+                        "subscription_id" => $localSubscription->id,
+                        "prescription_id" => $prescription->id,
+                    ],
+                );
+            }
+        }
+
+        Log::info("Subscription reactivated successfully", [
+            "subscription_id" => $localSubscription->id,
+            "has_prescription" => $localSubscription->prescription_id !== null,
+        ]);
     }
 }
