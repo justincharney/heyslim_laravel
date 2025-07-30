@@ -24,13 +24,18 @@ class DoseProgressionService
         }
 
         $schedule = $prescription->dose_schedule;
-        $currentDosePriceId =
-            $prescription->subscription?->chargebee_item_price_id;
-        $nextDosePriceId =
-            $schedule[$nextDoseIndex]["chargebee_item_price_id"] ?? null;
+        $currentDoseIndex = $this->calculateCurrentDoseIndex($prescription);
 
-        // Only update if the plan is actually changing
-        if ($currentDosePriceId !== $nextDosePriceId && $nextDosePriceId) {
+        // Only update if we're actually progressing to a different dose
+        if (
+            $currentDoseIndex !== $nextDoseIndex &&
+            $currentDoseIndex !== null
+        ) {
+            $currentDosePriceId =
+                $schedule[$currentDoseIndex]["chargebee_item_price_id"] ?? null;
+            $nextDosePriceId =
+                $schedule[$nextDoseIndex]["chargebee_item_price_id"] ?? null;
+
             UpdateSubscriptionDoseJob::dispatch(
                 $prescription->id,
                 $nextDoseIndex,
@@ -38,16 +43,23 @@ class DoseProgressionService
 
             Log::info("Scheduled dose progression", [
                 "prescription_id" => $prescription->id,
+                "current_dose_index" => $currentDoseIndex,
+                "current_dose" =>
+                    $schedule[$currentDoseIndex]["dose"] ?? "unknown",
                 "current_dose_price_id" => $currentDosePriceId,
-                "next_dose_price_id" => $nextDosePriceId,
                 "next_dose_index" => $nextDoseIndex,
                 "next_dose" => $schedule[$nextDoseIndex]["dose"] ?? "unknown",
+                "next_dose_price_id" => $nextDosePriceId,
             ]);
         } else {
-            Log::info("No dose progression needed - same dose", [
+            Log::info("No dose progression needed - same dose index", [
                 "prescription_id" => $prescription->id,
-                "current_dose_price_id" => $currentDosePriceId,
+                "current_dose_index" => $currentDoseIndex,
                 "next_dose_index" => $nextDoseIndex,
+                "current_dose" =>
+                    $currentDoseIndex !== null
+                        ? $schedule[$currentDoseIndex]["dose"] ?? "unknown"
+                        : "unknown",
             ]);
         }
     }
@@ -91,21 +103,23 @@ class DoseProgressionService
             return null;
         }
 
-        $maxRefill = collect($schedule)->max("refill_number") ?? 0;
-        $usedSoFar = $maxRefill - ($prescription->refills ?? 0);
+        // Get current dose index (the dose we just ordered)
+        $currentDoseIndex = $this->calculateCurrentDoseIndex($prescription);
 
-        // We target the next dose index. Since 'usedSoFar' is 0-indexed count of used refills,
-        // we need to add 1 to get the next dose entry in the 0-indexed schedule array.
-        $nextDoseIndex = $usedSoFar + 1;
+        if ($currentDoseIndex === null) {
+            return null;
+        }
 
+        // Next dose is simply the next index in the schedule
+        $nextDoseIndex = $currentDoseIndex + 1;
+
+        // Check if next dose exists in schedule
         if (!isset($schedule[$nextDoseIndex])) {
             Log::info("Next dose index not found in schedule", [
                 "prescription_id" => $prescription->id,
-                "calculated_next_index" => $nextDoseIndex,
+                "current_dose_index" => $currentDoseIndex,
+                "next_dose_index" => $nextDoseIndex,
                 "available_doses" => count($schedule),
-                "max_refill" => $maxRefill,
-                "refills_remaining" => $prescription->refills,
-                "used_so_far" => $usedSoFar,
             ]);
             return null;
         }
@@ -140,5 +154,30 @@ class DoseProgressionService
             "refill_number" =>
                 $schedule[$nextDoseIndex]["refill_number"] ?? null,
         ];
+    }
+
+    /**
+     * Calculate the current dose index based on refills used
+     */
+    public function calculateCurrentDoseIndex(Prescription $prescription): ?int
+    {
+        $schedule = $prescription->dose_schedule;
+
+        if (!$schedule) {
+            return null;
+        }
+
+        $maxRefill = collect($schedule)->max("refill_number") ?? 0;
+        $refillsRemaining = $prescription->refills ?? 0;
+        $refillNumberCurrent = $maxRefill - $refillsRemaining + 1;
+
+        // Find the dose index that matches the current refill number (just ordered)
+        foreach ($schedule as $index => $dose) {
+            if ($dose["refill_number"] === $refillNumberCurrent) {
+                return $index;
+            }
+        }
+
+        return null;
     }
 }

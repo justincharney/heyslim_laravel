@@ -238,10 +238,10 @@ class ChargebeeWebhookController extends Controller
                 $localSubscription->original_shopify_order_id
             );
 
-            Log::info("Processing payment", [
-                "payment_type" => $isInitialPayment ? "initial" : "recurring",
-                "subscription_id" => $localSubscription->id,
-            ]);
+            // Log::info("Processing payment", [
+            //     "payment_type" => $isInitialPayment ? "initial" : "recurring",
+            //     "subscription_id" => $localSubscription->id,
+            // ]);
 
             if ($isInitialPayment) {
                 $this->handleInitialPayment($localSubscription);

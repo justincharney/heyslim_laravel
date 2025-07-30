@@ -278,7 +278,7 @@ class CreateInitialShopifyOrderJob implements ShouldQueue
                 // For renewals, calculate which refill_number to order based on remaining refills
                 $maxRefill = collect($doseSchedule)->max("refill_number") ?? 0;
                 $refillsRemaining = $prescription->refills ?? 0;
-                $refillNumberToOrder = $maxRefill - $refillsRemaining;
+                $refillNumberToOrder = $maxRefill - $refillsRemaining + 1;
 
                 // Find the dose index that matches the refill number we're ordering
                 foreach ($doseSchedule as $index => $dose) {
