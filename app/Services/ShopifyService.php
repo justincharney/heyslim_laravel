@@ -856,6 +856,16 @@ class ShopifyService
                 id
                 email
               }
+              shippingAddress {
+                firstName
+                lastName
+                address1
+                address2
+                city
+                province
+                country
+                zip
+              }
             }
             userErrors {
               field

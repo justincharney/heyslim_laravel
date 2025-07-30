@@ -11,6 +11,7 @@ use App\Models\Subscription;
 use App\Models\User;
 use App\Services\ShopifyService;
 use App\Services\DoseProgressionService;
+use App\Services\ChargebeeService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -91,6 +92,34 @@ class CreateInitialShopifyOrderJob implements ShouldQueue
             }
 
             $shopifyService = app(ShopifyService::class);
+            $chargebeeService = app(ChargebeeService::class);
+
+            // Fetch shipping address from Chargebee subscription
+            $shippingAddress = null;
+            if ($subscription->chargebee_subscription_id) {
+                $shippingAddress = $chargebeeService->getSubscriptionShippingAddress(
+                    $subscription->chargebee_subscription_id,
+                );
+
+                if (!$shippingAddress) {
+                    Log::error(
+                        "No shipping address found for Chargebee subscription",
+                        [
+                            "prescription_id" => $this->prescriptionId,
+                            "chargebee_subscription_id" =>
+                                $subscription->chargebee_subscription_id,
+                        ],
+                    );
+                }
+            } else {
+                Log::error(
+                    "No Chargebee subscription ID found for subscription",
+                    [
+                        "prescription_id" => $this->prescriptionId,
+                        "subscription_id" => $subscription->id,
+                    ],
+                );
+            }
 
             // Create Shopify order for the prescription
             $productVariantId = $this->getProductVariantForPrescription(
@@ -156,6 +185,20 @@ class CreateInitialShopifyOrderJob implements ShouldQueue
                 "note" => $orderNote,
                 "metafields" => $metafields,
             ];
+
+            // Add shipping address if available from Chargebee
+            if ($shippingAddress) {
+                $orderData["shippingAddress"] = [
+                    "firstName" => $shippingAddress["first_name"] ?? "",
+                    "lastName" => $shippingAddress["last_name"] ?? "",
+                    "address1" => $shippingAddress["line1"] ?? "",
+                    "address2" => $shippingAddress["line2"] ?? "",
+                    "city" => $shippingAddress["city"] ?? "",
+                    "province" => $shippingAddress["state"] ?? "",
+                    "country" => $shippingAddress["country"] ?? "",
+                    "zip" => $shippingAddress["zip"] ?? "",
+                ];
+            }
 
             // // Log order data before creating the order
             // Log::info("Creating Shopify order for prescription", [

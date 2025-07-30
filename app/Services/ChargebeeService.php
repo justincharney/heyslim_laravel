@@ -779,4 +779,63 @@ class ChargebeeService
             return false;
         }
     }
+
+    /**
+     * Get shipping address from Chargebee subscription
+     */
+    public function getSubscriptionShippingAddress(
+        string $subscriptionId,
+    ): ?array {
+        try {
+            $response = Http::withBasicAuth($this->apiKey, "")->get(
+                "{$this->baseUrl}/subscriptions/{$subscriptionId}",
+            );
+
+            if ($response->successful()) {
+                $data = $response->json();
+
+                if (isset($data["subscription"]["shipping_address"])) {
+                    $shippingAddress =
+                        $data["subscription"]["shipping_address"];
+
+                    return [
+                        "first_name" => $shippingAddress["first_name"] ?? "",
+                        "last_name" => $shippingAddress["last_name"] ?? "",
+                        "line1" => $shippingAddress["line1"] ?? "",
+                        "line2" => $shippingAddress["line2"] ?? "",
+                        "line3" => $shippingAddress["line3"] ?? "",
+                        "city" => $shippingAddress["city"] ?? "",
+                        "state" => $shippingAddress["state"] ?? "",
+                        "country" => $shippingAddress["country"] ?? "",
+                        "zip" => $shippingAddress["zip"] ?? "",
+                        "phone" => $shippingAddress["phone"] ?? "",
+                        "email" => $shippingAddress["email"] ?? "",
+                        "company" => $shippingAddress["company"] ?? "",
+                    ];
+                }
+
+                return null;
+            }
+
+            Log::error(
+                "Failed to get shipping address from Chargebee subscription",
+                [
+                    "subscription_id" => $subscriptionId,
+                    "status" => $response->status(),
+                    "response" => $response->json(),
+                ],
+            );
+
+            return null;
+        } catch (\Exception $e) {
+            Log::error(
+                "Failed to get shipping address from Chargebee subscription",
+                [
+                    "subscription_id" => $subscriptionId,
+                    "error" => $e->getMessage(),
+                ],
+            );
+            return null;
+        }
+    }
 }
