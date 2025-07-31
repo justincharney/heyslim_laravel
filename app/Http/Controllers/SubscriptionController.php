@@ -144,6 +144,13 @@ class SubscriptionController extends Controller
                 // Also cancel the prescription
                 $prescription->update(["status" => "cancelled"]);
 
+                // Also mark the associated clinical plan as completed
+                if ($prescription->clinicalPlan) {
+                    $prescription->clinicalPlan->update([
+                        "status" => "completed",
+                    ]);
+                }
+
                 // Commit the transaction
                 DB::commit();
 

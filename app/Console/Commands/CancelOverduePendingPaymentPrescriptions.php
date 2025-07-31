@@ -32,11 +32,12 @@ class CancelOverduePendingPaymentPrescriptions extends Command
         $this->info(
             "Checking for prescriptions in 'pending_payment' status created before " .
                 $cutoffDate->toDateTimeString() .
-                "..."
+                "...",
         );
 
         $overduePrescriptions = Prescription::where("status", "pending_payment")
             ->where("created_at", "<", $cutoffDate)
+            ->with("clinicalPlan")
             ->get();
 
         if ($overduePrescriptions->isEmpty()) {
@@ -45,7 +46,7 @@ class CancelOverduePendingPaymentPrescriptions extends Command
         }
 
         $this->info(
-            "Found {$overduePrescriptions->count()} overdue 'pending_payment' prescriptions to cancel."
+            "Found {$overduePrescriptions->count()} overdue 'pending_payment' prescriptions to cancel.",
         );
         $cancelledCount = 0;
 
@@ -53,26 +54,33 @@ class CancelOverduePendingPaymentPrescriptions extends Command
             try {
                 $prescription->status = "cancelled";
                 $prescription->save();
+
+                // Also mark the associated clinical plan as completed
+                if ($prescription->clinicalPlan) {
+                    $prescription->clinicalPlan->status = "completed";
+                    $prescription->clinicalPlan->save();
+                }
+
                 $cancelledCount++;
                 Log::info(
-                    "Cancelled 'pending_payment' prescription #{$prescription->id} due to being overdue (created at: {$prescription->created_at->toDateTimeString()})."
+                    "Cancelled 'pending_payment' prescription #{$prescription->id} due to being overdue (created at: {$prescription->created_at->toDateTimeString()}).",
                 );
             } catch (\Exception $e) {
                 $this->error(
-                    "Failed to cancel prescription #{$prescription->id}: {$e->getMessage()}"
+                    "Failed to cancel prescription #{$prescription->id}: {$e->getMessage()}",
                 );
                 Log::error(
                     "Failed to cancel 'pending_payment' prescription #{$prescription->id} due to being overdue.",
                     [
                         "prescription_id" => $prescription->id,
                         "error" => $e->getMessage(),
-                    ]
+                    ],
                 );
             }
         }
 
         $this->info(
-            "Process completed. {$cancelledCount} 'pending_payment' prescriptions were cancelled."
+            "Process completed. {$cancelledCount} 'pending_payment' prescriptions were cancelled.",
         );
         return 0;
     }

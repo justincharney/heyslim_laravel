@@ -111,8 +111,17 @@ class ProcessRejectedQuestionnaireJob implements ShouldQueue
                         $subscription->save();
 
                         if ($subscription->prescription) {
-                            $subscription->prescription->status = "cancelled";
-                            $subscription->prescription->save();
+                            $prescription = $subscription->prescription;
+                            $prescription->load("clinicalPlan");
+                            $prescription->status = "cancelled";
+                            $prescription->save();
+
+                            // Also mark the associated clinical plan as completed
+                            if ($prescription->clinicalPlan) {
+                                $prescription->clinicalPlan->status =
+                                    "completed";
+                                $prescription->clinicalPlan->save();
+                            }
                         }
                     });
 

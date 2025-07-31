@@ -62,10 +62,19 @@ class ChargebeeWebhookController extends Controller
                 $localSubscription->update(["status" => "cancelled"]);
 
                 if ($localSubscription->prescription_id) {
-                    Prescription::where(
-                        "id",
+                    $prescription = Prescription::with("clinicalPlan")->find(
                         $localSubscription->prescription_id,
-                    )->update(["status" => "cancelled"]);
+                    );
+                    if ($prescription) {
+                        $prescription->update(["status" => "cancelled"]);
+
+                        // Also mark the associated clinical plan as completed
+                        if ($prescription->clinicalPlan) {
+                            $prescription->clinicalPlan->update([
+                                "status" => "completed",
+                            ]);
+                        }
+                    }
                 }
 
                 DB::commit();

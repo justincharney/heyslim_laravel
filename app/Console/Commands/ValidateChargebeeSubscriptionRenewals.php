@@ -368,9 +368,16 @@ class ValidateChargebeeSubscriptionRenewals extends Command
                 $subscription->status = "cancelled";
                 $subscription->save();
 
-                if ($subscription->prescription) {
-                    $subscription->prescription->status = "cancelled";
-                    $subscription->prescription->save();
+                $prescription = $subscription->prescription;
+                if ($prescription) {
+                    $prescription->status = "cancelled";
+                    $prescription->save();
+
+                    // Also mark the clinical plan as completed
+                    if ($prescription->clinicalPlan) {
+                        $prescription->clinicalPlan->status = "completed";
+                        $prescription->clinicalPlan->save();
+                    }
                 }
             });
 
