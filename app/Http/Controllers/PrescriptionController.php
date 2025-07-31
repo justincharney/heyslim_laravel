@@ -161,6 +161,27 @@ class PrescriptionController extends Controller
 
         // If a clinical plan was provided, validate that the user can prescribe based on the plan
         if (isset($validated["clinical_plan_id"])) {
+            // Check if an active or pending prescription already exists for this clinical plan
+            $existingPrescription = Prescription::where(
+                "clinical_plan_id",
+                $validated["clinical_plan_id"],
+            )
+                ->whereNotIn("status", ["completed", "cancelled", "replaced"])
+                ->first();
+
+            if ($existingPrescription) {
+                return response()->json(
+                    [
+                        "message" =>
+                            "An active or pending prescription already exists for this clinical plan. Please use the replacement workflow to make changes.",
+                        "existing_prescription_id" => $existingPrescription->id,
+                        "existing_prescription_status" =>
+                            $existingPrescription->status,
+                    ],
+                    409, // Conflict
+                );
+            }
+
             $plan = ClinicalPlan::findOrFail($validated["clinical_plan_id"]);
             // $autoApproved = false;
 
