@@ -29,7 +29,7 @@ class ClinicalPlanController extends Controller
                     "message" =>
                         "You must be associated with a team to view clinical management plans",
                 ],
-                403
+                403,
             );
         }
 
@@ -50,7 +50,7 @@ class ClinicalPlanController extends Controller
         // If pharmacist, get plans in their team
         elseif ($user->hasRole("pharmacist")) {
             $plans = ClinicalPlan::whereHas("patient", function ($query) use (
-                $teamId
+                $teamId,
             ) {
                 $query->where("current_team_id", $teamId);
             })
@@ -64,7 +64,7 @@ class ClinicalPlanController extends Controller
         // For admins, get all plans for the current team
         elseif ($user->hasRole("admin")) {
             $plans = ClinicalPlan::whereHas("patient", function ($query) use (
-                $teamId
+                $teamId,
             ) {
                 $query->where("current_team_id", $teamId);
             })
@@ -77,7 +77,7 @@ class ClinicalPlanController extends Controller
                     "message" =>
                         "You do not have permission to view clinical management plans",
                 ],
-                403
+                403,
             );
         }
 
@@ -100,7 +100,7 @@ class ClinicalPlanController extends Controller
                     "message" =>
                         "You must be associated with a team to create clinical management plans",
                 ],
-                403
+                403,
             );
         }
 
@@ -131,7 +131,7 @@ class ClinicalPlanController extends Controller
                     "message" =>
                         "You can only create plans for patients in your team",
                 ],
-                403
+                403,
             );
         }
 
@@ -147,7 +147,7 @@ class ClinicalPlanController extends Controller
             // Update the associated questionnaire to be 'approved'
             if ($validated["questionnaire_submission_id"]) {
                 $submission = QuestionnaireSubmission::find(
-                    $validated["questionnaire_submission_id"]
+                    $validated["questionnaire_submission_id"],
                 );
                 if ($submission) {
                     $submission->update([
@@ -166,7 +166,7 @@ class ClinicalPlanController extends Controller
                         "Clinical management plan created successfully",
                     "clinical_plan" => $plan,
                 ],
-                201
+                201,
             );
         } catch (\Exception $e) {
             DB::rollBack();
@@ -175,7 +175,7 @@ class ClinicalPlanController extends Controller
                     "message" => "Failed to create clinical management plan",
                     "error" => $e->getMessage(),
                 ],
-                500
+                500,
             );
         }
     }
@@ -193,7 +193,9 @@ class ClinicalPlanController extends Controller
         $clinicalManagementPlan->load([
             "patient",
             "provider",
-            "prescriptions.prescriber",
+            "prescriptions" => function ($query) {
+                $query->orderBy("created_at", "desc")->with("prescriber");
+            },
         ]);
 
         return response()->json([
@@ -256,7 +258,7 @@ class ClinicalPlanController extends Controller
                     "message" => "Failed to update clinical management plan",
                     "error" => $e->getMessage(),
                 ],
-                500
+                500,
             );
         }
     }
@@ -367,7 +369,7 @@ class ClinicalPlanController extends Controller
                     "message" =>
                         "You must be associated with a team to view clinical plans",
                 ],
-                403
+                403,
             );
         }
 
@@ -381,7 +383,7 @@ class ClinicalPlanController extends Controller
                     "message" =>
                         "You don't have permission to access this endpoint",
                 ],
-                403
+                403,
             );
         }
 
@@ -428,7 +430,7 @@ class ClinicalPlanController extends Controller
                 [
                     "message" => "Template not found in your team",
                 ],
-                404
+                404,
             );
         }
 
