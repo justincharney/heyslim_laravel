@@ -196,6 +196,10 @@ class ChargebeeService
         string $planId,
         array $additionalParams = [],
     ): ?array {
+        $submissionId =
+            $additionalParams["subscription[cf_questionnaire_submission_id]"] ??
+            null;
+
         $params = [
             "subscription[plan_id]" => $planId,
             "subscription[plan_quantity]" => 1,
@@ -206,9 +210,9 @@ class ChargebeeService
             "customer[phone]" => $customer->phone_number,
             "subscription[cf_consultation]" => "true",
             "redirect_url" =>
-                config("app.frontend_url") . "/consultation-success",
-            "cancel_url" =>
-                config("app.frontend_url") . "/consultation-cancelled",
+                config("app.frontend_url") .
+                "/submission-pending/{$submissionId}",
+            "cancel_url" => config("app.frontend_url") . "/dashboard",
         ];
 
         $params = array_merge($params, $additionalParams);

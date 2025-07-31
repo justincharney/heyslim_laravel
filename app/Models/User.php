@@ -53,6 +53,13 @@ class User extends Authenticatable
     protected $hidden = ["password", "remember_token", "workos_id"];
 
     /**
+     * The accessors to append to the model's array form.
+     *
+     * @var array
+     */
+    protected $appends = ["needs_photo_upload"];
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -210,8 +217,6 @@ class User extends Authenticatable
      */
     public function needsPhotoUpload(): bool
     {
-        setPermissionsTeamId($this->team_id);
-
         // Only patients need photo uploads
         if (!$this->hasRole("patient")) {
             return false;
@@ -228,6 +233,16 @@ class User extends Authenticatable
 
         // Check if they've already uploaded a photo
         return !$this->userFiles()->exists();
+    }
+
+    /**
+     * Get the needs photo upload attribute.
+     * This accessor automatically includes the photo upload requirement
+     * when the user model is serialized.
+     */
+    public function getNeedsPhotoUploadAttribute(): bool
+    {
+        return $this->needsPhotoUpload();
     }
 
     /**

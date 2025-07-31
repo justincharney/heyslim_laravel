@@ -41,7 +41,15 @@ class ProfileCompletedMiddleware
         }
 
         // Check if profile is complete
-        if (!$user->isProfileConsideredComplete()) {
+        $isProfileComplete = $user->isProfileConsideredComplete();
+
+        // Update profile_completed status in case it's out of sync
+        if ($isProfileComplete !== $user->profile_completed) {
+            $user->profile_completed = $isProfileComplete;
+            $user->save();
+        }
+
+        if (!$isProfileComplete) {
             // For API requests, return a structured response with status code
             return response()->json(
                 [
