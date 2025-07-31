@@ -83,4 +83,15 @@ class ClinicalPlan extends Model implements AuditableContract
             ->whereNotIn("status", ["completed", "cancelled", "replaced"])
             ->first();
     }
+
+    /**
+     * Get the subscription associated with this clinical plan via the questionnaire submission.
+     *
+     * @return \App\Models\Subscription|null
+     */
+    public function getSubscription()
+    {
+        // A Clinical Plan's subscription is linked via its QuestionnaireSubmission
+        return $this->questionnaireSubmission?->subscription;
+    }
 }

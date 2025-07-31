@@ -178,14 +178,26 @@ class PrescriptionController extends Controller
             }
             // $autoApproved = false;
 
-            // Make sure the plan is active (only if the user is a pharmacist)
-            if ($plan->status !== "active" && $user->hasRole("pharmacist")) {
+            // Make sure the plan is active
+            if ($plan->status !== "active") {
+                return response()->json(
+                    [
+                        "message" => "Cannot prescribe from a clinical management plan that is not active. Its status is '{$plan->status}'.",
+                    ],
+                    400,
+                );
+            }
+
+            // Make sure the plan has an active subscription
+            $subscription = $plan->getSubscription();
+
+            if (!$subscription || $subscription->status !== "active") {
                 return response()->json(
                     [
                         "message" =>
-                            "Cannot prescribe from an inactive clinical management plan",
+                            "This clinical plan does not have an active subscription. The patient must complete a new checkout before a prescription can be issued.",
                     ],
-                    400,
+                    402, // Payment Required
                 );
             }
 
