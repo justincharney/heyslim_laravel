@@ -72,4 +72,15 @@ class ClinicalPlan extends Model implements AuditableContract
     {
         return $this->hasMany(Prescription::class);
     }
+
+    /**
+     * Get the active (non-terminal) prescription for this clinical plan, if one exists.
+     * A clinical plan should only have one prescription that is not in a terminal state.
+     */
+    public function getActivePrescription()
+    {
+        return $this->prescriptions()
+            ->whereNotIn("status", ["completed", "cancelled", "replaced"])
+            ->first();
+    }
 }

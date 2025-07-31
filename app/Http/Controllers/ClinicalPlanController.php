@@ -198,8 +198,12 @@ class ClinicalPlanController extends Controller
             },
         ]);
 
+        // Get the active prescription, if one exists
+        $activePrescription = $clinicalManagementPlan->getActivePrescription();
+
         return response()->json([
             "clinical_plan" => $clinicalManagementPlan,
+            "active_prescription" => $activePrescription,
         ]);
     }
 
