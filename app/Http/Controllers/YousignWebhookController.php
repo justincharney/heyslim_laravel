@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use App\Services\ShopifyService;
 use App\Services\YousignService;
+use App\Jobs\UpdateSubscriptionDoseJob;
 use App\Jobs\SendGpLetterJob;
 
 class YousignWebhookController extends Controller
@@ -202,38 +203,75 @@ class YousignWebhookController extends Controller
 
         $prescription->refresh();
 
-        // Link prescription to subscription when signed
-        try {
-            $subscription =
-                $prescription->clinicalPlan?->questionnaireSubmission
-                    ?->subscription;
-            if ($subscription && !$subscription->prescription_id) {
-                $subscription->update(["prescription_id" => $prescription->id]);
-                Log::info("Linked prescription to subscription", [
+        // Link prescription to subscription when signed (ONLY for initial prescriptions)
+        $isReplacement = !is_null($prescription->replaces_prescription_id);
+        $subscription = null;
+
+        if ($isReplacement) {
+            // For replacement prescriptions, get subscription directly (already linked)
+            $subscription = $prescription->subscription;
+            Log::info(
+                "Skipping subscription linking for replacement prescription",
+                [
                     "prescription_id" => $prescription->id,
-                    "subscription_id" => $subscription->id,
-                ]);
-            } else {
-                Log::error(
-                    "Prescription already linked to subscription. Can't link again.",
-                    [
+                    "replaces_prescription_id" =>
+                        $prescription->replaces_prescription_id,
+                ],
+            );
+        } else {
+            // For initial prescriptions, link to subscription
+            try {
+                $subscription =
+                    $prescription->clinicalPlan?->questionnaireSubmission
+                        ?->subscription;
+                if ($subscription && !$subscription->prescription_id) {
+                    $subscription->update([
+                        "prescription_id" => $prescription->id,
+                    ]);
+                    Log::info("Linked prescription to subscription", [
                         "prescription_id" => $prescription->id,
                         "subscription_id" => $subscription->id,
-                    ],
-                );
+                    ]);
+                } else {
+                    Log::error(
+                        "Prescription already linked to subscription. Can't link again.",
+                        [
+                            "prescription_id" => $prescription->id,
+                            "subscription_id" => $subscription->id,
+                        ],
+                    );
+                    return response()->json(
+                        [
+                            "error" =>
+                                "Prescription already linked to subscription",
+                        ],
+                        400,
+                    );
+                }
+            } catch (\Exception $e) {
+                Log::error("Failed to link prescription to subscription", [
+                    "prescription_id" => $prescription->id,
+                    "error" => $e->getMessage(),
+                ]);
                 return response()->json(
-                    ["error" => "Prescription already linked to subscription"],
-                    400,
+                    ["error" => "Failed to link prescription to subscription"],
+                    500,
                 );
             }
-        } catch (\Exception $e) {
-            Log::error("Failed to link prescription to subscription", [
-                "prescription_id" => $prescription->id,
-                "error" => $e->getMessage(),
-            ]);
-            return response()->json(
-                ["error" => "Failed to link prescription to subscription"],
-                500,
+        }
+
+        // Update Chargebee subscription plan for replacement prescriptions
+        $isReplacement = !is_null($prescription->replaces_prescription_id);
+        if ($isReplacement && $subscription) {
+            // For replacement prescriptions, always start with the first dose (index 0)
+            UpdateSubscriptionDoseJob::dispatch($prescription->id, 0);
+            Log::info(
+                "Dispatched UpdateSubscriptionDoseJob for replacement prescription",
+                [
+                    "prescription_id" => $prescription->id,
+                    "subscription_id" => $subscription->id,
+                    "dose_index" => 0,
+                ],
             );
         }
 
@@ -241,8 +279,6 @@ class YousignWebhookController extends Controller
         SendGpLetterJob::dispatch($prescription->id);
 
         // Conditionally dispatch job based on prescription type
-        $isReplacement = !is_null($prescription->replaces_prescription_id);
-
         if ($isReplacement) {
             // This is a replacement prescription - do NOT dispatch job here
             Log::info(
