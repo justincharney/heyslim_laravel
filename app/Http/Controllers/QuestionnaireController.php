@@ -228,6 +228,27 @@ class QuestionnaireController extends Controller
         ]);
     }
 
+    public function getSubmissionStatus($submission_id)
+    {
+        try {
+            $submission = QuestionnaireSubmission::where(
+                "user_id",
+                auth()->id(),
+            )->findOrFail($submission_id, ["status"]);
+
+            return response()->json([
+                "status" => $submission->status,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(
+                [
+                    "error" => "Submission not found",
+                ],
+                404,
+            );
+        }
+    }
+
     public function initializeDraft(Request $request)
     {
         $userId = auth()->id();
