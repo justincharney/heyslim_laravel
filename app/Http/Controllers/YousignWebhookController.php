@@ -2,20 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use App\Jobs\ProcessSignedPrescriptionJob;
-use App\Jobs\CreateInitialShopifyOrderJob;
+use App\Jobs\HandleSignedPrescriptionLogicJob;
 use App\Models\Prescription;
 use App\Services\SupabaseStorageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use App\Services\ShopifyService;
 use App\Services\YousignService;
-use App\Jobs\UpdateSubscriptionDoseJob;
-use App\Jobs\SendGpLetterJob;
-use App\Notifications\PrescriptionSignedNotification;
 
 class YousignWebhookController extends Controller
 {
@@ -141,7 +135,7 @@ class YousignWebhookController extends Controller
         }
 
         // Upload to Supabase Storage
-        $supabasePath = "signed_prescriptions/prescription_{$prescription->id}";
+        $supabasePath = "signed_prescriptions/prescription_{$prescription->id}.pdf";
         $uploadOptions = [
             "contentType" => "application/pdf",
             "upsert" => false,
@@ -179,7 +173,7 @@ class YousignWebhookController extends Controller
             );
         }
 
-        // ----- PERFORM DB UPDATE -----
+        // ----- PERFORM DB UPDATE & DISPATCH JOB -----
         try {
             DB::beginTransaction();
             $updateData = [
@@ -189,6 +183,15 @@ class YousignWebhookController extends Controller
                 "status" => "active",
             ];
             $prescription->update($updateData);
+
+            // Dispatch a job to handle all post-signature processing.
+            // This moves the complex logic out of the webhook controller.
+            HandleSignedPrescriptionLogicJob::dispatch($prescription->id);
+
+            // Log::info(
+            //     "Dispatched HandleSignedPrescriptionLogicJob for prescription #$prescription->id",
+            // );
+
             DB::commit();
         } catch (\Exception $e) {
             DB::rollBack();
@@ -202,111 +205,8 @@ class YousignWebhookController extends Controller
             );
         }
 
-        $prescription->refresh();
-
-        // Link prescription to subscription when signed (ONLY for initial prescriptions)
-        $isReplacement = !is_null($prescription->replaces_prescription_id);
-        $subscription = null;
-
-        if ($isReplacement) {
-            // For replacement prescriptions, get subscription directly (already linked)
-            $subscription = $prescription->subscription;
-            Log::info(
-                "Skipping subscription linking for replacement prescription",
-                [
-                    "prescription_id" => $prescription->id,
-                    "replaces_prescription_id" =>
-                        $prescription->replaces_prescription_id,
-                ],
-            );
-        } else {
-            // For initial prescriptions, link to subscription
-            try {
-                $subscription =
-                    $prescription->clinicalPlan?->questionnaireSubmission
-                        ?->subscription;
-                if ($subscription && !$subscription->prescription_id) {
-                    $subscription->update([
-                        "prescription_id" => $prescription->id,
-                    ]);
-                    Log::info("Linked prescription to subscription", [
-                        "prescription_id" => $prescription->id,
-                        "subscription_id" => $subscription->id,
-                    ]);
-                } else {
-                    Log::error(
-                        "Prescription already linked to subscription. Can't link again.",
-                        [
-                            "prescription_id" => $prescription->id,
-                            "subscription_id" => $subscription->id,
-                        ],
-                    );
-                    return response()->json(
-                        [
-                            "error" =>
-                                "Prescription already linked to subscription",
-                        ],
-                        400,
-                    );
-                }
-            } catch (\Exception $e) {
-                Log::error("Failed to link prescription to subscription", [
-                    "prescription_id" => $prescription->id,
-                    "error" => $e->getMessage(),
-                ]);
-                return response()->json(
-                    ["error" => "Failed to link prescription to subscription"],
-                    500,
-                );
-            }
-        }
-
-        // Update Chargebee subscription plan for replacement prescriptions
-        $isReplacement = !is_null($prescription->replaces_prescription_id);
-        if ($isReplacement && $subscription) {
-            // For replacement prescriptions, always start with the first dose (index 0)
-            UpdateSubscriptionDoseJob::dispatch($prescription->id, 0);
-            Log::info(
-                "Dispatched UpdateSubscriptionDoseJob for replacement prescription",
-                [
-                    "prescription_id" => $prescription->id,
-                    "subscription_id" => $subscription->id,
-                    "dose_index" => 0,
-                ],
-            );
-        }
-
-        // Dispatch the job to generate and send the GP letter
-        SendGpLetterJob::dispatch($prescription->id);
-
-        // Notify the patient that their treatment is approved
-        $prescription->load("patient");
-        if ($prescription->patient) {
-            $prescription->patient->notify(
-                new PrescriptionSignedNotification($prescription),
-            );
-        } else {
-            Log::error(
-                "Could not find patient to notify for prescription #{$prescription->id}",
-            );
-        }
-
-        // Conditionally dispatch job based on prescription type
-        if ($isReplacement) {
-            // This is a replacement prescription - do NOT dispatch job here
-            Log::info(
-                "Prescription #{$prescription->id} is a replacement. Signed document uploaded but no job dispatched. ChargebeeWebhookController will handle attachment to future orders.",
-            );
-        } else {
-            // This is an initial prescription that needs a Shopify order created
-            CreateInitialShopifyOrderJob::dispatch($prescription->id);
-            Log::info(
-                "Dispatched CreateInitialShopifyOrderJob for initial prescription #{$prescription->id}",
-            );
-        }
-
         return response()->json(
-            ["message" => "Webhook received, processing completed"],
+            ["message" => "Webhook received, processing job dispatched"],
             200,
         );
     }
@@ -348,68 +248,5 @@ class YousignWebhookController extends Controller
 
         // Compare signatures using a constant-time comparison function
         return hash_equals($expectedSignature, $signature);
-    }
-
-    /**
-     * Attach the signed document to the Shopify order if applicable
-     */
-    private function attachDocumentToShopifyOrder(
-        Prescription $prescription,
-        string $documentContent,
-    ): bool {
-        // Check if this prescription is associated with a subscription that has an order ID
-        $subscription = $prescription->subscription;
-
-        if (!$subscription || !$subscription->latest_shopify_order_id) {
-            Log::info(
-                "No Shopify order ID found for prescription #{$prescription->id}, skipping document attachment",
-            );
-            return false;
-        }
-
-        $orderId = $subscription->latest_shopify_order_id;
-
-        try {
-            // Store the document temporarily
-            $tempPath = "prescriptions/" . $prescription->id . "_signed.pdf";
-            Storage::put($tempPath, $documentContent);
-
-            // Get the full path
-            $fullPath = Storage::path($tempPath);
-
-            // Attach the document to the Shopify order
-            $success = $this->shopifyService->attachPrescriptionToOrder(
-                $orderId,
-                $fullPath,
-                "Signed prescription #{$prescription->id}",
-            );
-
-            // Clean up the temporary file
-            Storage::delete($tempPath);
-
-            if ($success) {
-                // Log::info(
-                //     "Successfully attached signed prescription to Shopify order",
-                //     [
-                //         "prescription_id" => $prescription->id,
-                //         "order_id" => $orderId,
-                //     ]
-                // );
-                return true;
-            } else {
-                Log::error("Failed to attach prescription to Shopify order", [
-                    "prescription_id" => $prescription->id,
-                    "order_id" => $orderId,
-                ]);
-                return false;
-            }
-        } catch (\Exception $e) {
-            Log::error("Exception attaching prescription to Shopify order", [
-                "prescription_id" => $prescription->id,
-                "order_id" => $orderId,
-                "error" => $e->getMessage(),
-            ]);
-            return false;
-        }
     }
 }
