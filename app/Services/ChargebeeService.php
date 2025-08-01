@@ -265,8 +265,7 @@ class ChargebeeService
             "item_prices[quantity][0]" => 1,
             "redirect_url" =>
                 config("app.frontend_url") . "/consultation-success",
-            "cancel_url" =>
-                config("app.frontend_url") . "/consultation-cancelled",
+            "cancel_url" => config("app.frontend_url") . "/treatments",
         ];
 
         $params = array_merge($params, $additionalParams);
