@@ -2,6 +2,9 @@
 
 namespace App\Jobs;
 
+use App\Jobs\CreateInitialShopifyOrderJob;
+use App\Jobs\SendGpLetterJob;
+use App\Jobs\UpdateSubscriptionDoseJob;
 use App\Models\Prescription;
 use App\Notifications\PrescriptionSignedNotification;
 use Illuminate\Bus\Queueable;
@@ -45,6 +48,9 @@ class HandleSignedPrescriptionLogicJob implements ShouldQueue
             $this->fail("Prescription not found: " . $this->prescriptionId);
             return;
         }
+
+        // Refresh the prescription to ensure we have the latest data
+        $prescription->refresh();
 
         // The controller already updated the status to 'active'
         // We can double-check to be sure.
