@@ -279,15 +279,15 @@ class YousignWebhookController extends Controller
         // Dispatch the job to generate and send the GP letter
         SendGpLetterJob::dispatch($prescription->id);
 
-        // Notify the user that their treatment is approved
-        $prescription->load("user");
-        if ($prescription->user) {
-            $prescription->user->notify(
+        // Notify the patient that their treatment is approved
+        $prescription->load("patient");
+        if ($prescription->patient) {
+            $prescription->patient->notify(
                 new PrescriptionSignedNotification($prescription),
             );
         } else {
             Log::error(
-                "Could not find user to notify for prescription #{$prescription->id}",
+                "Could not find patient to notify for prescription #{$prescription->id}",
             );
         }
 
