@@ -15,6 +15,7 @@ use App\Services\ShopifyService;
 use App\Services\YousignService;
 use App\Jobs\UpdateSubscriptionDoseJob;
 use App\Jobs\SendGpLetterJob;
+use App\Notifications\PrescriptionSignedNotification;
 
 class YousignWebhookController extends Controller
 {
@@ -277,6 +278,18 @@ class YousignWebhookController extends Controller
 
         // Dispatch the job to generate and send the GP letter
         SendGpLetterJob::dispatch($prescription->id);
+
+        // Notify the user that their treatment is approved
+        $prescription->load("user");
+        if ($prescription->user) {
+            $prescription->user->notify(
+                new PrescriptionSignedNotification($prescription),
+            );
+        } else {
+            Log::error(
+                "Could not find user to notify for prescription #{$prescription->id}",
+            );
+        }
 
         // Conditionally dispatch job based on prescription type
         if ($isReplacement) {

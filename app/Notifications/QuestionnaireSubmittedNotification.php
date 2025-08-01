@@ -55,26 +55,26 @@ class QuestionnaireSubmittedNotification extends Notification implements
         $patientEmail =
             $this->submission->user->email ?? "your registered email address";
 
-        return (new MailMessage())
+        return new MailMessage()
             ->subject("Your Questionnaire Has Been Submitted - Next Steps")
             ->greeting("Hello " . $patientName . ",")
             ->line(
-                "Thank you for submitting your questionnaire: \"{$questionnaireTitle}\". Here are the next steps in your journey with HeySlim:"
+                "Thank you for submitting your questionnaire: \"{$questionnaireTitle}\". Here are the next steps in your journey with heySlim:",
             )
             ->line(
-                "1. **Provider Review:** Your health profile and submitted information will be carefully reviewed by one of our licensed healthcare providers."
+                "1. **Upload a Full-Body Photo:** If you haven't already, please upload a full-body photo to your account. Our doctors require this piece of your health profile before making a clinical decision.",
             )
             ->line(
-                "2. **Prescription & Medication Payment (If Approved):** Once your provider has reviewed your profile and if you are approved for treatment, you will receive another email from us. This email will contain instructions on how to complete the payment for your prescribed medication. **Important:** The checkout process will require you to log in with a Shopify account. Please ensure you use the **same email address ({$patientEmail})** for Shopify as you used for your HeySlim account. If the email addresses do not match, you will not be authorized to complete the checkout."
+                "2. **Prescription (If Approved):** Once your provider has reviewed your profile and if you are approved for treatment, you will receive two emails from us. One email will contain a letter that you can share with your GP to inform them of your treatment with heySlim. The other is a notification email confirming that your treatment has been approved.",
             )
             ->line(
-                "3. **ID Verification:** After completing the order for the medication, instructions for ID verification will be emailed to you in a separate email. This ID verification must be completed before your order can be dispensed by our pharmacy."
+                "3. **ID Verification:** After your treatment is approved, instructions for ID verification will be emailed to you in a separate email. This ID verification must be completed before your order can be dispensed by our pharmacy.",
             )
             ->line(
-                "Our team is working diligently to review your information. We appreciate your patience during this process."
+                "Our team is working diligently to review your information. We appreciate your patience during this process.",
             )
             ->line(
-                "If you have any questions in the meantime, please don't hesitate to contact our support team or use the chat feature in your patient portal to speak with your provider."
+                "If you have any questions in the meantime, please don't hesitate to contact our support team or use the chat feature in your patient portal to speak with your provider.",
             );
     }
 

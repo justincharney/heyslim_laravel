@@ -6,6 +6,7 @@ use App\Config\ShopifyProductMapping;
 use App\Models\QuestionnaireSubmission;
 use App\Models\User;
 use App\Notifications\ScheduleConsultationNotification;
+use App\Notifications\MedicationDispatchedNotification;
 use App\Services\CalendlyService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -231,10 +232,9 @@ class ShopifyWebhookController extends Controller
         $chargebeeSubscriptionId = null;
 
         // Find subscription by Shopify order ID
-        $subscription = Subscription::where(
-            "latest_shopify_order_id",
-            $shopifyOrderId,
-        )->first();
+        $subscription = Subscription::with(["user", "prescription"])
+            ->where("latest_shopify_order_id", $shopifyOrderId)
+            ->first();
 
         if (!$subscription) {
             Log::error("Subscription in order fulfilled webhook handler.", [
@@ -299,6 +299,32 @@ class ShopifyWebhookController extends Controller
                 "shopify_order_id" => $shopifyOrderId,
                 "chargebee_subscription_id" => $chargebeeSubscriptionId,
                 "error" => $e->getMessage(),
+            ]);
+        }
+
+        // Send medication dispatched notification
+        if ($subscription->prescription) {
+            try {
+                $subscription->user->notify(
+                    new MedicationDispatchedNotification(
+                        $subscription->prescription,
+                    ),
+                );
+            } catch (\Exception $e) {
+                Log::error(
+                    "Failed to send medication dispatched notification",
+                    [
+                        "user_id" => $subscription->user->id,
+                        "prescription_id" => $subscription->prescription->id,
+                        "shopify_order_id" => $shopifyOrderId,
+                        "error" => $e->getMessage(),
+                    ],
+                );
+            }
+        } else {
+            Log::error("No prescription found for subscription", [
+                "subscription_id" => $subscription->id,
+                "shopify_order_id" => $shopifyOrderId,
             ]);
         }
 
