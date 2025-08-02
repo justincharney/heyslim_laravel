@@ -48,7 +48,7 @@ class ProcessInactiveUsers extends Command
         // Find users who:
         // 1. Are patients.
         // 2. Registered more than 1 hour ago.
-        // 3. Have NOT completed their profile OR have no questionnaire submissions not in draft.
+        // 3. Have NOT completed their profile OR have no questionnaire submissions not in draft or pending_payment.
         // 4. Have NOT had a Zendesk lead created yet.
         $inactiveUsers = User::where("created_at", "<", $cutoff)
             ->where(function ($query) {
@@ -57,11 +57,9 @@ class ProcessInactiveUsers extends Command
                     ->orWhereDoesntHave("questionnaireSubmissions", function (
                         $subQuery,
                     ) {
-                        $subQuery->whereIn("status", [
-                            "submitted",
-                            "approved",
+                        $subQuery->whereNotIn("status", [
+                            "draft",
                             "pending_payment",
-                            "rejected",
                         ]);
                     });
             })
