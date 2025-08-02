@@ -222,10 +222,10 @@ class User extends Authenticatable
             return false;
         }
 
-        // Only if they have non-draft questionnaire submissions
+        // Only if they have non-draft or non-pending_payment questionnaire submissions
         if (
             !$this->questionnaireSubmissions()
-                ->where("status", "!=", "draft")
+                ->whereNotIn("status", ["draft", "pending_payment"])
                 ->exists()
         ) {
             return false;
