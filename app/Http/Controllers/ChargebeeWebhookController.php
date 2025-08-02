@@ -200,16 +200,8 @@ class ChargebeeWebhookController extends Controller
                 ]);
             }
 
-            $localSubscription = null;
-            if ($subscriptionData) {
-                $localSubscription = Subscription::where(
-                    "chargebee_subscription_id",
-                    $subscriptionData["id"],
-                )->first();
-            }
-
-            // If subscription does not exist locally, create it. This handles the initial payment case.
-            if (!$localSubscription && $subscriptionData && $customerData) {
+            // Use updateOrCreate to handle subscription creation and updates atomically.
+            if ($subscriptionData && $customerData) {
                 $user = User::where("email", $customerData["email"])->first();
                 if (!$user) {
                     throw new \Exception(
@@ -217,12 +209,28 @@ class ChargebeeWebhookController extends Controller
                     );
                 }
 
+                // Prepare data for creating or updating the subscription
+                $subscriptionValues = [
+                    "chargebee_customer_id" => $customerData["id"],
+                    "user_id" => $user->id,
+                    "status" => strtolower($subscriptionData["status"]),
+                    "next_charge_scheduled_at" => isset(
+                        $subscriptionData["next_billing_at"],
+                    )
+                        ? date(
+                            "Y-m-d H:i:s",
+                            $subscriptionData["next_billing_at"],
+                        )
+                        : null,
+                ];
+
                 $questionnaireSubmissionId =
                     $subscriptionData["cf_questionnaire_submission_id"] ?? null;
-                if (!$questionnaireSubmissionId) {
-                    throw new \Exception(
-                        "Questionnaire submission ID custom field not found.",
-                    );
+
+                if ($questionnaireSubmissionId) {
+                    $subscriptionValues[
+                        "questionnaire_submission_id"
+                    ] = $questionnaireSubmissionId;
                 }
 
                 $chargebeeItemPriceId =
@@ -230,60 +238,32 @@ class ChargebeeWebhookController extends Controller
                         "item_price_id"
                     ] ?? null;
 
-                $localSubscription = Subscription::create([
-                    "chargebee_subscription_id" => $subscriptionData["id"],
-                    "chargebee_customer_id" => $customerData["id"],
-                    "user_id" => $user->id,
-                    "questionnaire_submission_id" => $questionnaireSubmissionId,
-                    "chargebee_item_price_id" => $chargebeeItemPriceId,
-                    "status" => strtolower($subscriptionData["status"]),
-                    "next_charge_scheduled_at" => isset(
-                        $subscriptionData["next_billing_at"],
-                    )
-                        ? date(
-                            "Y-m-d H:i:s",
-                            $subscriptionData["next_billing_at"],
-                        )
-                        : null,
-                ]);
+                if ($chargebeeItemPriceId) {
+                    $subscriptionValues[
+                        "chargebee_item_price_id"
+                    ] = $chargebeeItemPriceId;
+                }
 
-                // Log::info("Created new local subscription from payment.", [
-                //     "subscription_id" => $localSubscription->id,
-                // ]);
-            } elseif ($localSubscription && $subscriptionData) {
-                // Update existing subscription with fresh webhook data
-                $chargebeeItemPriceId =
-                    $subscriptionData["subscription_items"][0][
-                        "item_price_id"
-                    ] ?? $localSubscription->chargebee_item_price_id;
+                $localSubscription = Subscription::updateOrCreate(
+                    [
+                        "chargebee_subscription_id" => $subscriptionData["id"],
+                    ],
+                    $subscriptionValues,
+                );
 
-                $localSubscription->update([
-                    "chargebee_item_price_id" => $chargebeeItemPriceId,
-                    "status" => strtolower($subscriptionData["status"]),
-                    "next_charge_scheduled_at" => isset(
-                        $subscriptionData["next_billing_at"],
-                    )
-                        ? date(
-                            "Y-m-d H:i:s",
-                            $subscriptionData["next_billing_at"],
-                        )
-                        : null,
-                ]);
-
-                // Log::info(
-                //     "Updated existing subscription from payment webhook",
-                //     [
-                //         "subscription_id" => $localSubscription->id,
-                //         "chargebee_subscription_id" => $subscriptionData["id"],
-                //         "status" => $subscriptionData["status"],
-                //         "next_billing_at" =>
-                //             $subscriptionData["next_billing_at"] ?? null,
-                //     ],
-                // );
-            } elseif (!$localSubscription) {
-                // If we still don't have a subscription, we can't proceed.
+                // For new subscriptions, the questionnaire ID is required.
+                if (
+                    $localSubscription->wasRecentlyCreated &&
+                    !$localSubscription->questionnaire_submission_id
+                ) {
+                    throw new \Exception(
+                        "Questionnaire submission ID custom field not found for new subscription.",
+                    );
+                }
+            } else {
+                // If we don't have subscription data, we can't proceed.
                 throw new \Exception(
-                    "Could not find or create a subscription for this payment.",
+                    "Subscription data is missing from the webhook.",
                 );
             }
 
