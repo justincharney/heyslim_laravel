@@ -209,40 +209,42 @@ class ChargebeeWebhookController extends Controller
                     );
                 }
 
-                // Prepare data for creating or updating the subscription
-                $subscriptionValues = [
-                    "chargebee_customer_id" => $customerData["id"],
-                    "user_id" => $user->id,
-                    "status" => strtolower($subscriptionData["status"]),
-                    "next_charge_scheduled_at" => isset(
-                        $subscriptionData["next_billing_at"],
-                    )
-                        ? date(
-                            "Y-m-d H:i:s",
-                            $subscriptionData["next_billing_at"],
-                        )
-                        : null,
-                ];
-
+                // Validate and extract required data from the webhook
+                $chargebeeCustomerId = $customerData["id"] ?? null;
+                $status = isset($subscriptionData["status"])
+                    ? strtolower($subscriptionData["status"])
+                    : null;
+                $nextChargeAt = isset($subscriptionData["next_billing_at"])
+                    ? date("Y-m-d H:i:s", $subscriptionData["next_billing_at"])
+                    : null;
                 $questionnaireSubmissionId =
                     $subscriptionData["cf_questionnaire_submission_id"] ?? null;
-
-                if ($questionnaireSubmissionId) {
-                    $subscriptionValues[
-                        "questionnaire_submission_id"
-                    ] = $questionnaireSubmissionId;
-                }
-
                 $chargebeeItemPriceId =
                     $subscriptionData["subscription_items"][0][
                         "item_price_id"
                     ] ?? null;
 
-                if ($chargebeeItemPriceId) {
-                    $subscriptionValues[
-                        "chargebee_item_price_id"
-                    ] = $chargebeeItemPriceId;
+                if (
+                    !$chargebeeCustomerId ||
+                    !$status ||
+                    !$nextChargeAt ||
+                    !$questionnaireSubmissionId ||
+                    !$chargebeeItemPriceId
+                ) {
+                    throw new \Exception(
+                        "Webhook is missing one or more required fields.",
+                    );
                 }
+
+                // Prepare data for creating or updating the subscription
+                $subscriptionValues = [
+                    "chargebee_customer_id" => $chargebeeCustomerId,
+                    "user_id" => $user->id,
+                    "status" => $status,
+                    "next_charge_scheduled_at" => $nextChargeAt,
+                    "questionnaire_submission_id" => $questionnaireSubmissionId,
+                    "chargebee_item_price_id" => $chargebeeItemPriceId,
+                ];
 
                 $localSubscription = Subscription::updateOrCreate(
                     [
@@ -250,16 +252,6 @@ class ChargebeeWebhookController extends Controller
                     ],
                     $subscriptionValues,
                 );
-
-                // For new subscriptions, the questionnaire ID is required.
-                if (
-                    $localSubscription->wasRecentlyCreated &&
-                    !$localSubscription->questionnaire_submission_id
-                ) {
-                    throw new \Exception(
-                        "Questionnaire submission ID custom field not found for new subscription.",
-                    );
-                }
             } else {
                 // If we don't have subscription data, we can't proceed.
                 throw new \Exception(
