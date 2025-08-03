@@ -511,7 +511,10 @@ class QuestionnaireController extends Controller
             "answers" => "required|array",
             "answers.*.question_id" => "required|integer",
             "answers.*.answer_text" => "nullable",
+            "tolt_referral_id" => "nullable|string|max:255",
         ]);
+
+        // Log::info("Tolt Referral ID: {$validated["tolt_referral_id"]}");
 
         // Load with questionnaire for required question check
         $submission = QuestionnaireSubmission::with(
@@ -618,6 +621,7 @@ class QuestionnaireController extends Controller
                 $user,
                 $glp1PlanId,
                 $checkoutData,
+                $validated["tolt_referral_id"] ?? null,
             );
 
             if (!$hostedPage || !isset($hostedPage["url"])) {

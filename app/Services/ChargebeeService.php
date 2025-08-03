@@ -127,63 +127,6 @@ class ChargebeeService
     }
 
     /**
-     * Create a checkout for prescription with dose schedule
-     *
-     * @param Prescription $prescription
-     * @param User $customer
-     * @param array $additionalParams
-     * @return array|null
-     */
-    public function createPrescriptionCheckout(
-        Prescription $prescription,
-        User $customer,
-        array $additionalParams = [],
-    ): ?array {
-        $doseSchedule = $prescription->dose_schedule;
-        if (!is_array($doseSchedule) || empty($doseSchedule)) {
-            Log::error("Invalid dose schedule for prescription checkout", [
-                "prescription_id" => $prescription->id,
-                "dose_schedule" => $doseSchedule,
-            ]);
-            return null;
-        }
-
-        // Get the first dose for initial subscription
-        $initialDose = $doseSchedule[0];
-
-        $params = [
-            "subscription[plan_id]" =>
-                $initialDose["chargebee_plan_id"] ?? null,
-            "subscription[plan_quantity]" => 1,
-            "customer[id]" => $this->getChargebeeCustomerId($customer),
-            "customer[first_name]" => $this->getFirstName($customer->name),
-            "customer[last_name]" => $this->getLastName($customer->name),
-            "customer[email]" => $customer->email,
-            "customer[phone]" => $customer->phone_number,
-            "subscription[cf_prescription_id]" => $prescription->id,
-            "subscription[cf_patient_id]" => $prescription->patient_id,
-            "redirect_url" =>
-                config("app.frontend_url") . "/prescription-success",
-            "cancel_url" =>
-                config("app.frontend_url") . "/prescription-cancelled",
-        ];
-
-        // Add custom fields for tracking
-        if (
-            $prescription->clinicalPlan &&
-            $prescription->clinicalPlan->questionnaire_submission_id
-        ) {
-            $params["subscription[cf_questionnaire_submission_id]"] =
-                $prescription->clinicalPlan->questionnaire_submission_id;
-        }
-
-        // Merge any additional parameters
-        $params = array_merge($params, $additionalParams);
-
-        return $this->createHostedCheckout($params);
-    }
-
-    /**
      * Create a GLP1 checkout
      *
      * @param User $customer
@@ -195,6 +138,7 @@ class ChargebeeService
         User $customer,
         string $planId,
         array $additionalParams = [],
+        ?string $toltReferralId = null,
     ): ?array {
         $submissionId =
             $additionalParams["subscription[cf_questionnaire_submission_id]"] ??
@@ -211,6 +155,11 @@ class ChargebeeService
             "subscription[cf_consultation]" => "true",
             "cancel_url" => config("app.frontend_url") . "/dashboard",
         ];
+
+        // Add Tolt referral ID if provided
+        if ($toltReferralId) {
+            $params["customer[cf_tolt_referral]"] = $toltReferralId;
+        }
 
         $params = array_merge($params, $additionalParams);
 
