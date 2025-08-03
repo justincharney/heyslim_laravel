@@ -642,18 +642,6 @@ class QuestionnaireController extends Controller
                 "submitted_at" => now(),
             ]);
 
-            // Notify the providers on the patient's team
-            if ($user->current_team_id) {
-                $team = Team::find($user->current_team_id);
-                if ($team) {
-                    $team->notify(
-                        new QuestionnaireSubmittedForProviderNotification(
-                            $submission,
-                        ),
-                    );
-                }
-            }
-
             return response()->json([
                 "message" => "Questionnaire requires payment to complete.",
                 "checkout_url" => $hostedPage["url"],
@@ -663,7 +651,7 @@ class QuestionnaireController extends Controller
                 "Exception creating Chargebee checkout for questionnaire",
                 [
                     "submission_id" => $submission->id,
-                    "user_id" => $patient->id,
+                    "user_id" => $user->id,
                     "error" => $e->getMessage(),
                 ],
             );

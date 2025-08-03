@@ -9,8 +9,10 @@ use App\Models\Prescription;
 use App\Models\ProcessedRecurringOrder;
 use App\Models\QuestionnaireSubmission;
 use App\Models\Subscription;
+use App\Models\Team;
 use App\Models\User;
 use App\Notifications\QuestionnaireSubmittedNotification;
+use App\Notifications\QuestionnaireSubmittedForProviderNotification;
 use App\Services\ChargebeeService;
 use App\Services\ShopifyService;
 use Illuminate\Http\Request;
@@ -356,6 +358,18 @@ class ChargebeeWebhookController extends Controller
                                 ],
                             ],
                         );
+                    }
+
+                    // Notify the providers on the patient's team
+                    if ($user->current_team_id) {
+                        $team = Team::find($user->current_team_id);
+                        if ($team) {
+                            $team->notify(
+                                new QuestionnaireSubmittedForProviderNotification(
+                                    $questionnaireSubmission,
+                                ),
+                            );
+                        }
                     }
                 }
             }
