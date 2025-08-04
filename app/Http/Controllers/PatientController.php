@@ -31,6 +31,7 @@ class PatientController extends Controller
             ->whereHas("teams", function ($query) use ($teamId) {
                 $query->where("id", $teamId);
             })
+            ->orderBy("created_at", "desc")
             ->get();
 
         return response()->json([
