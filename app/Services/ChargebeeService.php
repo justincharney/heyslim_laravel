@@ -153,6 +153,9 @@ class ChargebeeService
             "customer[email]" => $customer->email,
             "customer[phone]" => $customer->phone_number,
             "subscription[cf_consultation]" => "true",
+            "redirect_url" =>
+                config("app.frontend_url") .
+                "/submission-pending/{$submissionId}",
             "cancel_url" => config("app.frontend_url") . "/dashboard",
         ];
 

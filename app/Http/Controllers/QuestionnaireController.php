@@ -56,13 +56,13 @@ class QuestionnaireController extends Controller
         // Add the consultation product as a treatment option
         $consultationProduct = ShopifyProductMapping::getConsultationProductDetails();
         if ($consultationProduct) {
-            $formattedQuestionnaires->prepend([
+            $formattedQuestionnaires[] = [
                 "id" => $consultationProduct["id"], // Using Shopify Product GID as ID
                 "title" => $consultationProduct["title"],
                 "description" => $consultationProduct["description"],
                 "type" => $consultationProduct["type"],
                 "created_at" => now()->format("Y-m-d H:i:s"),
-            ]);
+            ];
         }
 
         return response()->json([
