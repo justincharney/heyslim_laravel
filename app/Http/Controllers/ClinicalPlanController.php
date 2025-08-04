@@ -398,16 +398,7 @@ class ClinicalPlanController extends Controller
             })
             ->whereDoesntHave("prescriptions");
 
-        // If provider, filter plans they created for patients in their team
-        if ($user->hasRole("provider")) {
-            $plansQuery->where("provider_id", $user->id);
-        }
-        // If pharmacist, filter for plans in their team
-        elseif ($user->hasRole("pharmacist")) {
-            $plansQuery->whereHas("provider", function ($query) use ($teamId) {
-                $query->where("current_team_id", $teamId);
-            });
-        }
+        // All roles see plans for patients in their team (no creator-based filtering)
 
         // Get plans
         $plans = $plansQuery

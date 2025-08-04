@@ -621,17 +621,76 @@ class PrescriptionController extends Controller
 
         setPermissionsTeamId($teamId);
 
-        // Fetch prescriptions where the current user is the prescriber
-        // and the status is pending_signature
-        $prescriptions = Prescription::where("prescriber_id", $user->id)
-            ->where("status", "pending_signature")
+        // Check user role permissions
+        if (!$user->hasRole(["provider", "pharmacist", "admin"])) {
+            return response()->json(
+                [
+                    "message" =>
+                        "You do not have permission to view prescriptions",
+                ],
+                403,
+            );
+        }
+
+        // Fetch prescriptions needing signature for patients in the team
+        $prescriptions = Prescription::where("status", "pending_signature")
             ->whereHas("patient", function ($query) use ($teamId) {
-                // Ensure the patient is also in the same team
+                // Ensure the patient is in the same team
                 $query->where("current_team_id", $teamId);
             })
             ->with(["patient:id,name", "clinicalPlan:id,condition_treated"])
             ->orderBy("created_at", "desc")
             ->get();
+
+        return response()->json([
+            "prescriptions" => $prescriptions,
+        ]);
+    }
+
+    /**
+     * Get prescriptions that need replacement (no refills but active subscription)
+     */
+    public function getNeedingReplacement()
+    {
+        $user = auth()->user();
+        $teamId = $user->current_team_id;
+
+        if (!$teamId) {
+            return response()->json(
+                [
+                    "message" =>
+                        "You must be associated with a team to view prescriptions",
+                ],
+                403,
+            );
+        }
+
+        // Set team context for permissions
+        setPermissionsTeamId($teamId);
+
+        $query = Prescription::with(["patient", "clinicalPlan", "subscription"])
+            ->where("refills", 0)
+            ->where("status", "active")
+            ->whereHas("subscription", function ($subQuery) {
+                $subQuery->where("status", "active");
+            });
+
+        // Filter by team - all roles see prescriptions for patients in their team
+        if ($user->hasRole(["provider", "pharmacist", "admin"])) {
+            $query->whereHas("patient", function ($patientQuery) use ($teamId) {
+                $patientQuery->where("current_team_id", $teamId);
+            });
+        } else {
+            return response()->json(
+                [
+                    "message" =>
+                        "You do not have permission to view prescriptions",
+                ],
+                403,
+            );
+        }
+
+        $prescriptions = $query->orderBy("created_at", "desc")->get();
 
         return response()->json([
             "prescriptions" => $prescriptions,

@@ -290,6 +290,10 @@ Route::middleware(["auth:sanctum", "role:provider|pharmacist"])->group(
             PrescriptionController::class,
             "getNeedingSignature",
         ]);
+        Route::get("/prescriptions/needing-replacement", [
+            PrescriptionController::class,
+            "getNeedingReplacement",
+        ]);
         Route::get("/prescriptions/{prescription}", [
             PrescriptionController::class,
             "show",
