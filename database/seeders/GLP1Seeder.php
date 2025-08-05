@@ -14,7 +14,7 @@ class GLP1Seeder extends Seeder
     public function run(): void
     {
         $questionnaireTitle = "GLP-1 Weight Management Treatment Plan";
-        $targetVersion = 8; // Define the version this seeder creates
+        $targetVersion = 9; // Define the version this seeder creates
 
         // Check if the target version already exists and is current
         $existingCurrentQuestionnaire = Questionnaire::where(
@@ -419,21 +419,21 @@ class GLP1Seeder extends Seeder
                 "questions" => [
                     [
                         "text" =>
-                            "Are you aware of common side effects such as nausea, vomiting, diarrhea, and constipation?",
+                            "Confirm that you are aware of common side effects such as nausea, vomiting, diarrhea, and constipation.",
                         "type" => "yes_no",
                         "required" => true,
                         "required_answer" => "yes",
                     ],
                     [
                         "text" =>
-                            "Do you understand that rare but serious side effects include pancreatitis and gallbladder issues?",
+                            "Confirm that you understand that rare but serious side effects include pancreatitis and gallbladder issues.",
                         "type" => "yes_no",
                         "required" => true,
                         "required_answer" => "yes",
                     ],
                     [
                         "text" =>
-                            "Do you consent to regular follow-up appointments to monitor progress, including weight, side effects, and blood tests if required?",
+                            "Confirm that you consent to regular follow-up appointments to monitor progress, including weight, side effects, and blood tests if required.",
                         "type" => "yes_no",
                         "required" => true,
                         "required_answer" => "yes",
