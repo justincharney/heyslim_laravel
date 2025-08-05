@@ -2,9 +2,9 @@
 
 namespace Database\Seeders;
 
+use App\Models\Questionnaire;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use App\Models\Questionnaire;
 
 class GLP1Seeder extends Seeder
 {
@@ -14,12 +14,12 @@ class GLP1Seeder extends Seeder
     public function run(): void
     {
         $questionnaireTitle = "GLP-1 Weight Management Treatment Plan";
-        $targetVersion = 7; // Define the version this seeder creates
+        $targetVersion = 8; // Define the version this seeder creates
 
         // Check if the target version already exists and is current
         $existingCurrentQuestionnaire = Questionnaire::where(
             "title",
-            $questionnaireTitle
+            $questionnaireTitle,
         )
             ->where("version", $targetVersion)
             ->where("is_current", true)
@@ -27,7 +27,7 @@ class GLP1Seeder extends Seeder
 
         if ($existingCurrentQuestionnaire) {
             $this->command->info(
-                "Questionnaire '{$questionnaireTitle}' version {$targetVersion} already exists and is current. Skipping."
+                "Questionnaire '{$questionnaireTitle}' version {$targetVersion} already exists and is current. Skipping.",
             );
             return; // Exit if the target version is already the current one
         }
@@ -35,7 +35,7 @@ class GLP1Seeder extends Seeder
         // Find any existing questionnaire with the same title and mark it as not current
         $existingQuestionnaire = Questionnaire::where(
             "title",
-            $questionnaireTitle
+            $questionnaireTitle,
         )
             ->where("is_current", true)
             ->orderByDesc("version")
@@ -45,7 +45,7 @@ class GLP1Seeder extends Seeder
             // If the existing version is newer, don't downgrade.
             if ($existingQuestionnaire->version > $targetVersion) {
                 $this->command->warn(
-                    "Existing questionnaire '{$questionnaireTitle}' version {$existingQuestionnaire->version} is newer than target version {$targetVersion}. Skipping."
+                    "Existing questionnaire '{$questionnaireTitle}' version {$existingQuestionnaire->version} is newer than target version {$targetVersion}. Skipping.",
                 );
                 return;
             }
@@ -54,7 +54,7 @@ class GLP1Seeder extends Seeder
             $existingQuestionnaire->is_current = false;
             $existingQuestionnaire->save();
             $this->command->info(
-                "Marked questionnaire '{$questionnaireTitle}' version {$existingQuestionnaire->version} as not current."
+                "Marked questionnaire '{$questionnaireTitle}' version {$existingQuestionnaire->version} as not current.",
             );
         }
 
@@ -71,7 +71,7 @@ class GLP1Seeder extends Seeder
 
         $questionnaireId = $newQuestionnaire->id;
         $this->command->info(
-            "Created new questionnaire '{$questionnaireTitle}' version {$targetVersion} with ID {$questionnaireId}."
+            "Created new questionnaire '{$questionnaireTitle}' version {$targetVersion} with ID {$questionnaireId}.",
         );
 
         // Define sections and their questions
@@ -120,7 +120,7 @@ class GLP1Seeder extends Seeder
                 ],
             ],
             [
-                "title" => "Eligibility Screening",
+                "title" => "Eligibility Screening - Health Conditions",
                 "questions" => [
                     [
                         "text" =>
@@ -138,6 +138,11 @@ class GLP1Seeder extends Seeder
                             "None of the above",
                         ],
                     ],
+                ],
+            ],
+            [
+                "title" => "Eligibility Screening - Weight-Related Issues",
+                "questions" => [
                     [
                         "text" =>
                             "Has your weight ever caused or worsened any of the following?",
@@ -272,7 +277,7 @@ class GLP1Seeder extends Seeder
                 ],
             ],
             [
-                "title" => "Lifestyle and Weight Management - Part 1",
+                "title" => "Lifestyle and Weight Management - Eating Habits",
                 "questions" => [
                     [
                         "text" =>
@@ -292,6 +297,12 @@ class GLP1Seeder extends Seeder
                             "None of the above",
                         ],
                     ],
+                ],
+            ],
+            [
+                "title" =>
+                    "Lifestyle and Weight Management - Physical Activity Frequency",
+                "questions" => [
                     [
                         "text" =>
                             "How many days a week do you engage in physical activity?",
@@ -299,6 +310,12 @@ class GLP1Seeder extends Seeder
                         "required" => true,
                         "options" => ["0", "1-2", "3-4", "5+"],
                     ],
+                ],
+            ],
+            [
+                "title" =>
+                    "Lifestyle and Weight Management - Physical Activity Type",
+                "questions" => [
                     [
                         "text" => "What type of exercise do you do?",
                         "type" => "multi-select",
@@ -314,7 +331,7 @@ class GLP1Seeder extends Seeder
                 ],
             ],
             [
-                "title" => "Lifestyle and Weight Management - Part 2",
+                "title" => "Lifestyle and Weight Management - Goals",
                 "questions" => [
                     [
                         "text" =>
@@ -483,7 +500,7 @@ class GLP1Seeder extends Seeder
                         ? json_encode($question["validation"])
                         : null,
                     "display_conditions" => isset(
-                        $question["display_conditions"]
+                        $question["display_conditions"],
                     )
                         ? json_encode($question["display_conditions"])
                         : null,
