@@ -844,7 +844,29 @@ class PrescriptionController extends Controller
 
             // 4. Update the Subscription
             $subscription->prescription_id = $newPrescription->id;
-            $subscription->chargebee_item_price_id = null;
+
+            // Set the chargebee_item_price_id from the first dose in the new prescription's schedule
+            $firstDoseItemPriceId = null;
+            if (is_array($doseScheduleArray) && !empty($doseScheduleArray)) {
+                // Get the first dose (index 0) from the schedule
+                $firstDose = $doseScheduleArray[0] ?? null;
+                if (
+                    $firstDose &&
+                    isset($firstDose["chargebee_item_price_id"])
+                ) {
+                    $firstDoseItemPriceId =
+                        $firstDose["chargebee_item_price_id"];
+                }
+            }
+
+            // If we couldn't find the item price ID, keep the existing one to avoid NULL constraint violation
+            if ($firstDoseItemPriceId) {
+                $subscription->chargebee_item_price_id = $firstDoseItemPriceId;
+            }
+            // If no new price ID is found, keep the existing one (don't set to null).
+            // The UpdateSubscriptionDoseJob will update the Chargebee's subscription value and the
+            // local subscriptions value when the prescription is signed
+
             $subscription->save();
 
             // 5. Handle Chats (Update existing)
