@@ -39,7 +39,7 @@ class MedicationDispatchedNotification extends Notification implements
     public function toMail(object $notifiable): MailMessage
     {
         $medicationName = $this->prescription->medication_name;
-        $videoUrl = "https://youtu.be/L4taLqjUEZI";
+        $videoUrl = "https://www.youtube.com/watch?v=jnELVSRSWXs";
 
         return new MailMessage()
             ->subject("Your medication is on the way!")
