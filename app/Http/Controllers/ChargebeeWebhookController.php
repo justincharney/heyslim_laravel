@@ -15,6 +15,7 @@ use App\Notifications\QuestionnaireSubmittedNotification;
 use App\Notifications\QuestionnaireSubmittedForProviderNotification;
 use App\Services\ChargebeeService;
 use App\Services\ShopifyService;
+use App\Services\ZendeskService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -24,13 +25,16 @@ class ChargebeeWebhookController extends Controller
 {
     protected ChargebeeService $chargebeeService;
     protected ShopifyService $shopifyService;
+    protected ZendeskService $zendeskService;
 
     public function __construct(
         ChargebeeService $chargebeeService,
         ShopifyService $shopifyService,
+        ZendeskService $zendeskService,
     ) {
         $this->chargebeeService = $chargebeeService;
         $this->shopifyService = $shopifyService;
+        $this->zendeskService = $zendeskService;
     }
 
     /**
@@ -360,6 +364,13 @@ class ChargebeeWebhookController extends Controller
                         );
                     }
 
+                    // Delete the lead from Zendesk Sell since they're now a paying customer
+                    $this->zendeskService->deleteLead($user);
+
+                    // Clear the zendesk_lead_created_at timestamp
+                    $user->zendesk_lead_created_at = null;
+                    $user->save();
+
                     // Notify the providers on the patient's team
                     if ($user->current_team_id) {
                         $team = Team::find($user->current_team_id);
@@ -504,6 +515,16 @@ class ChargebeeWebhookController extends Controller
                 ? date("Y-m-d H:i:s", $subscriptionData["next_billing_at"])
                 : null,
         ]);
+
+        // Delete the lead from Zendesk Sell since they're reactivating their subscription
+        $user = User::find($localSubscription->user_id);
+        if ($user) {
+            $this->zendeskService->deleteLead($user);
+
+            // Clear the zendesk_lead_created_at timestamp
+            $user->zendesk_lead_created_at = null;
+            $user->save();
+        }
 
         // If there's an associated prescription, reactivate it as well
         if ($localSubscription->prescription_id) {

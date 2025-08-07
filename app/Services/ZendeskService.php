@@ -8,8 +8,8 @@ use Illuminate\Support\Facades\Log;
 
 class ZendeskService
 {
-    protected string $apiUrl;
-    protected string $accessToken;
+    protected ?string $apiUrl;
+    protected ?string $accessToken;
 
     /**
      * ZendeskService constructor.
@@ -85,6 +85,93 @@ class ZendeskService
         } catch (\Exception $e) {
             Log::error(
                 "Exception occurred while creating Zendesk Sell lead for user {$user->email}.",
+                [
+                    "error" => $e->getMessage(),
+                    "trace" => $e->getTraceAsString(),
+                ],
+            );
+            return false;
+        }
+    }
+
+    /**
+     * Delete a lead from Zendesk Sell by user email.
+     *
+     * @param User $user The user whose lead should be deleted.
+     * @return bool True on success, false on failure.
+     */
+    public function deleteLead(User $user): bool
+    {
+        if (empty($this->accessToken) || empty($this->apiUrl)) {
+            Log::error("Zendesk Sell API credentials are not configured.");
+            return false;
+        }
+
+        try {
+            // First, search for the lead by email
+            $searchResponse = Http::withHeaders([
+                "Authorization" => "Bearer " . $this->accessToken,
+                "Accept" => "application/json",
+            ])->get("{$this->apiUrl}/v3/leads/search", [
+                "email" => $user->email,
+            ]);
+
+            if (!$searchResponse->successful()) {
+                Log::warning(
+                    "Failed to search for Zendesk Sell lead for user {$user->email}.",
+                    [
+                        "status" => $searchResponse->status(),
+                        "response" => $searchResponse->json(),
+                    ],
+                );
+                return false;
+            }
+
+            $leads = $searchResponse->json("items", []);
+
+            if (empty($leads)) {
+                Log::info(
+                    "No Zendesk Sell lead found for user {$user->email}.",
+                );
+                return true; // Consider this a success since there's no lead to delete
+            }
+
+            // Delete each lead found (there should typically be only one)
+            $allDeleted = true;
+            foreach ($leads as $lead) {
+                $leadId = $lead["data"]["id"] ?? null;
+
+                if (!$leadId) {
+                    continue;
+                }
+
+                $deleteResponse = Http::withHeaders([
+                    "Authorization" => "Bearer " . $this->accessToken,
+                    "Accept" => "application/json",
+                ])->delete("{$this->apiUrl}/v2/leads/{$leadId}");
+
+                if ($deleteResponse->successful()) {
+                    Log::info(
+                        "Successfully deleted Zendesk Sell lead for user {$user->email}.",
+                        ["lead_id" => $leadId],
+                    );
+                } else {
+                    Log::error(
+                        "Failed to delete Zendesk Sell lead for user {$user->email}.",
+                        [
+                            "lead_id" => $leadId,
+                            "status" => $deleteResponse->status(),
+                            "response" => $deleteResponse->json(),
+                        ],
+                    );
+                    $allDeleted = false;
+                }
+            }
+
+            return $allDeleted;
+        } catch (\Exception $e) {
+            Log::error(
+                "Exception occurred while deleting Zendesk Sell lead for user {$user->email}.",
                 [
                     "error" => $e->getMessage(),
                     "trace" => $e->getTraceAsString(),
